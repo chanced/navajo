@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package navajo;
+
+import "proto/chacha20_poly1305.proto";
+import "proto/aes_gcm.proto";
+
+message Aead {
+    oneof algorithm {
+        AesGcmKeys aes_gcm = 1;
+        ChaCha20Poly1305Keys chacha20_poly1305 = 2;
+    };
+}

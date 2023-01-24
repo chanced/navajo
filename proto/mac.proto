@@ -1,0 +1,4 @@
+syntax = "proto3";
+package navajo;
+
+message Mac {}
