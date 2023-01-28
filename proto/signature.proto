@@ -1,9 +1,0 @@
-syntax = "proto3";
-package navajo;
-import "proto/ed25519.proto";
-
-message Signature {
-    oneof algorithm {
-        Ed25519Keys ed25519 = 1;
-    }
-}

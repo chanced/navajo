@@ -1,3 +1,8 @@
 pub mod aead;
-pub mod keyset;
-pub(crate) mod proto;
+
+mod error;
+
+pub use error::*;
+
+mod id;
+pub(crate) use id::*;
