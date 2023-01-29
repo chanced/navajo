@@ -1,9 +1,10 @@
 [package]
 name = "navajo"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["Chance Dinkins"]
+description = "A Rust library for interacting with the Navajo API"
 
 [dependencies]
 ring = { version = "0.16", features = ["std"] }
