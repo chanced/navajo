@@ -63,3 +63,7 @@ pub struct KeyInfo<A> {
     /// The public key, if applicable.
     pub pub_key: Option<Vec<u8>>,
 }
+
+pub(crate) fn key_id_len() -> usize {
+    4
+}

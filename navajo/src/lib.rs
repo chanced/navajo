@@ -2,6 +2,9 @@ mod keyring;
 pub use keyring::*;
 
 pub mod aead;
+pub use aead::Aead;
+
+pub mod rand;
 
 mod error;
 

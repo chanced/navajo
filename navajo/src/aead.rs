@@ -1,6 +1,6 @@
 use crate::{
-    gen_id, timestamp, DecryptError, EncryptError, InvalidBlockSizeError, KeyInfo,
-    KeyNotFoundError, KeyStatus, UnspecifiedError,
+    gen_id, key_id_len, rand::DefaultRandom, timestamp, DecryptError, EncryptError,
+    InvalidBlockSizeError, KeyInfo, KeyNotFoundError, KeyStatus, UnspecifiedError,
 };
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use core::fmt;
@@ -10,17 +10,22 @@ use ring::{
 };
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr as DeserializeRepr, Serialize_repr as SerializeRepr};
+use std::{default, marker::PhantomData};
 
 const FOUR_KB: u32 = 4096;
 const SIXTY_FOUR_KB: u32 = 65536;
 const ONE_MB: u32 = 1048576;
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Aead {
+pub struct Aead<R = crate::rand::DefaultRandom> {
     keys: Vec<Key>,
     primary_key_id: u32,
+    rand: PhantomData<R>,
 }
 
-impl Aead {
+impl<R> Aead<R>
+where
+    R: crate::rand::Rand,
+{
     /// Creates a new AEAD keyring with a single key of the specified [`Algorithm`].
     ///
     ///
@@ -33,6 +38,7 @@ impl Aead {
         Ok(Self {
             keys: vec![key],
             primary_key_id: kid,
+            rand: PhantomData,
         })
     }
 
@@ -245,14 +251,22 @@ pub struct CiphertextInfo {
 #[derive(Serialize, Deserialize)]
 #[serde(try_from = "KeyData")]
 #[serde(into = "KeyData")]
-struct Key {
+struct Key<R = DefaultRandom>
+where
+    R: Clone,
+{
     id: u32,
     algorithm: Algorithm,
     key: LessSafeKey,
     timestamp: u64,
     data: Vec<u8>,
+    #[serde(skip)]
+    _rand: PhantomData<R>,
 }
-impl Clone for Key {
+impl<R> Clone for Key<R>
+where
+    R: Clone,
+{
     fn clone(&self) -> Self {
         Self {
             id: self.id,
@@ -260,12 +274,16 @@ impl Clone for Key {
             key: self.algorithm.load_key(&self.data).unwrap(),
             data: self.data.clone(),
             timestamp: self.timestamp,
+            _rand: PhantomData,
         }
     }
 }
-impl Key {
+impl<R> Key<R>
+where
+    R: crate::rand::Rand,
+{
     fn new(algorithm: Algorithm) -> Result<Self, UnspecifiedError> {
-        let rng = SystemRandom::new();
+        let rng = R::new();
         let mut data = vec![0; algorithm.key_len()];
         rng.fill(&mut data)?;
         let key = algorithm.load_key(&data)?;
@@ -276,6 +294,7 @@ impl Key {
             key,
             data,
             timestamp: timestamp::now(),
+            _rand: PhantomData,
         })
     }
 
@@ -327,11 +346,12 @@ impl Key {
         Ok(nonce)
     }
     // The length of the key id in bytes
-    fn id_len() -> usize {
-        4
-    }
 }
-impl TryFrom<KeyData> for Key {
+
+impl<R> TryFrom<KeyData> for Key<R>
+where
+    R: Clone,
+{
     type Error = ring::error::Unspecified;
     fn try_from(value: KeyData) -> Result<Self, Self::Error> {
         let key = value.algorithm.load_key(&value.data)?;
@@ -341,6 +361,7 @@ impl TryFrom<KeyData> for Key {
             key,
             data: value.data,
             timestamp: value.timestamp,
+            _rand: default::Default::default(),
         })
     }
 }
@@ -362,8 +383,8 @@ struct KeyData {
     #[serde(with = "hex")]
     data: Vec<u8>,
 }
-impl From<Key> for KeyData {
-    fn from(value: Key) -> Self {
+impl<R: Clone> From<Key<R>> for KeyData {
+    fn from(value: Key<R>) -> Self {
         Self {
             id: value.id,
             algorithm: value.algorithm,
@@ -402,10 +423,10 @@ impl Method {
     fn header_len(&self, algorithm: Algorithm) -> usize {
         match self {
             // method + key id + nonce
-            Method::Block => Method::len() + Key::id_len() + algorithm.nonce_len(),
+            Method::Block => Method::len() + key_id_len() + algorithm.nonce_len(),
             // method + key id + block size in kilobytes + nonce prefix
             Method::Stream => {
-                Method::len() + Key::id_len() + SegmentSize::len() + algorithm.nonce_prefix_len()
+                Method::len() + key_id_len() + SegmentSize::len() + algorithm.nonce_prefix_len()
             }
         }
     }
@@ -439,7 +460,7 @@ impl TryFrom<u8> for Method {
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    // use crate::rand::*;
     #[test]
     fn test_encrypt_produces_correct_header() -> Result<(), Box<dyn std::error::Error>> {
         let ks = Aead::new(Algorithm::Aes256Gcm)?;
