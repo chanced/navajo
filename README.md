@@ -1,11 +1,9 @@
 # navajo
 
 navajo is a library that provides cryptographic and key management APIs built
-upon the outstanding crates [ring](https://github.com/briansmith/ring),
-[RustCrypto](https://github.com/RustCrypto),
+upon the outstanding crates [_ring_](https://github.com/briansmith/ring),
+[RustCrypto](https://github.com/RustCrypto), and
 [jsonwebtoken](https://github.com/Keats/jsonwebtoken).
-
-The name navajo was chosen as an omage Navajo (or Diné) Tribe of Native Americans
 
 ## Credit
 

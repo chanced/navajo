@@ -1,15 +1,6 @@
-pub trait Rand: Clone {
-    fn new() -> Self;
-    fn fill(&self, dest: &mut [u8]) -> Result<(), crate::error::UnspecifiedError>;
-}
+use ring::rand::SecureRandom;
 
-impl Rand for ring::rand::SystemRandom {
-    fn new() -> Self {
-        ring::rand::SystemRandom::new()
-    }
-    fn fill(&self, dest: &mut [u8]) -> Result<(), crate::error::UnspecifiedError> {
-        ring::rand::SecureRandom::fill(self, dest).map_err(|e| e.into())
-    }
+pub(crate) fn fill(dst: &mut [u8]) -> Result<(), crate::UnspecifiedError> {
+    let rng = ring::rand::SystemRandom::new();
+    rng.fill(dst).map_err(|_| crate::UnspecifiedError)
 }
-
-pub type DefaultRandom = ring::rand::SystemRandom;

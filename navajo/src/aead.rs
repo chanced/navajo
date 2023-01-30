@@ -1,31 +1,25 @@
 use crate::{
-    gen_id, key_id_len, rand::DefaultRandom, timestamp, DecryptError, EncryptError,
-    InvalidBlockSizeError, KeyInfo, KeyNotFoundError, KeyStatus, UnspecifiedError,
+    gen_id, key_id_len, rand, timestamp, DecryptError, EncryptError, InvalidSegmentSizeError,
+    KeyInfo, KeyNotFoundError, KeyStatus, UnspecifiedError,
 };
+
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use core::fmt;
-use ring::{
-    aead::{Aad, LessSafeKey, Nonce, UnboundKey},
-    rand::{SecureRandom, SystemRandom},
-};
+use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr as DeserializeRepr, Serialize_repr as SerializeRepr};
-use std::{default, marker::PhantomData};
 
 const FOUR_KB: u32 = 4096;
 const SIXTY_FOUR_KB: u32 = 65536;
 const ONE_MB: u32 = 1048576;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Aead<R = crate::rand::DefaultRandom> {
+pub struct Aead {
     keys: Vec<Key>,
     primary_key_id: u32,
-    rand: PhantomData<R>,
 }
 
-impl<R> Aead<R>
-where
-    R: crate::rand::Rand,
-{
+impl Aead {
     /// Creates a new AEAD keyring with a single key of the specified [`Algorithm`].
     ///
     ///
@@ -38,7 +32,6 @@ where
         Ok(Self {
             keys: vec![key],
             primary_key_id: kid,
-            rand: PhantomData,
         })
     }
 
@@ -58,7 +51,8 @@ where
             pub_key: None,
         })
     }
-    pub fn key_status(&self, kid: u32) -> Option<KeyStatus> {
+
+    fn key_status(&self, kid: u32) -> Option<KeyStatus> {
         if kid == self.primary_key_id {
             Some(KeyStatus::Primary)
         } else {
@@ -85,12 +79,7 @@ where
     where
         A: AsRef<[u8]>,
     {
-        let key = self
-            .keys
-            .iter()
-            .find(|k| k.id == self.primary_key_id)
-            .ok_or(EncryptError::MissingPrimaryKey)?;
-        let res = key.encrypt(cleartext, additional_data)?;
+        let res = self.primary()?.encrypt(cleartext, additional_data)?;
         Ok(res)
     }
 
@@ -112,10 +101,12 @@ where
         }
     }
 
-    pub fn primary_key_id(&self) -> u32 {
-        self.primary_key_id
+    pub fn primary_key(&self) -> Result<KeyInfo<Algorithm>, KeyNotFoundError> {
+        self.key_info(self.primary_key_id)
+            .ok_or(KeyNotFoundError(self.primary_key_id))
     }
-    fn primary_key(&self) -> Result<&Key, EncryptError> {
+
+    fn primary(&self) -> Result<&Key, EncryptError> {
         self.keys
             .iter()
             .find(|k| k.id == self.primary_key_id)
@@ -143,22 +134,19 @@ impl SegmentSize {
     }
 }
 impl SegmentSize {
-    fn validate(&self) -> Result<(), InvalidBlockSizeError> {
+    fn validate(&self) -> Result<(), InvalidSegmentSizeError> {
         match self {
             Self::FourKB => Ok(()),
             Self::SixtyFourKB => Ok(()),
             Self::OneMB => Ok(()),
             Self::Of(n) => {
                 if *n < 1024 {
-                    Err(InvalidBlockSizeError(*n))
+                    Err(InvalidSegmentSizeError(*n))
                 } else {
                     Ok(())
                 }
             }
         }
-    }
-    fn to_be_bytes(&self) -> [u8; 4] {
-        self.as_u32().to_be_bytes()
     }
 
     fn as_u32(&self) -> u32 {
@@ -251,22 +239,14 @@ pub struct CiphertextInfo {
 #[derive(Serialize, Deserialize)]
 #[serde(try_from = "KeyData")]
 #[serde(into = "KeyData")]
-struct Key<R = DefaultRandom>
-where
-    R: Clone,
-{
+struct Key {
     id: u32,
     algorithm: Algorithm,
     key: LessSafeKey,
     timestamp: u64,
     data: Vec<u8>,
-    #[serde(skip)]
-    _rand: PhantomData<R>,
 }
-impl<R> Clone for Key<R>
-where
-    R: Clone,
-{
+impl Clone for Key {
     fn clone(&self) -> Self {
         Self {
             id: self.id,
@@ -274,18 +254,13 @@ where
             key: self.algorithm.load_key(&self.data).unwrap(),
             data: self.data.clone(),
             timestamp: self.timestamp,
-            _rand: PhantomData,
         }
     }
 }
-impl<R> Key<R>
-where
-    R: crate::rand::Rand,
-{
+impl Key {
     fn new(algorithm: Algorithm) -> Result<Self, UnspecifiedError> {
-        let rng = R::new();
         let mut data = vec![0; algorithm.key_len()];
-        rng.fill(&mut data)?;
+        rand::fill(&mut data)?;
         let key = algorithm.load_key(&data)?;
         let id = gen_id();
         Ok(Self {
@@ -294,7 +269,6 @@ where
             key,
             data,
             timestamp: timestamp::now(),
-            _rand: PhantomData,
         })
     }
 
@@ -341,17 +315,14 @@ where
 
     fn gen_nonce(&self) -> Result<Nonce, UnspecifiedError> {
         let mut nonce_value = vec![0; self.algorithm.nonce_len()];
-        SystemRandom::new().fill(&mut nonce_value)?;
+        rand::fill(&mut nonce_value)?;
         let nonce = Nonce::try_assume_unique_for_key(&nonce_value)?;
         Ok(nonce)
     }
     // The length of the key id in bytes
 }
 
-impl<R> TryFrom<KeyData> for Key<R>
-where
-    R: Clone,
-{
+impl TryFrom<KeyData> for Key {
     type Error = ring::error::Unspecified;
     fn try_from(value: KeyData) -> Result<Self, Self::Error> {
         let key = value.algorithm.load_key(&value.data)?;
@@ -361,7 +332,6 @@ where
             key,
             data: value.data,
             timestamp: value.timestamp,
-            _rand: default::Default::default(),
         })
     }
 }
@@ -383,8 +353,8 @@ struct KeyData {
     #[serde(with = "hex")]
     data: Vec<u8>,
 }
-impl<R: Clone> From<Key<R>> for KeyData {
-    fn from(value: Key<R>) -> Self {
+impl From<Key> for KeyData {
+    fn from(value: Key) -> Self {
         Self {
             id: value.id,
             algorithm: value.algorithm,
@@ -473,7 +443,7 @@ mod tests {
             1 + 4 + k.algorithm.nonce_len() + cleartext.len() + k.algorithm.tag_len()
         );
         assert_eq!(res.get_u8(), Method::Block as u8);
-        assert_eq!(res.get_u32(), ks.primary_key_id());
+        assert_eq!(res.get_u32(), ks.primary_key().unwrap().id);
         assert_eq!(
             res.remaining(),
             k.algorithm.nonce_len() + cleartext.len() + k.algorithm.tag_len()
@@ -488,7 +458,7 @@ mod tests {
         let additional_data = b"additional data";
         let mut res = ks.encrypt(cleartext[..].into(), additional_data)?;
         assert_eq!(res.get_u8(), Method::Block as u8);
-        assert_eq!(res.get_u32(), ks.primary_key_id());
+        assert_eq!(res.get_u32(), ks.primary_key().unwrap().id);
         assert_eq!(
             res.remaining(),
             k.algorithm.nonce_len() + cleartext.len() + k.algorithm.tag_len()

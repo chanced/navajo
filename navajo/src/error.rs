@@ -1,7 +1,7 @@
 use core::fmt;
 
-pub struct InvalidBlockSizeError(pub u32);
-impl fmt::Debug for InvalidBlockSizeError {
+pub struct InvalidSegmentSizeError(pub u32);
+impl fmt::Debug for InvalidSegmentSizeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -10,7 +10,7 @@ impl fmt::Debug for InvalidBlockSizeError {
         )
     }
 }
-impl fmt::Display for InvalidBlockSizeError {
+impl fmt::Display for InvalidSegmentSizeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -58,7 +58,7 @@ impl std::error::Error for UnspecifiedError {}
 pub enum EncryptError {
     Unspecified(UnspecifiedError),
     MissingPrimaryKey,
-    InvalidBlockSize(InvalidBlockSizeError),
+    InvalidBlockSize(InvalidSegmentSizeError),
 }
 impl fmt::Debug for EncryptError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
