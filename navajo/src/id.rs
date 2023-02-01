@@ -1,23 +1,25 @@
 use ring::rand::{SecureRandom, SystemRandom};
 use std::collections::HashSet;
 
-pub(crate) fn gen_id() -> u32 {
-    let rng = SystemRandom::new();
+use crate::{rand, UnspecifiedError};
+
+pub(crate) fn gen_id() -> Result<u32, UnspecifiedError> {
     let mut data = [0; 4];
-    let mut value: u32 = 0;
-    while value < 1000000000 {
-        rng.fill(&mut data).expect("failed to generate random u32");
+    rand::fill(&mut data)?;
+    let mut value: u32 = u32::from_be_bytes(data);
+    while value < 100_000_000 {
+        rand::fill(&mut data)?;
         value = u32::from_be_bytes(data);
     }
-    value
+    Ok(value)
 }
 
-pub(crate) fn gen_unique_id(lookup: &HashSet<u32>) -> u32 {
-    let mut id = gen_id();
+pub(crate) fn gen_unique_id(lookup: &HashSet<u32>) -> Result<u32, UnspecifiedError> {
+    let mut id = gen_id()?;
     loop {
         if !lookup.contains(&id) {
-            return id;
+            return Ok(id);
         }
-        id = gen_id();
+        id = gen_id()?;
     }
 }
