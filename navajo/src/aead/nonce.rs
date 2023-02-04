@@ -1,5 +1,3 @@
-use bytes::{BufMut, BytesMut};
-
 use crate::{rand, NonceSequenceError, UnspecifiedError, KEY_ID_LEN};
 
 use super::{header::HeaderNonce, Algorithm};
@@ -56,14 +54,15 @@ impl AsRef<[u8]> for Nonce {
     }
 }
 
+#[derive(Debug)]
 pub(super) struct NonceSequence {
-    prefix: BytesMut,
+    prefix: Vec<u8>,
     counter: u32,
 }
 
 impl NonceSequence {
     pub(super) fn new(algorithm: super::Algorithm) -> Result<Self, UnspecifiedError> {
-        let mut prefix = BytesMut::with_capacity(algorithm.nonce_len() - KEY_ID_LEN - 1);
+        let mut prefix = Vec::with_capacity(algorithm.nonce_len() - KEY_ID_LEN - 1);
         crate::rand::fill(&mut prefix)?;
 
         Ok(Self { prefix, counter: 0 })
@@ -79,10 +78,20 @@ impl NonceSequence {
             return Err(NonceSequenceError::CounterLimitExceeded);
         }
         let mut nonce = self.prefix.clone();
-        nonce.put_u32(self.counter);
-        nonce.put_u8(if is_final { 1 } else { 0 });
+        nonce.reserve(5);
+        nonce.extend(&self.counter.to_be_bytes());
+        nonce.push(if is_final { 1 } else { 0 });
         let current = self.counter;
         self.counter += 1;
         Ok((current, Nonce(nonce.into())))
+    }
+}
+
+impl From<Vec<u8>> for NonceSequence {
+    fn from(value: Vec<u8>) -> Self {
+        Self {
+            prefix: value,
+            counter: 0,
+        }
     }
 }

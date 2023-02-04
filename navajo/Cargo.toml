@@ -4,17 +4,187 @@ version = "0.0.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["Chance Dinkins"]
-description = "A Rust library for interacting with the Navajo API"
+description = "cryptographic APIs"
 
-[dependencies]
-bytes = "1.3.0"
-futures = "0.3.25"
-pin-project = "1.0.12"
-ring = { version = "0.16.20", features = ["std"] }
-hex = { version = "0.4.3", features = ["serde"] }
-serde = { version = "1.0.152", features = ["derive", "rc"] }
-serde_json = "1.0.91"
-zeroize = "1.5.7"
+#cfg-if
+[dependencies.cfg-if]
 
-[dev-dependencies]
-tokio = { version = "1.24", features = ["full"] } # todo: reduce features
+# futures
+[dependencies.futures]
+version = "0.3"
+
+# pin-project
+[dependencies.pin-project]
+version = "1.0"
+
+# enum_dispatch
+[dependencies.enum_dispatch]
+version = "0.3"
+
+# zeroize
+[dependencies.zeroize]
+version = "1.5"
+features = ["alloc", "zeroize_derive", "serde"]
+
+# hex
+[dependencies.hex]
+version = "0.4"
+default-features = false
+features = ["serde"]
+
+# paste
+[dependencies.paste]
+version = "1.0"
+
+# ring-compat
+[dependencies.ring-compat]
+version = "0.6"
+optional = true
+
+#typenum
+[dependencies.typenum]
+features = ["no_std"]
+
+# serde
+[dependencies.serde]
+version = "1.0"
+default-features = false
+features = ["alloc", "derive", "rc"]
+
+# serde_json
+[dependencies.serde_json]
+version = "1.0"
+default-features = false
+features = ["alloc"]
+
+# serde_repr
+[dependencies.serde_repr]
+version = "0.1"
+
+# aes-siv
+[dependencies.aes-siv]
+version = "0.7"
+optional = true
+
+# chachapoly1305
+[dependencies.chacha20poly1305]
+version = "*"
+optional = true
+
+# hmac
+[dependencies.hmac]
+version = "0.12"
+
+# aes-gcm
+[dependencies.aes-gcm]
+version = "*"
+features = ["zeroize"]
+optional = true
+
+# ed25519
+[dependencies.ed25519]
+version = "2.1"
+default-features = false
+features = ["pem", "zeroize", "serde"]
+optional = true
+
+# p256
+[dependencies.p256]
+version = "0.12"
+features = ["ecdsa-core", "pkcs8", "hash2curve"]
+optional = true
+
+# p384
+[dependencies.p384]
+version = "0.12"
+features = ["ecdsa-core", "pkcs8", "hash2curve"]
+optional = true
+
+# sha2
+[dependencies.sha2]
+version = "0.10"
+
+# sha3
+[dependencies.sha3]
+version = "0.10"
+default-features = false
+
+
+# pkcs8
+[dependencies.pkcs8]
+version = "0.9"
+default-features = false
+optional = true
+
+# pbkdf2
+[dependencies.pbkdf2]
+version = "0.11"
+
+# hashbrown
+[dependencies.hashbrown]
+version = "0.13"
+
+# rand
+[dependencies.random]
+package = "rand"
+version = "0.8"
+
+# aes
+[dependencies.aes]
+features = ["zeroize"]
+version = "0.8"
+
+# cmac
+[dependencies.cmac]
+version = "0.7"
+features = ["zeroize"]
+
+# digest
+[dependencies.digest]
+version = "0.10"
+
+# dbl
+[dependencies.dbl]
+version = "0.3"
+
+# cipher
+[dependencies.cipher]
+version = "0.4"
+features = ["zeroize"]
+
+# tokio-test
+[dev-dependencies.tokio-test]
+version = "0.4"
+
+# opaque_debug
+[dependencies.opaque-debug]
+version = "0.3"
+
+# # blake3
+# [dependencies.blake3]
+# version = "1.3"
+# features = ["traits-preview"]
+
+[features]
+default = ["ring", "aead", "signature"]
+ring = ["ring-compat"]
+signature = ["ed25519", "p256", "p384"]
+aead = ["dep:aes-gcm"]
+std = [
+	"ring-compat?/std",
+	"hex/std",
+	"serde/std",
+	"serde_json/std",
+	"zeroize/std",
+	"aes-gcm?/std",
+	"aes-siv?/std",
+	"hmac/std",
+	"chacha20poly1305?/std",
+	"pkcs8?/std",
+	"cmac/std",
+	"digest/std",
+	"cipher/std",
+	"sha2/std",
+	"sha3/std",
+
+]

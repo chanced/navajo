@@ -1,7 +1,8 @@
-use bytes::{Buf, BytesMut};
+use std::mem;
+
 use serde::{Deserialize, Serialize};
 
-use crate::{DecryptError, KEY_ID_LEN};
+use crate::{DecryptError, MalformedError, KEY_ID_LEN};
 
 use super::{Algorithm, Segment};
 
@@ -11,7 +12,7 @@ use super::{Algorithm, Segment};
 pub enum Method {
     /// Online with constant memory while making a single left-to-right pass
     ///
-    /// Header is represented as:
+    /// Header wireformat is:
     ///
     /// ```plaintext
     /// || Method (1) || KeyID (4) || Nonce (Algorithm Nonce) ||
@@ -19,14 +20,19 @@ pub enum Method {
     Online,
     /// streamed with a constant segment size using the STREAM method as described by
     /// [Online Authenticated-Encryption and its Nonce-Reuse Misuse-Resistance](https://eprint.iacr.org/2015/189.pdf)
+    ///
+    /// Header wireformat is:
+    /// ```plaintext
+    /// || Method (1) || KeyID (4) || Salt (Algorithm Key) || Nonce Prefix (Algorithm Nonce Prefix) ||
     StreamHmacSha256(Segment),
 }
 impl Method {
-    pub(super) fn parse(cursor: &mut BytesMut) -> Result<Self, DecryptError> {
-        if cursor.remaining() < 1 {
-            return Err(DecryptError::Malformed("ciphertext too short".into()));
-        }
-        Method::try_from(cursor.get_u8()).map_err(DecryptError::Malformed)
+    pub fn is_online(self) -> bool {
+        matches!(self, Method::Online)
+    }
+
+    pub fn is_stream(self) -> bool {
+        matches!(self, Method::StreamHmacSha256(_))
     }
 
     pub(super) fn header_len(&self, algorithm: Algorithm) -> usize {
@@ -71,14 +77,22 @@ impl From<Method> for usize {
     }
 }
 impl TryFrom<u8> for Method {
-    type Error = String;
+    type Error = MalformedError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Method::Online),
             1 => Ok(Method::StreamHmacSha256(Segment::FourKB)),
             2 => Ok(Method::StreamHmacSha256(Segment::OneMB)),
-            _ => Err("missing or unknown encryption method".to_string()),
+            _ => Err("missing or unknown encryption method".into()),
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse() {}
 }
