@@ -26,14 +26,14 @@ pub(super) trait MacRustCryptoOutput {}
 mod macros {}
 
 macro_rules! rust_crypto_internal_tag {
-    ($typ:ident, $typ_crt:ident, $crt:ident, $algo:ident$(, $cfg:tt)?) => {
+    ($typ:ident, $typ_crt:ident, $crt:ident, $algo:ident $(, $cfg:tt)*) => {
         paste::paste! {
             #[cfg(all(feature="[< $typ:lower _ $algo>]"), $($cfg)?)]
             // #[derive(Clone, Debug)]
             pub(super) struct [< $typ $algo InternalTag >] (digest::CtOutput<$typ_crt::$typ<$crt::$algo>>);
 
 
-            #[cfg(all(feature="[< $typ:lower _ $algo>]"), $($cfg)?)]
+            #[cfg(all(feature="$typ_crt_$algo>]"),$($cfg)?)]
             impl MacRustCryptoOutput for [< $typ $algo InternalTag >] {
 
             }
