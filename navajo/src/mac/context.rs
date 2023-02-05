@@ -66,7 +66,7 @@ macro_rules! rust_crypto_contexts {
 			$(
 				#[cfg(not(feature = "ring"))]
 				#[derive(Clone, Debug)]
-				struct [<Hmac $hmac_ring >] (Hmac<[< $hmac_ring >]>);
+				pub(super) struct [<Hmac $hmac_ring >] (Hmac<[< $hmac_ring >]>);
 
 				#[cfg(not(feature = "ring"))]
 				impl MacContext for [<Hmac $hmac_ring Context>] {
@@ -81,7 +81,7 @@ macro_rules! rust_crypto_contexts {
 
 			$(
 				#[derive(Clone, Debug)]
-				struct [<Hmac $hmac_rc Context>] (Hmac<[< $hmac_rc >]>);
+				pub(super) struct [<Hmac $hmac_rc Context>] (Hmac<[< $hmac_rc >]>);
 
 				impl MacContext for [<Hmac $hmac_rc Context>] {
 					fn update(&mut self, data: &[u8]) {
@@ -95,7 +95,7 @@ macro_rules! rust_crypto_contexts {
 			)*
 			$(
 				#[derive(Clone, Debug)]
-				struct [<Cmac $cmac Context>] (Cmac<[< $cmac >]>);
+				pub(super) struct [<Cmac $cmac Context>] (Cmac<[< $cmac >]>);
 				impl MacContext for [<Cmac $cmac Context>] {
 					fn update(&mut self, data: &[u8]) {
 						unimplemented!()
@@ -107,7 +107,7 @@ macro_rules! rust_crypto_contexts {
 			)*
 
 			#[derive(Clone, Debug)]
-			enum RustCryptoContextInner {
+			pub(super) enum RustCryptoContextInner {
 				$(
 					#[cfg(not(feature = "ring"))]
 					[<Hmac $hmac_ring>]([<Hmac $hmac_ring Context>]),
