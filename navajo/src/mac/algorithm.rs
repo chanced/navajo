@@ -1,3 +1,4 @@
+use random::RngCore;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 const SHA2_256_KEY_LEN: usize = 32;
@@ -10,7 +11,7 @@ const SHA3_224_KEY_LEN: usize = 32;
 const SHA3_256_KEY_LEN: usize = 32;
 const SHA3_384_KEY_LEN: usize = 48;
 const SHA3_512_KEY_LEN: usize = 64;
-const BLAKE3_KEY_LEN: usize = 64;
+const BLAKE3_KEY_LEN: usize = 32;
 const AES128_KEY_LEN: usize = 16;
 const AES192_KEY_LEN: usize = 24;
 const AES256_KEY_LEN: usize = 32;
@@ -20,17 +21,17 @@ const AES256_KEY_LEN: usize = 32;
 pub enum Algorithm {
     // HMAC
     #[cfg(feature = "hmac_sha2")]
-    Sha2_256 = 0,
+    Sha256 = 0,
     #[cfg(feature = "hmac_sha2")]
-    Sha2_224 = 1,
+    Sha224 = 1,
     #[cfg(feature = "hmac_sha2")]
-    Sha2_384 = 2,
+    Sha384 = 2,
     #[cfg(feature = "hmac_sha2")]
-    Sha2_512 = 3,
+    Sha512 = 3,
     #[cfg(feature = "hmac_sha2")]
     Sha2_512_224 = 4,
     #[cfg(feature = "hmac_sha2")]
-    Sha2_512_256 = 5,
+    Sha512_256 = 5,
     #[cfg(feature = "hmac_sha3")]
     Sha3_256 = 6,
     #[cfg(feature = "hmac_sha3")]
@@ -52,20 +53,25 @@ pub enum Algorithm {
 }
 
 impl Algorithm {
+    pub(super) fn generate_key(&self) -> Vec<u8> {
+        let mut key = vec![0u8; self.default_key_len()];
+        crate::rand::fill(&mut key);
+        key
+    }
     pub fn default_key_len(&self) -> usize {
         match self {
             #[cfg(feature = "hmac_sha2")]
-            Algorithm::Sha2_256 => SHA2_256_KEY_LEN,
+            Algorithm::Sha256 => SHA2_256_KEY_LEN,
             #[cfg(feature = "hmac_sha2")]
-            Algorithm::Sha2_224 => SHA2_224_KEY_LEN,
+            Algorithm::Sha224 => SHA2_224_KEY_LEN,
             #[cfg(feature = "hmac_sha2")]
-            Algorithm::Sha2_384 => SHA2_384_KEY_LEN,
+            Algorithm::Sha384 => SHA2_384_KEY_LEN,
             #[cfg(feature = "hmac_sha2")]
-            Algorithm::Sha2_512 => SHA2_512_KEY_LEN,
+            Algorithm::Sha512 => SHA2_512_KEY_LEN,
             #[cfg(feature = "hmac_sha2")]
             Algorithm::Sha2_512_224 => SHA2_512_224_KEY_LEN,
             #[cfg(feature = "hmac_sha2")]
-            Algorithm::Sha2_512_256 => SHA2_512_256_KEY_LEN,
+            Algorithm::Sha512_256 => SHA2_512_256_KEY_LEN,
             #[cfg(feature = "hmac_sha3")]
             Algorithm::Sha3_256 => SHA3_256_KEY_LEN,
             #[cfg(feature = "hmac_sha3")]

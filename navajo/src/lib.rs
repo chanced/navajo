@@ -12,7 +12,7 @@ mod id;
 pub(crate) use id::*;
 
 mod rand;
-pub use rand::SecureRandom;
+pub use rand::Random;
 
 mod timestamp;
 

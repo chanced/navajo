@@ -1,18 +1,47 @@
-use alloc::sync::Arc;
+use alloc::sync::{Arc, Weak};
 
+/// Tags are used to verify the integrity of data. They are generated for each
+/// active key within the keyring at the point of computation. If new keys are
+/// added to the keyring, tags can be updated by calling
+/// [`update`](Self::update), [`read_update`](Self::read_update), or
+/// [`stream_update`](Self::stream_update).
+///
+/// When a key is deleted from the keyring, the computed tag for that given key
+/// will no longer be evaluated. Note though that the computed data remains in
+/// memory. If the `Tag` is not updated after all keys have been deleted, all
+/// attempts to [`verify`](Self::verify) will fail, returning a
+/// [`MacError::NoTagsAvailabe`](crate::error::MacError).
+///
+/// If the keyring is composed of a single key and that fact will not change
+/// through the life of the application, it will be more efficient to use the
+/// tag as bytes by calling [`truncate(size).as_bytes()`](Self::truncate),
+/// [`as_bytes`](Self::as_bytes) or [`as_ref`](Self::as_ref). and evaluating the
+/// tag directly with
+/// [`constant_time::verify_slices_are_equal`](crate::constant_time::verify_slices_are_equal).
+/// ## Examples
 #[derive(Clone)]
 pub struct Tag {
-    key: Arc<super::Key>,
+    entries: Vec<Arc<Entry>>,
+    primary: Arc<Entry>,
+}
+
+#[derive(Clone)]
+struct Entry {
+    key: Weak<super::Key>,
     output: Output,
 }
-impl Tag {
-    pub(super) fn new(key: Arc<super::Key>, output: Output) -> Self {
-        Self { key, output }
+
+impl Entry {
+    pub(super) fn new(key: &Arc<super::Key>, output: Output) -> Self {
+        Self {
+            key: Arc::downgrade(key),
+            output,
+        }
     }
-    pub fn truncatable(&self) -> bool {
+    pub(super) fn truncatable(&self) -> bool {
         self.output.truncatable()
     }
-    pub fn truncate(&self, len: usize) -> Result<TruncatedTag, TruncationError> {
+    pub(super) fn truncate(&self, len: usize) -> Result<TruncatedTag, TruncationError> {
         // todo: validate len
         Ok(TruncatedTag {
             tag: self.clone(),
@@ -24,23 +53,15 @@ impl Tag {
     }
 }
 
-impl AsRef<[u8]> for Tag {
+impl AsRef<[u8]> for Entry {
     fn as_ref(&self) -> &[u8] {
         self.output.as_ref()
     }
 }
 
-impl<T: AsRef<[u8]>> PartialEq<T> for Tag {
-    fn eq(&self, other: &T) -> bool {
-        crate::constant_time::verify_slices_are_equal(self.as_ref(), other.as_ref()).is_ok()
-    }
-}
-
-impl Eq for Tag {}
-
 #[derive(Clone)]
 pub struct TruncatedTag {
-    tag: Tag,
+    tag: Entry,
     len: usize,
 }
 

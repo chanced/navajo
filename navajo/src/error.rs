@@ -1,5 +1,5 @@
 use core::fmt;
-use std::borrow::Cow;
+use std::{borrow::Cow, fmt::Display};
 
 pub use random::Error as RandError;
 
@@ -234,3 +234,18 @@ pub enum TruncationError {
 }
 
 pub enum MacError {}
+
+#[derive(Debug, Clone)]
+pub struct InvalidKeyLength;
+impl Display for InvalidKeyLength {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid key length")
+    }
+}
+impl std::error::Error for InvalidKeyLength {}
+
+impl From<crypto_common::InvalidLength> for InvalidKeyLength {
+    fn from(_: crypto_common::InvalidLength) -> Self {
+        Self {}
+    }
+}

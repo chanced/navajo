@@ -5,22 +5,31 @@ use random::{rngs::OsRng, CryptoRng, RngCore};
 
 #[cfg(feature = "ring")]
 pub(crate) fn fill(dst: &mut [u8]) {
-    SecureRandom::new().fill_bytes(dst)
+    Random::fill(dst)
 }
 
-pub struct SecureRandom;
+/// A random number generator that uses [*ring*'s `SystemRandom`](https://docs.rs/ring/0.16.20/ring/rand/struct.SystemRandom.html) if the `"ring"`
+/// feature is enabled, otherwise it uses [rand's `OsRng`](https://docs.rs/rand/0.8/rand/rngs/struct.OsRng.html).
+pub struct Random;
 
 #[cfg(feature = "ring")]
-impl CryptoRng for SecureRandom {}
+impl CryptoRng for Random {}
 
 #[cfg(feature = "ring")]
-impl SecureRandom {
+impl Random {
     pub fn new() -> Self {
         Self
     }
+
+    pub fn fill(dst: &mut [u8]) {
+        SystemRandom::new().fill(dst).unwrap_or_else(|_| {
+            OsRng.fill_bytes(dst);
+        });
+    }
 }
+
 #[cfg(feature = "ring")]
-impl RngCore for SecureRandom {
+impl RngCore for Random {
     fn next_u32(&mut self) -> u32 {
         let mut data = [0; 4];
         SystemRandom::new()
@@ -52,7 +61,7 @@ impl RngCore for SecureRandom {
 }
 
 #[cfg(not(feature = "ring"))]
-impl RngCore for SecureRandom {
+impl RngCore for Random {
     fn next_u32(&mut self) -> u32 {
         OsRng.next_u32()
     }

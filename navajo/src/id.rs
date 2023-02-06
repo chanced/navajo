@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 use crate::error::UnspecifiedError;
 use crate::rand;
@@ -16,7 +16,7 @@ pub(crate) fn gen_id() -> u32 {
 
 pub(crate) fn gen_unique_id(lookup: &HashSet<u32>) -> u32 {
     let mut id = gen_id();
-    while lookup.contains(&id){
+    while lookup.contains(&id) {
         id = gen_id();
     }
     id
