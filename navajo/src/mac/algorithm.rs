@@ -6,8 +6,14 @@ const SHA2_384_KEY_LEN: usize = 48;
 const SHA2_512_KEY_LEN: usize = 64;
 const SHA2_512_224_KEY_LEN: usize = 64;
 const SHA2_512_256_KEY_LEN: usize = 64;
-const SHA3_256_KEY_LEN: usize = 32;
 const SHA3_224_KEY_LEN: usize = 32;
+const SHA3_256_KEY_LEN: usize = 32;
+const SHA3_384_KEY_LEN: usize = 48;
+const SHA3_512_KEY_LEN: usize = 64;
+const BLAKE3_KEY_LEN: usize = 64;
+const AES128_KEY_LEN: usize = 16;
+const AES192_KEY_LEN: usize = 24;
+const AES256_KEY_LEN: usize = 32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
 #[repr(u8)]
@@ -49,33 +55,33 @@ impl Algorithm {
     pub fn default_key_len(&self) -> usize {
         match self {
             #[cfg(feature = "hmac_sha2")]
-            Algorithm::Sha2_256 => 32,
+            Algorithm::Sha2_256 => SHA2_256_KEY_LEN,
             #[cfg(feature = "hmac_sha2")]
-            Algorithm::Sha2_224 => 32,
+            Algorithm::Sha2_224 => SHA2_224_KEY_LEN,
             #[cfg(feature = "hmac_sha2")]
-            Algorithm::Sha2_384 => 48,
+            Algorithm::Sha2_384 => SHA2_384_KEY_LEN,
             #[cfg(feature = "hmac_sha2")]
-            Algorithm::Sha2_512 => 64,
+            Algorithm::Sha2_512 => SHA2_512_KEY_LEN,
             #[cfg(feature = "hmac_sha2")]
-            Algorithm::Sha2_512_224 => 64,
+            Algorithm::Sha2_512_224 => SHA2_512_224_KEY_LEN,
             #[cfg(feature = "hmac_sha2")]
-            Algorithm::Sha2_512_256 => 64,
+            Algorithm::Sha2_512_256 => SHA2_512_256_KEY_LEN,
             #[cfg(feature = "hmac_sha3")]
-            Algorithm::Sha3_256 => 32,
+            Algorithm::Sha3_256 => SHA3_256_KEY_LEN,
             #[cfg(feature = "hmac_sha3")]
-            Algorithm::Sha3_224 => 32,
+            Algorithm::Sha3_224 => SHA3_224_KEY_LEN,
             #[cfg(feature = "hmac_sha3")]
-            Algorithm::Sha3_384 => 64,
+            Algorithm::Sha3_384 => SHA3_384_KEY_LEN,
             #[cfg(feature = "hmac_sha3")]
-            Algorithm::Sha3_512 => 64,
+            Algorithm::Sha3_512 => SHA3_512_KEY_LEN,
             #[cfg(feature = "blake3")]
-            Algorithm::Blake3 => 64,
+            Algorithm::Blake3 => BLAKE3_KEY_LEN,
             #[cfg(feature = "cmac_aes")]
-            Algorithm::Aes128 => 16,
+            Algorithm::Aes128 => AES128_KEY_LEN,
             #[cfg(feature = "cmac_aes")]
-            Algorithm::Aes192 => 24,
+            Algorithm::Aes192 => AES192_KEY_LEN,
             #[cfg(feature = "cmac_aes")]
-            Algorithm::Aes256 => 32,
+            Algorithm::Aes256 => AES256_KEY_LEN,
         }
     }
 }
