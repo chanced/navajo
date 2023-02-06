@@ -228,4 +228,9 @@ impl From<u8> for InvalidAlgorithm {
     }
 }
 
+pub enum TruncationError {
+    NotTruncatable,
+    TooShort,
+}
+
 pub enum MacError {}

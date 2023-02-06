@@ -1,186 +1,144 @@
-use super::{key::Key, InternalTag};
-use crate::error::MacError;
-use alloc::sync::Arc;
-use cfg_if::cfg_if;
-use cmac::Cmac;
-use enum_dispatch::enum_dispatch;
-use hmac::{Hmac, Mac};
-
-use paste::paste;
-cfg_if! {
-    if #[cfg(feature = "ring")] {
-        use ring_compat::ring::hmac::{HMAC_SHA256, HMAC_SHA384, HMAC_SHA512};
-    } else {
-        use sha2::{Sha256, Sha384, Sha512};
-    }
-
-}
-use sha2::{Sha256, Sha384, Sha512};
-
-use aes::{Aes128, Aes192, Aes256};
-use sha2::Sha224;
-use sha3::{Sha3_224, Sha3_256, Sha3_384, Sha3_512};
+use super::{tag::Blake3Output, Output};
 
 pub(super) struct Context(ContextInner);
 
-#[enum_dispatch]
-enum ContextInner {
-    #[cfg(feature = "ring")]
-    RingContext,
-    RustCryptoContext,
+#[allow(clippy::large_enum_variant)]
+pub(super) enum ContextInner {
+    #[cfg(feature = "blake3")]
+    Blake3(Blake3Output),
+    #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+    Ring(crate::mac::RingContext),
+    RustCrypto(Box<crate::mac::RustCryptoContext>),
 }
 
-#[enum_dispatch(ContextInner)]
-trait MacContext {
+pub(super) trait MacContext {
     fn update(&mut self, data: &[u8]);
-    fn finalize(self) -> InternalTag;
+    fn finalize(self) -> Output;
 }
 
-#[cfg(feature = "ring")]
-struct RingContext {}
+cfg_if::cfg_if! {
+    if #[cfg(all(feature = "ring", feature="hmac_sha2"))]{
+        pub(super) struct RingContext(ring_compat::ring::hmac::Context);
 
-impl MacContext for RingContext {
-    fn update(&mut self, data: &[u8]) {
-        unimplemented!()
-    }
-    fn finalize(self) -> InternalTag {
-        unimplemented!()
+        impl MacContext for RingContext {
+            fn update(&mut self, data: &[u8]) {
+                self.0.update(data);
+            }
+            fn finalize(self) -> Output {
+                self.0.sign().into()
+            }
+        }
+
     }
 }
+macro_rules! rust_crypto_context_inner {
+    ($typ:ident, $crt:ident, $alg:ident, $feat:meta$(, not($cfg:meta))?) => {
+        cfg_if::cfg_if! {
+            if #[cfg(all($feat, $(not($cfg))?))] {
+                paste::paste! {
+                    #[derive(Clone, Debug)]
+                    pub(super) struct [<$typ $alg Context>] ([< $typ:lower >]::$typ<$crt::$alg>);
+                    impl MacContext for [<$typ $alg Context>] {
+                        fn update(&mut self, data: &[u8]) {
+                            use [< $typ:lower >]::Mac;
+                            self.0.update(data);
+                        }
+                        fn finalize(self) -> crate::mac::Output {
+                            use [< $typ:lower >]::Mac;
+                            self.0.finalize().into()
+                        }
+                    }
+                    impl From<[<$typ $alg Context>]> for RustCryptoContext {
+                        fn from(ctx: [<$typ $alg Context>]) -> Self {
+                            RustCryptoContext::$alg(ctx)
+                        }
+                    }
 
-impl MacContext for RustCryptoContext {
-    fn update(&mut self, data: &[u8]) {
-        unimplemented!()
-    }
-    fn finalize(self) -> InternalTag {
-        unimplemented!()
-    }
+                }
+            }
+        }
+    };
 }
-
 macro_rules! rust_crypto_contexts {
     ({
-        hmac: ([$($hmac_ring:ident),*], [$($hmac_rc:ident),*],),
-        cmac: [$($cmac:ident),*]
+
+        hmac: { ring: [$($ring:ident),*], sha2: [$($sha2:ident),*], sha3: [$($sha3:ident),*]$(,)? },
+        cmac: { aes: [$($aes:ident),*]$(,)? }
 	}) => {
-        paste! {
-			$(
-				#[cfg(not(feature = "ring"))]
-				#[derive(Clone, Debug)]
-				pub(super) struct [<Hmac $hmac_ring >] (Hmac<[< $hmac_ring >]>);
+        paste::paste!{
+        pub(crate) enum RustCryptoContext {
+                $(
+                    #[cfg(all(feature = "hmac_sha2", not(feature="ring")))]
+                    $ring([< Hmac $ring Context>]),
+                )*
+                $(
+                    #[cfg(feature = "hmac_sha2")]
+                    $sha2([< Hmac $sha2 Context>]),
+                )*
+                $(
+                    #[cfg(feature = "hmac_sha3")]
+                    $sha3([< Hmac $sha3 Context>]),
+                )*
+                $(
+                    #[cfg(feature = "cmac_aes")]
+                    $aes([< Cmac $aes Context>]),
+                )*
+            }
 
-				#[cfg(not(feature = "ring"))]
-				impl MacContext for [<Hmac $hmac_ring Context>] {
-					fn update(&mut self, data: &[u8]) {
-						todo!()
-					}
-					fn finalize(self) -> Tag {
-						todo!()
-					}
-				}
-			)*
+            impl From<crate::mac::RustCryptoContext> for ContextInner {
+                fn from(ctx: crate::mac::RustCryptoContext) -> Self {
+                    ContextInner::RustCrypto(Box::new(ctx))
+                }
+            }
+            impl MacContext for crate::mac::RustCryptoContext {
+                fn update(&mut self, data: &[u8]) {
+                    match self{
+                        $(
+                            #[cfg(all(feature = "hmac_sha2", not(feature="ring")))]
+                            RustCryptoContext::$ring(ctx) => ctx.update(data),
+                        )*
+                        $(
+                            #[cfg(feature = "hmac_sha2")]
+                            RustCryptoContext::$sha2(ctx) => ctx.update(data),
+                        )*
+                        $(
+                            #[cfg(feature = "hmac_sha3")]
+                            RustCryptoContext::$sha3(ctx) => ctx.update(data),
+                        )*
+                        $(
+                            #[cfg(feature = "cmac_aes")]
+                            RustCryptoContext::$aes(ctx) => ctx.update(data),
+                        )*
+                    }
+                }
+                fn finalize(self) -> Output {
+                    match self{
+                        $(
+                            #[cfg(all(feature = "hmac_sha2", not(feature="ring")))]
+                            RustCryptoContext::$ring(ctx) => ctx.finalize(),
+                        )*
+                        $(
+                            #[cfg(feature = "hmac_sha2")]
+                            RustCryptoContext::$sha2(ctx) => ctx.finalize(),
+                        )*
+                        $(
+                            #[cfg(feature = "hmac_sha3")]
+                            RustCryptoContext::$sha3(ctx) => ctx.finalize(),
+                        )*
+                        $(
+                            #[cfg(feature = "cmac_aes")]
+                            RustCryptoContext::$aes(ctx) => ctx.finalize(),
+                        )*
+                    }
+                }
+            }
 
-			$(
-				#[derive(Clone, Debug)]
-				pub(super) struct [<Hmac $hmac_rc Context>] (Hmac<[< $hmac_rc >]>);
-
-				impl MacContext for [<Hmac $hmac_rc Context>] {
-					fn update(&mut self, data: &[u8]) {
-						todo!()
-					}
-					fn finalize(self) -> InternalTag {
-						todo!()
-					}
-				}
-
-			)*
-			$(
-				#[derive(Clone, Debug)]
-				pub(super) struct [<Cmac $cmac Context>] (Cmac<[< $cmac >]>);
-				impl MacContext for [<Cmac $cmac Context>] {
-					fn update(&mut self, data: &[u8]) {
-						unimplemented!()
-					}
-					fn finalize(self) -> InternalTag {
-						unimplemented!()
-					}
-				}
-			)*
-
-			#[derive(Clone, Debug)]
-			pub(super) enum RustCryptoContextInner {
-				$(
-					#[cfg(not(feature = "ring"))]
-					[<Hmac $hmac_ring>]([<Hmac $hmac_ring Context>]),
-				)*
-				$(
-					[<Hmac $hmac_rc>]([<Hmac $hmac_rc Context>]),
-				)*
-				$(
-					[<Cmac $cmac>]([<Cmac $cmac Context>]),
-				)*
-			}
-			impl MacContext for RustCryptoContextInner {
-				cfg_if! {
-					if #[cfg(feature = "ring")] {
-						fn update(&mut self, data: &[u8]) {
-							match self {
-								$(
-									Self::[<Hmac $hmac_rc>](ctx) => ctx.update(data),
-								)*
-								$(
-									Self::[<Cmac $cmac>](ctx) => ctx.update(data),
-								)*
-							}
-						}
-						fn finalize(self) -> InternalTag {
-							match self {
-								$(
-									Self::[<Hmac $hmac_rc>](ctx) => ctx.finalize(),
-								)*
-								$(
-									Self::[<Cmac $cmac>](ctx) => ctx.finalize(),
-								)*
-							}
-						}
-					} else {
-						fn update(&mut self, data: &[u8]) {
-							match self {
-								$(
-									[<Hmac $hmac_ring>](ctx) => ctx.update(data),
-								)*
-								$(
-									[<Hmac $hmac_rc>](ctx) => ctx.update(data),
-								)*
-								$(
-									[<Cmac $cmac>](ctx) => ctx.update(data),
-								)*
-							}
-						}
-						fn finalize(self) -> Tag {
-							match self {
-								$(
-									[<Hmac $hmac_ring>](ctx) => ctx.finalize(),
-								)*
-								$(
-									[<Hmac $hmac_rc>](ctx) => ctx.finalize(),
-								)*
-								$(
-									[<Cmac $cmac>](ctx) => ctx.finalize(),
-								)*
-							}
-						}
-					}
-				}
-			}
-		}
+			$( rust_crypto_context_inner!(Hmac, sha2, $ring, feature = "hmac_sha2", not(feature="ring")); )*
+            $( rust_crypto_context_inner!(Hmac, sha2, $sha2, feature = "hmac_sha2"); )*
+            $( rust_crypto_context_inner!(Hmac, sha3, $sha3, feature = "hmac_sha3"); )*
+            $( rust_crypto_context_inner!(Cmac, aes, $aes, feature = "cmac_aes"); )*
+        }
 	}
 }
-enum RustCryptoContext {}
-
-rust_crypto_contexts!({
-    hmac:  (
-        [ Sha256, Sha384, Sha512 ],
-        [Sha224, Sha3_224, Sha3_256, Sha3_384, Sha3_512],
-    ),
-    cmac: [Aes128, Aes192, Aes256]
-});
+pub(super) use rust_crypto_context_inner;
+pub(super) use rust_crypto_contexts;

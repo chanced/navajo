@@ -1227,6 +1227,10 @@ pub mod error {
             Self(v)
         }
     }
+    pub enum TruncationError {
+        NotTruncatable,
+        TooShort,
+    }
     pub enum MacError {}
 }
 mod id {
@@ -1256,12 +1260,14 @@ mod rand {
     #[cfg(feature = "ring")]
     use ring_compat::ring::rand::{SecureRandom as _, SystemRandom};
     use random::{rngs::OsRng, CryptoRng, RngCore};
+    #[cfg(feature = "ring")]
     pub(crate) fn fill(dst: &mut [u8]) {
         SecureRandom::new().fill_bytes(dst)
     }
-    #[cfg(feature = "ring")]
     pub struct SecureRandom;
+    #[cfg(feature = "ring")]
     impl CryptoRng for SecureRandom {}
+    #[cfg(feature = "ring")]
     impl SecureRandom {
         pub fn new() -> Self {
             Self
@@ -1310,16 +1316,33 @@ pub mod mac {
         use serde_repr::{Deserialize_repr, Serialize_repr};
         #[repr(u8)]
         pub enum Algorithm {
+            #[cfg(feature = "hmac_sha2")]
             Sha256 = 0,
+            #[cfg(feature = "hmac_sha2")]
             Sha512 = 1,
+            #[cfg(feature = "hmac_sha2")]
             Sha224 = 2,
-            Sha384 = 3,
-            Sha3_256 = 4,
-            Sha3_512 = 5,
-            Sha3_224 = 6,
-            Sha3_384 = 7,
+            #[cfg(feature = "hmac_sha2")]
+            Sha512_224 = 3,
+            #[cfg(feature = "hmac_sha2")]
+            Sha512_256 = 4,
+            #[cfg(feature = "hmac_sha2")]
+            Sha384 = 5,
+            #[cfg(feature = "hmac_sha3")]
+            Sha3_256 = 6,
+            #[cfg(feature = "hmac_sha3")]
+            Sha3_512 = 7,
+            #[cfg(feature = "hmac_sha3")]
+            Sha3_224 = 8,
+            #[cfg(feature = "hmac_sha3")]
+            Sha3_384 = 9,
+            #[cfg(feature = "blake3")]
+            Blake3 = 10,
+            #[cfg(feature = "cmac_aes")]
             Aes128 = 128,
+            #[cfg(feature = "cmac_aes")]
             Aes192 = 129,
+            #[cfg(feature = "cmac_aes")]
             Aes256 = 130,
         }
         #[automatically_derived]
@@ -1329,6 +1352,12 @@ pub mod mac {
                     Algorithm::Sha256 => ::core::fmt::Formatter::write_str(f, "Sha256"),
                     Algorithm::Sha512 => ::core::fmt::Formatter::write_str(f, "Sha512"),
                     Algorithm::Sha224 => ::core::fmt::Formatter::write_str(f, "Sha224"),
+                    Algorithm::Sha512_224 => {
+                        ::core::fmt::Formatter::write_str(f, "Sha512_224")
+                    }
+                    Algorithm::Sha512_256 => {
+                        ::core::fmt::Formatter::write_str(f, "Sha512_256")
+                    }
                     Algorithm::Sha384 => ::core::fmt::Formatter::write_str(f, "Sha384"),
                     Algorithm::Sha3_256 => {
                         ::core::fmt::Formatter::write_str(f, "Sha3_256")
@@ -1342,6 +1371,7 @@ pub mod mac {
                     Algorithm::Sha3_384 => {
                         ::core::fmt::Formatter::write_str(f, "Sha3_384")
                     }
+                    Algorithm::Blake3 => ::core::fmt::Formatter::write_str(f, "Blake3"),
                     Algorithm::Aes128 => ::core::fmt::Formatter::write_str(f, "Aes128"),
                     Algorithm::Aes192 => ::core::fmt::Formatter::write_str(f, "Aes192"),
                     Algorithm::Aes256 => ::core::fmt::Formatter::write_str(f, "Aes256"),
@@ -1397,11 +1427,14 @@ pub mod mac {
                     Algorithm::Sha256 => Algorithm::Sha256 as u8,
                     Algorithm::Sha512 => Algorithm::Sha512 as u8,
                     Algorithm::Sha224 => Algorithm::Sha224 as u8,
+                    Algorithm::Sha512_224 => Algorithm::Sha512_224 as u8,
+                    Algorithm::Sha512_256 => Algorithm::Sha512_256 as u8,
                     Algorithm::Sha384 => Algorithm::Sha384 as u8,
                     Algorithm::Sha3_256 => Algorithm::Sha3_256 as u8,
                     Algorithm::Sha3_512 => Algorithm::Sha3_512 as u8,
                     Algorithm::Sha3_224 => Algorithm::Sha3_224 as u8,
                     Algorithm::Sha3_384 => Algorithm::Sha3_384 as u8,
+                    Algorithm::Blake3 => Algorithm::Blake3 as u8,
                     Algorithm::Aes128 => Algorithm::Aes128 as u8,
                     Algorithm::Aes192 => Algorithm::Aes192 as u8,
                     Algorithm::Aes256 => Algorithm::Aes256 as u8,
@@ -1421,11 +1454,14 @@ pub mod mac {
                     const Sha256: u8 = Algorithm::Sha256 as u8;
                     const Sha512: u8 = Algorithm::Sha512 as u8;
                     const Sha224: u8 = Algorithm::Sha224 as u8;
+                    const Sha512_224: u8 = Algorithm::Sha512_224 as u8;
+                    const Sha512_256: u8 = Algorithm::Sha512_256 as u8;
                     const Sha384: u8 = Algorithm::Sha384 as u8;
                     const Sha3_256: u8 = Algorithm::Sha3_256 as u8;
                     const Sha3_512: u8 = Algorithm::Sha3_512 as u8;
                     const Sha3_224: u8 = Algorithm::Sha3_224 as u8;
                     const Sha3_384: u8 = Algorithm::Sha3_384 as u8;
+                    const Blake3: u8 = Algorithm::Blake3 as u8;
                     const Aes128: u8 = Algorithm::Aes128 as u8;
                     const Aes192: u8 = Algorithm::Aes192 as u8;
                     const Aes256: u8 = Algorithm::Aes256 as u8;
@@ -1434,6 +1470,12 @@ pub mod mac {
                     discriminant::Sha256 => core::result::Result::Ok(Algorithm::Sha256),
                     discriminant::Sha512 => core::result::Result::Ok(Algorithm::Sha512),
                     discriminant::Sha224 => core::result::Result::Ok(Algorithm::Sha224),
+                    discriminant::Sha512_224 => {
+                        core::result::Result::Ok(Algorithm::Sha512_224)
+                    }
+                    discriminant::Sha512_256 => {
+                        core::result::Result::Ok(Algorithm::Sha512_256)
+                    }
                     discriminant::Sha384 => core::result::Result::Ok(Algorithm::Sha384),
                     discriminant::Sha3_256 => {
                         core::result::Result::Ok(Algorithm::Sha3_256)
@@ -1447,6 +1489,7 @@ pub mod mac {
                     discriminant::Sha3_384 => {
                         core::result::Result::Ok(Algorithm::Sha3_384)
                     }
+                    discriminant::Blake3 => core::result::Result::Ok(Algorithm::Blake3),
                     discriminant::Aes128 => core::result::Result::Ok(Algorithm::Aes128),
                     discriminant::Aes192 => core::result::Result::Ok(Algorithm::Aes192),
                     discriminant::Aes256 => core::result::Result::Ok(Algorithm::Aes256),
@@ -1467,12 +1510,21 @@ pub mod mac {
                                         ", ",
                                         ", ",
                                         ", ",
+                                        ", ",
+                                        ", ",
+                                        ", ",
                                     ],
                                     &[
                                         ::core::fmt::ArgumentV1::new_display(&other),
                                         ::core::fmt::ArgumentV1::new_display(&discriminant::Sha256),
                                         ::core::fmt::ArgumentV1::new_display(&discriminant::Sha512),
                                         ::core::fmt::ArgumentV1::new_display(&discriminant::Sha224),
+                                        ::core::fmt::ArgumentV1::new_display(
+                                            &discriminant::Sha512_224,
+                                        ),
+                                        ::core::fmt::ArgumentV1::new_display(
+                                            &discriminant::Sha512_256,
+                                        ),
                                         ::core::fmt::ArgumentV1::new_display(&discriminant::Sha384),
                                         ::core::fmt::ArgumentV1::new_display(
                                             &discriminant::Sha3_256,
@@ -1486,6 +1538,7 @@ pub mod mac {
                                         ::core::fmt::ArgumentV1::new_display(
                                             &discriminant::Sha3_384,
                                         ),
+                                        ::core::fmt::ArgumentV1::new_display(&discriminant::Blake3),
                                         ::core::fmt::ArgumentV1::new_display(&discriminant::Aes128),
                                         ::core::fmt::ArgumentV1::new_display(&discriminant::Aes192),
                                         ::core::fmt::ArgumentV1::new_display(&discriminant::Aes256),
@@ -1499,802 +1552,1344 @@ pub mod mac {
         }
     }
     mod context {
-        use super::{key::Key, InternalTag};
-        use crate::error::MacError;
-        use alloc::sync::Arc;
-        use cfg_if::cfg_if;
-        use cmac::Cmac;
-        use enum_dispatch::enum_dispatch;
-        use hmac::{Hmac, Mac};
-        use paste::paste;
-        use ring_compat::ring::hmac::{HMAC_SHA256, HMAC_SHA384, HMAC_SHA512};
-        use sha2::{Sha256, Sha384, Sha512};
-        use aes::{Aes128, Aes192, Aes256};
-        use sha2::Sha224;
-        use sha3::{Sha3_224, Sha3_256, Sha3_384, Sha3_512};
+        use super::{tag::Blake3Output, Output};
         pub(super) struct Context(ContextInner);
-        enum ContextInner {
-            #[cfg(feature = "ring")]
-            RingContext(RingContext),
-            RustCryptoContext(RustCryptoContext),
+        #[allow(clippy::large_enum_variant)]
+        pub(super) enum ContextInner {
+            #[cfg(feature = "blake3")]
+            Blake3(Blake3Output),
+            #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+            Ring(crate::mac::RingContext),
+            RustCrypto(Box<crate::mac::RustCryptoContext>),
         }
-        trait MacContext {
+        pub(super) trait MacContext {
             fn update(&mut self, data: &[u8]);
-            fn finalize(self) -> InternalTag;
+            fn finalize(self) -> Output;
         }
-        #[cfg(feature = "ring")]
-        impl ::core::convert::From<RingContext> for ContextInner {
-            fn from(v: RingContext) -> ContextInner {
-                ContextInner::RingContext(v)
-            }
-        }
-        impl ::core::convert::From<RustCryptoContext> for ContextInner {
-            fn from(v: RustCryptoContext) -> ContextInner {
-                ContextInner::RustCryptoContext(v)
-            }
-        }
-        #[cfg(feature = "ring")]
-        impl core::convert::TryInto<RingContext> for ContextInner {
-            type Error = &'static str;
-            fn try_into(
-                self,
-            ) -> ::core::result::Result<
-                RingContext,
-                <Self as core::convert::TryInto<RingContext>>::Error,
-            > {
-                match self {
-                    ContextInner::RingContext(v) => Ok(v),
-                    ContextInner::RustCryptoContext(v) => {
-                        Err("Tried to convert variant RustCryptoContext to RingContext")
-                    }
-                }
-            }
-        }
-        impl core::convert::TryInto<RustCryptoContext> for ContextInner {
-            type Error = &'static str;
-            fn try_into(
-                self,
-            ) -> ::core::result::Result<
-                RustCryptoContext,
-                <Self as core::convert::TryInto<RustCryptoContext>>::Error,
-            > {
-                match self {
-                    ContextInner::RustCryptoContext(v) => Ok(v),
-                    #[cfg(feature = "ring")]
-                    ContextInner::RingContext(v) => {
-                        Err("Tried to convert variant RingContext to RustCryptoContext")
-                    }
-                }
-            }
-        }
-        impl MacContext for ContextInner {
-            #[inline]
-            fn update(&mut self, __enum_dispatch_arg_0: &[u8]) {
-                match self {
-                    #[cfg(feature = "ring")]
-                    ContextInner::RingContext(inner) => {
-                        MacContext::update(inner, __enum_dispatch_arg_0)
-                    }
-                    ContextInner::RustCryptoContext(inner) => {
-                        MacContext::update(inner, __enum_dispatch_arg_0)
-                    }
-                }
-            }
-            #[inline]
-            fn finalize(self) -> InternalTag {
-                match self {
-                    #[cfg(feature = "ring")]
-                    ContextInner::RingContext(inner) => MacContext::finalize(inner),
-                    ContextInner::RustCryptoContext(inner) => MacContext::finalize(inner),
-                }
-            }
-        }
-        #[cfg(feature = "ring")]
-        struct RingContext {}
+        pub(super) struct RingContext(ring_compat::ring::hmac::Context);
         impl MacContext for RingContext {
             fn update(&mut self, data: &[u8]) {
-                ::core::panicking::panic("not implemented")
+                self.0.update(data);
             }
-            fn finalize(self) -> InternalTag {
-                ::core::panicking::panic("not implemented")
-            }
-        }
-        impl MacContext for RustCryptoContext {
-            fn update(&mut self, data: &[u8]) {
-                ::core::panicking::panic("not implemented")
-            }
-            fn finalize(self) -> InternalTag {
-                ::core::panicking::panic("not implemented")
+            fn finalize(self) -> Output {
+                self.0.sign().into()
             }
         }
-        enum RustCryptoContext {}
-        pub(super) struct HmacSha224Context(Hmac<Sha224>);
-        #[automatically_derived]
-        impl ::core::clone::Clone for HmacSha224Context {
-            #[inline]
-            fn clone(&self) -> HmacSha224Context {
-                HmacSha224Context(::core::clone::Clone::clone(&self.0))
-            }
-        }
-        #[automatically_derived]
-        impl ::core::fmt::Debug for HmacSha224Context {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-                ::core::fmt::Formatter::debug_tuple_field1_finish(
-                    f,
-                    "HmacSha224Context",
-                    &&self.0,
-                )
-            }
-        }
-        impl MacContext for HmacSha224Context {
-            fn update(&mut self, data: &[u8]) {
-                ::core::panicking::panic("not yet implemented")
-            }
-            fn finalize(self) -> InternalTag {
-                ::core::panicking::panic("not yet implemented")
-            }
-        }
-        pub(super) struct HmacSha3_224Context(Hmac<Sha3_224>);
-        #[automatically_derived]
-        impl ::core::clone::Clone for HmacSha3_224Context {
-            #[inline]
-            fn clone(&self) -> HmacSha3_224Context {
-                HmacSha3_224Context(::core::clone::Clone::clone(&self.0))
-            }
-        }
-        #[automatically_derived]
-        impl ::core::fmt::Debug for HmacSha3_224Context {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-                ::core::fmt::Formatter::debug_tuple_field1_finish(
-                    f,
-                    "HmacSha3_224Context",
-                    &&self.0,
-                )
-            }
-        }
-        impl MacContext for HmacSha3_224Context {
-            fn update(&mut self, data: &[u8]) {
-                ::core::panicking::panic("not yet implemented")
-            }
-            fn finalize(self) -> InternalTag {
-                ::core::panicking::panic("not yet implemented")
-            }
-        }
-        pub(super) struct HmacSha3_256Context(Hmac<Sha3_256>);
-        #[automatically_derived]
-        impl ::core::clone::Clone for HmacSha3_256Context {
-            #[inline]
-            fn clone(&self) -> HmacSha3_256Context {
-                HmacSha3_256Context(::core::clone::Clone::clone(&self.0))
-            }
-        }
-        #[automatically_derived]
-        impl ::core::fmt::Debug for HmacSha3_256Context {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-                ::core::fmt::Formatter::debug_tuple_field1_finish(
-                    f,
-                    "HmacSha3_256Context",
-                    &&self.0,
-                )
-            }
-        }
-        impl MacContext for HmacSha3_256Context {
-            fn update(&mut self, data: &[u8]) {
-                ::core::panicking::panic("not yet implemented")
-            }
-            fn finalize(self) -> InternalTag {
-                ::core::panicking::panic("not yet implemented")
-            }
-        }
-        pub(super) struct HmacSha3_384Context(Hmac<Sha3_384>);
-        #[automatically_derived]
-        impl ::core::clone::Clone for HmacSha3_384Context {
-            #[inline]
-            fn clone(&self) -> HmacSha3_384Context {
-                HmacSha3_384Context(::core::clone::Clone::clone(&self.0))
-            }
-        }
-        #[automatically_derived]
-        impl ::core::fmt::Debug for HmacSha3_384Context {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-                ::core::fmt::Formatter::debug_tuple_field1_finish(
-                    f,
-                    "HmacSha3_384Context",
-                    &&self.0,
-                )
-            }
-        }
-        impl MacContext for HmacSha3_384Context {
-            fn update(&mut self, data: &[u8]) {
-                ::core::panicking::panic("not yet implemented")
-            }
-            fn finalize(self) -> InternalTag {
-                ::core::panicking::panic("not yet implemented")
-            }
-        }
-        pub(super) struct HmacSha3_512Context(Hmac<Sha3_512>);
-        #[automatically_derived]
-        impl ::core::clone::Clone for HmacSha3_512Context {
-            #[inline]
-            fn clone(&self) -> HmacSha3_512Context {
-                HmacSha3_512Context(::core::clone::Clone::clone(&self.0))
-            }
-        }
-        #[automatically_derived]
-        impl ::core::fmt::Debug for HmacSha3_512Context {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-                ::core::fmt::Formatter::debug_tuple_field1_finish(
-                    f,
-                    "HmacSha3_512Context",
-                    &&self.0,
-                )
-            }
-        }
-        impl MacContext for HmacSha3_512Context {
-            fn update(&mut self, data: &[u8]) {
-                ::core::panicking::panic("not yet implemented")
-            }
-            fn finalize(self) -> InternalTag {
-                ::core::panicking::panic("not yet implemented")
-            }
-        }
-        pub(super) struct CmacAes128Context(Cmac<Aes128>);
-        #[automatically_derived]
-        impl ::core::clone::Clone for CmacAes128Context {
-            #[inline]
-            fn clone(&self) -> CmacAes128Context {
-                CmacAes128Context(::core::clone::Clone::clone(&self.0))
-            }
-        }
-        #[automatically_derived]
-        impl ::core::fmt::Debug for CmacAes128Context {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-                ::core::fmt::Formatter::debug_tuple_field1_finish(
-                    f,
-                    "CmacAes128Context",
-                    &&self.0,
-                )
-            }
-        }
-        impl MacContext for CmacAes128Context {
-            fn update(&mut self, data: &[u8]) {
-                ::core::panicking::panic("not implemented")
-            }
-            fn finalize(self) -> InternalTag {
-                ::core::panicking::panic("not implemented")
-            }
-        }
-        pub(super) struct CmacAes192Context(Cmac<Aes192>);
-        #[automatically_derived]
-        impl ::core::clone::Clone for CmacAes192Context {
-            #[inline]
-            fn clone(&self) -> CmacAes192Context {
-                CmacAes192Context(::core::clone::Clone::clone(&self.0))
-            }
-        }
-        #[automatically_derived]
-        impl ::core::fmt::Debug for CmacAes192Context {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-                ::core::fmt::Formatter::debug_tuple_field1_finish(
-                    f,
-                    "CmacAes192Context",
-                    &&self.0,
-                )
-            }
-        }
-        impl MacContext for CmacAes192Context {
-            fn update(&mut self, data: &[u8]) {
-                ::core::panicking::panic("not implemented")
-            }
-            fn finalize(self) -> InternalTag {
-                ::core::panicking::panic("not implemented")
-            }
-        }
-        pub(super) struct CmacAes256Context(Cmac<Aes256>);
-        #[automatically_derived]
-        impl ::core::clone::Clone for CmacAes256Context {
-            #[inline]
-            fn clone(&self) -> CmacAes256Context {
-                CmacAes256Context(::core::clone::Clone::clone(&self.0))
-            }
-        }
-        #[automatically_derived]
-        impl ::core::fmt::Debug for CmacAes256Context {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-                ::core::fmt::Formatter::debug_tuple_field1_finish(
-                    f,
-                    "CmacAes256Context",
-                    &&self.0,
-                )
-            }
-        }
-        impl MacContext for CmacAes256Context {
-            fn update(&mut self, data: &[u8]) {
-                ::core::panicking::panic("not implemented")
-            }
-            fn finalize(self) -> InternalTag {
-                ::core::panicking::panic("not implemented")
-            }
-        }
-        pub(super) enum RustCryptoContextInner {
-            HmacSha224(HmacSha224Context),
-            HmacSha3_224(HmacSha3_224Context),
-            HmacSha3_256(HmacSha3_256Context),
-            HmacSha3_384(HmacSha3_384Context),
-            HmacSha3_512(HmacSha3_512Context),
-            CmacAes128(CmacAes128Context),
-            CmacAes192(CmacAes192Context),
-            CmacAes256(CmacAes256Context),
-        }
-        #[automatically_derived]
-        impl ::core::clone::Clone for RustCryptoContextInner {
-            #[inline]
-            fn clone(&self) -> RustCryptoContextInner {
-                match self {
-                    RustCryptoContextInner::HmacSha224(__self_0) => {
-                        RustCryptoContextInner::HmacSha224(
-                            ::core::clone::Clone::clone(__self_0),
-                        )
-                    }
-                    RustCryptoContextInner::HmacSha3_224(__self_0) => {
-                        RustCryptoContextInner::HmacSha3_224(
-                            ::core::clone::Clone::clone(__self_0),
-                        )
-                    }
-                    RustCryptoContextInner::HmacSha3_256(__self_0) => {
-                        RustCryptoContextInner::HmacSha3_256(
-                            ::core::clone::Clone::clone(__self_0),
-                        )
-                    }
-                    RustCryptoContextInner::HmacSha3_384(__self_0) => {
-                        RustCryptoContextInner::HmacSha3_384(
-                            ::core::clone::Clone::clone(__self_0),
-                        )
-                    }
-                    RustCryptoContextInner::HmacSha3_512(__self_0) => {
-                        RustCryptoContextInner::HmacSha3_512(
-                            ::core::clone::Clone::clone(__self_0),
-                        )
-                    }
-                    RustCryptoContextInner::CmacAes128(__self_0) => {
-                        RustCryptoContextInner::CmacAes128(
-                            ::core::clone::Clone::clone(__self_0),
-                        )
-                    }
-                    RustCryptoContextInner::CmacAes192(__self_0) => {
-                        RustCryptoContextInner::CmacAes192(
-                            ::core::clone::Clone::clone(__self_0),
-                        )
-                    }
-                    RustCryptoContextInner::CmacAes256(__self_0) => {
-                        RustCryptoContextInner::CmacAes256(
-                            ::core::clone::Clone::clone(__self_0),
-                        )
-                    }
-                }
-            }
-        }
-        #[automatically_derived]
-        impl ::core::fmt::Debug for RustCryptoContextInner {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-                match self {
-                    RustCryptoContextInner::HmacSha224(__self_0) => {
-                        ::core::fmt::Formatter::debug_tuple_field1_finish(
-                            f,
-                            "HmacSha224",
-                            &__self_0,
-                        )
-                    }
-                    RustCryptoContextInner::HmacSha3_224(__self_0) => {
-                        ::core::fmt::Formatter::debug_tuple_field1_finish(
-                            f,
-                            "HmacSha3_224",
-                            &__self_0,
-                        )
-                    }
-                    RustCryptoContextInner::HmacSha3_256(__self_0) => {
-                        ::core::fmt::Formatter::debug_tuple_field1_finish(
-                            f,
-                            "HmacSha3_256",
-                            &__self_0,
-                        )
-                    }
-                    RustCryptoContextInner::HmacSha3_384(__self_0) => {
-                        ::core::fmt::Formatter::debug_tuple_field1_finish(
-                            f,
-                            "HmacSha3_384",
-                            &__self_0,
-                        )
-                    }
-                    RustCryptoContextInner::HmacSha3_512(__self_0) => {
-                        ::core::fmt::Formatter::debug_tuple_field1_finish(
-                            f,
-                            "HmacSha3_512",
-                            &__self_0,
-                        )
-                    }
-                    RustCryptoContextInner::CmacAes128(__self_0) => {
-                        ::core::fmt::Formatter::debug_tuple_field1_finish(
-                            f,
-                            "CmacAes128",
-                            &__self_0,
-                        )
-                    }
-                    RustCryptoContextInner::CmacAes192(__self_0) => {
-                        ::core::fmt::Formatter::debug_tuple_field1_finish(
-                            f,
-                            "CmacAes192",
-                            &__self_0,
-                        )
-                    }
-                    RustCryptoContextInner::CmacAes256(__self_0) => {
-                        ::core::fmt::Formatter::debug_tuple_field1_finish(
-                            f,
-                            "CmacAes256",
-                            &__self_0,
-                        )
-                    }
-                }
-            }
-        }
-        impl MacContext for RustCryptoContextInner {
-            fn update(&mut self, data: &[u8]) {
-                match self {
-                    Self::HmacSha224(ctx) => ctx.update(data),
-                    Self::HmacSha3_224(ctx) => ctx.update(data),
-                    Self::HmacSha3_256(ctx) => ctx.update(data),
-                    Self::HmacSha3_384(ctx) => ctx.update(data),
-                    Self::HmacSha3_512(ctx) => ctx.update(data),
-                    Self::CmacAes128(ctx) => ctx.update(data),
-                    Self::CmacAes192(ctx) => ctx.update(data),
-                    Self::CmacAes256(ctx) => ctx.update(data),
-                }
-            }
-            fn finalize(self) -> InternalTag {
-                match self {
-                    Self::HmacSha224(ctx) => ctx.finalize(),
-                    Self::HmacSha3_224(ctx) => ctx.finalize(),
-                    Self::HmacSha3_256(ctx) => ctx.finalize(),
-                    Self::HmacSha3_384(ctx) => ctx.finalize(),
-                    Self::HmacSha3_512(ctx) => ctx.finalize(),
-                    Self::CmacAes128(ctx) => ctx.finalize(),
-                    Self::CmacAes192(ctx) => ctx.finalize(),
-                    Self::CmacAes256(ctx) => ctx.finalize(),
-                }
-            }
-        }
+        pub(super) use rust_crypto_context_inner;
+        pub(super) use rust_crypto_contexts;
     }
     mod key {
-        use aes::{Aes128, Aes192, Aes256};
-        use cmac::Cmac;
-        use enum_dispatch::enum_dispatch;
-        use hmac::{Hmac, Mac};
-        use paste::paste;
-        use sha2::{Sha224, Sha256, Sha384, Sha512};
-        use sha3::{Sha3_224, Sha3_256, Sha3_384, Sha3_512};
-        pub(super) struct Key;
+        use super::Algorithm;
+        pub(super) struct Key {
+            id: u64,
+            algorithm: Algorithm,
+            inner: MacKey,
+            prefix: Option<Vec<u8>>,
+        }
         #[automatically_derived]
         impl ::core::clone::Clone for Key {
             #[inline]
             fn clone(&self) -> Key {
-                Key
+                Key {
+                    id: ::core::clone::Clone::clone(&self.id),
+                    algorithm: ::core::clone::Clone::clone(&self.algorithm),
+                    inner: ::core::clone::Clone::clone(&self.inner),
+                    prefix: ::core::clone::Clone::clone(&self.prefix),
+                }
             }
+        }
+        pub(super) enum MacKey {
+            #[cfg(all(feature = "ring"))]
+            Ring(ring_compat::ring::hmac::Key),
+            RustCrypto(crate::mac::RustCryptoKey),
         }
         #[automatically_derived]
-        impl ::core::fmt::Debug for Key {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-                ::core::fmt::Formatter::write_str(f, "Key")
+        impl ::core::clone::Clone for MacKey {
+            #[inline]
+            fn clone(&self) -> MacKey {
+                match self {
+                    MacKey::Ring(__self_0) => {
+                        MacKey::Ring(::core::clone::Clone::clone(__self_0))
+                    }
+                    MacKey::RustCrypto(__self_0) => {
+                        MacKey::RustCrypto(::core::clone::Clone::clone(__self_0))
+                    }
+                }
             }
         }
-        pub(super) trait MacKey {}
-        enum KeyInner {}
-        impl MacKey for KeyInner {}
-        pub(super) struct HmacSha224(Hmac<Sha224>);
-        pub(super) struct HmacSha256(Hmac<Sha256>);
-        pub(super) struct HmacSha384(Hmac<Sha384>);
-        pub(super) struct HmacSha512(Hmac<Sha512>);
-        pub(super) struct HmacSha3_224(Hmac<Sha3_224>);
-        pub(super) struct HmacSha3_256(Hmac<Sha3_256>);
-        pub(super) struct HmacSha3_384(Hmac<Sha3_384>);
-        pub(super) struct HmacSha3_512(Hmac<Sha3_512>);
-        pub(super) struct CmacAes128(Cmac<Aes128>);
-        pub(super) struct CmacAes192(Cmac<Aes192>);
-        pub(super) struct CmacAes256(Cmac<Aes256>);
+        pub(super) use rust_crypto_key;
+        pub(super) use rust_crypto_keys;
     }
-    mod ring {}
     mod tag {
-        use enum_dispatch::enum_dispatch;
-        use hmac::{Hmac, Mac};
-        pub struct Tag {}
-        pub(super) trait MacOutput {}
+        use alloc::sync::Arc;
+        pub struct Tag {
+            key: Arc<super::Key>,
+            output: Output,
+        }
+        #[automatically_derived]
+        impl ::core::clone::Clone for Tag {
+            #[inline]
+            fn clone(&self) -> Tag {
+                Tag {
+                    key: ::core::clone::Clone::clone(&self.key),
+                    output: ::core::clone::Clone::clone(&self.output),
+                }
+            }
+        }
+        impl Tag {
+            pub(super) fn new(key: Arc<super::Key>, output: Output) -> Self {
+                Self { key, output }
+            }
+            pub fn truncatable(&self) -> bool {
+                self.output.truncatable()
+            }
+            pub fn truncate(&self, len: usize) -> Result<TruncatedTag, TruncationError> {
+                Ok(TruncatedTag {
+                    tag: self.clone(),
+                    len,
+                })
+            }
+            pub fn verify(&self, other: &[u8]) -> Result<(), MacError> {
+                ::core::panicking::panic("not yet implemented")
+            }
+        }
+        impl AsRef<[u8]> for Tag {
+            fn as_ref(&self) -> &[u8] {
+                self.output.as_ref()
+            }
+        }
+        impl<T: AsRef<[u8]>> PartialEq<T> for Tag {
+            fn eq(&self, other: &T) -> bool {
+                crate::constant_time::verify_slices_are_equal(
+                        self.as_ref(),
+                        other.as_ref(),
+                    )
+                    .is_ok()
+            }
+        }
+        impl Eq for Tag {}
+        pub struct TruncatedTag {
+            tag: Tag,
+            len: usize,
+        }
+        #[automatically_derived]
+        impl ::core::clone::Clone for TruncatedTag {
+            #[inline]
+            fn clone(&self) -> TruncatedTag {
+                TruncatedTag {
+                    tag: ::core::clone::Clone::clone(&self.tag),
+                    len: ::core::clone::Clone::clone(&self.len),
+                }
+            }
+        }
+        impl AsRef<[u8]> for TruncatedTag {
+            fn as_ref(&self) -> &[u8] {
+                &self.tag.as_ref()[..self.len]
+            }
+        }
+        pub(super) trait DigestOutput: AsRef<[u8]> + Clone {
+            fn into_bytes(self) -> Vec<u8> {
+                self.as_ref().to_vec()
+            }
+            fn truncatable(&self) -> bool;
+        }
         pub(super) enum Output {
-            RingOutput(RingOutput),
-            RustCryptoOutput(RustCryptoOutput),
+            #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+            Ring(RingOutput),
+            RustCrypto(crate::mac::RustCryptoOutput),
+            #[cfg(feature = "blake3")]
+            Blake3(Blake3Output),
         }
-        pub(super) struct RingOutput {}
-        impl MacOutput for RingOutput {}
-        pub(super) trait MacRustCryptoOutput {}
-        mod macros {}
-        pub(super) enum RustCryptoOutput {
-            HmacSha3_256InternalTag(HmacSha3_256InternalTag),
-            HmacSha3_384InternalTag(HmacSha3_384InternalTag),
-            HmacSha3_512InternalTag(HmacSha3_512InternalTag),
-            CmacAes128InternalTag(CmacAes128InternalTag),
-            CmacAes192InternalTag(CmacAes192InternalTag),
-            CmacAes256InternalTag(CmacAes256InternalTag),
-        }
-        impl ::core::convert::From<HmacSha3_256InternalTag> for RustCryptoOutput {
-            fn from(v: HmacSha3_256InternalTag) -> RustCryptoOutput {
-                RustCryptoOutput::HmacSha3_256InternalTag(v)
-            }
-        }
-        impl ::core::convert::From<HmacSha3_384InternalTag> for RustCryptoOutput {
-            fn from(v: HmacSha3_384InternalTag) -> RustCryptoOutput {
-                RustCryptoOutput::HmacSha3_384InternalTag(v)
-            }
-        }
-        impl ::core::convert::From<HmacSha3_512InternalTag> for RustCryptoOutput {
-            fn from(v: HmacSha3_512InternalTag) -> RustCryptoOutput {
-                RustCryptoOutput::HmacSha3_512InternalTag(v)
-            }
-        }
-        impl ::core::convert::From<CmacAes128InternalTag> for RustCryptoOutput {
-            fn from(v: CmacAes128InternalTag) -> RustCryptoOutput {
-                RustCryptoOutput::CmacAes128InternalTag(v)
-            }
-        }
-        impl ::core::convert::From<CmacAes192InternalTag> for RustCryptoOutput {
-            fn from(v: CmacAes192InternalTag) -> RustCryptoOutput {
-                RustCryptoOutput::CmacAes192InternalTag(v)
-            }
-        }
-        impl ::core::convert::From<CmacAes256InternalTag> for RustCryptoOutput {
-            fn from(v: CmacAes256InternalTag) -> RustCryptoOutput {
-                RustCryptoOutput::CmacAes256InternalTag(v)
-            }
-        }
-        impl core::convert::TryInto<HmacSha3_256InternalTag> for RustCryptoOutput {
-            type Error = &'static str;
-            fn try_into(
-                self,
-            ) -> ::core::result::Result<
-                HmacSha3_256InternalTag,
-                <Self as core::convert::TryInto<HmacSha3_256InternalTag>>::Error,
-            > {
+        #[automatically_derived]
+        impl ::core::clone::Clone for Output {
+            #[inline]
+            fn clone(&self) -> Output {
                 match self {
-                    RustCryptoOutput::HmacSha3_256InternalTag(v) => Ok(v),
-                    RustCryptoOutput::HmacSha3_384InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant HmacSha3_384InternalTag to HmacSha3_256InternalTag",
-                        )
+                    Output::Ring(__self_0) => {
+                        Output::Ring(::core::clone::Clone::clone(__self_0))
                     }
-                    RustCryptoOutput::HmacSha3_512InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant HmacSha3_512InternalTag to HmacSha3_256InternalTag",
-                        )
+                    Output::RustCrypto(__self_0) => {
+                        Output::RustCrypto(::core::clone::Clone::clone(__self_0))
                     }
-                    RustCryptoOutput::CmacAes128InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant CmacAes128InternalTag to HmacSha3_256InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::CmacAes192InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant CmacAes192InternalTag to HmacSha3_256InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::CmacAes256InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant CmacAes256InternalTag to HmacSha3_256InternalTag",
-                        )
+                    Output::Blake3(__self_0) => {
+                        Output::Blake3(::core::clone::Clone::clone(__self_0))
                     }
                 }
             }
         }
-        impl core::convert::TryInto<HmacSha3_384InternalTag> for RustCryptoOutput {
-            type Error = &'static str;
-            fn try_into(
-                self,
-            ) -> ::core::result::Result<
-                HmacSha3_384InternalTag,
-                <Self as core::convert::TryInto<HmacSha3_384InternalTag>>::Error,
-            > {
+        impl DigestOutput for Output {
+            fn truncatable(&self) -> bool {
                 match self {
-                    RustCryptoOutput::HmacSha3_384InternalTag(v) => Ok(v),
-                    RustCryptoOutput::HmacSha3_256InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant HmacSha3_256InternalTag to HmacSha3_384InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::HmacSha3_512InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant HmacSha3_512InternalTag to HmacSha3_384InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::CmacAes128InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant CmacAes128InternalTag to HmacSha3_384InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::CmacAes192InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant CmacAes192InternalTag to HmacSha3_384InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::CmacAes256InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant CmacAes256InternalTag to HmacSha3_384InternalTag",
-                        )
-                    }
+                    #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+                    Self::Ring(output) => output.truncatable(),
+                    Self::RustCrypto(output) => output.truncatable(),
+                    Self::Blake3(output) => output.truncatable(),
                 }
             }
         }
-        impl core::convert::TryInto<HmacSha3_512InternalTag> for RustCryptoOutput {
-            type Error = &'static str;
-            fn try_into(
-                self,
-            ) -> ::core::result::Result<
-                HmacSha3_512InternalTag,
-                <Self as core::convert::TryInto<HmacSha3_512InternalTag>>::Error,
-            > {
+        impl AsRef<[u8]> for Output {
+            fn as_ref(&self) -> &[u8] {
                 match self {
-                    RustCryptoOutput::HmacSha3_512InternalTag(v) => Ok(v),
-                    RustCryptoOutput::HmacSha3_256InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant HmacSha3_256InternalTag to HmacSha3_512InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::HmacSha3_384InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant HmacSha3_384InternalTag to HmacSha3_512InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::CmacAes128InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant CmacAes128InternalTag to HmacSha3_512InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::CmacAes192InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant CmacAes192InternalTag to HmacSha3_512InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::CmacAes256InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant CmacAes256InternalTag to HmacSha3_512InternalTag",
-                        )
-                    }
+                    #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+                    Self::Ring(output) => output.as_ref(),
+                    Self::RustCrypto(output) => output.as_ref(),
+                    Self::Blake3(output) => output.as_ref(),
                 }
             }
         }
-        impl core::convert::TryInto<CmacAes128InternalTag> for RustCryptoOutput {
-            type Error = &'static str;
-            fn try_into(
-                self,
-            ) -> ::core::result::Result<
-                CmacAes128InternalTag,
-                <Self as core::convert::TryInto<CmacAes128InternalTag>>::Error,
-            > {
-                match self {
-                    RustCryptoOutput::CmacAes128InternalTag(v) => Ok(v),
-                    RustCryptoOutput::HmacSha3_256InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant HmacSha3_256InternalTag to CmacAes128InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::HmacSha3_384InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant HmacSha3_384InternalTag to CmacAes128InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::HmacSha3_512InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant HmacSha3_512InternalTag to CmacAes128InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::CmacAes192InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant CmacAes192InternalTag to CmacAes128InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::CmacAes256InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant CmacAes256InternalTag to CmacAes128InternalTag",
-                        )
-                    }
-                }
+        pub(super) struct RingOutput(ring_compat::ring::hmac::Tag);
+        #[automatically_derived]
+        impl ::core::clone::Clone for RingOutput {
+            #[inline]
+            fn clone(&self) -> RingOutput {
+                RingOutput(::core::clone::Clone::clone(&self.0))
             }
         }
-        impl core::convert::TryInto<CmacAes192InternalTag> for RustCryptoOutput {
-            type Error = &'static str;
-            fn try_into(
-                self,
-            ) -> ::core::result::Result<
-                CmacAes192InternalTag,
-                <Self as core::convert::TryInto<CmacAes192InternalTag>>::Error,
-            > {
-                match self {
-                    RustCryptoOutput::CmacAes192InternalTag(v) => Ok(v),
-                    RustCryptoOutput::HmacSha3_256InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant HmacSha3_256InternalTag to CmacAes192InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::HmacSha3_384InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant HmacSha3_384InternalTag to CmacAes192InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::HmacSha3_512InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant HmacSha3_512InternalTag to CmacAes192InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::CmacAes128InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant CmacAes128InternalTag to CmacAes192InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::CmacAes256InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant CmacAes256InternalTag to CmacAes192InternalTag",
-                        )
-                    }
-                }
+        impl AsRef<[u8]> for RingOutput {
+            fn as_ref(&self) -> &[u8] {
+                self.0.as_ref()
             }
         }
-        impl core::convert::TryInto<CmacAes256InternalTag> for RustCryptoOutput {
-            type Error = &'static str;
-            fn try_into(
-                self,
-            ) -> ::core::result::Result<
-                CmacAes256InternalTag,
-                <Self as core::convert::TryInto<CmacAes256InternalTag>>::Error,
-            > {
-                match self {
-                    RustCryptoOutput::CmacAes256InternalTag(v) => Ok(v),
-                    RustCryptoOutput::HmacSha3_256InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant HmacSha3_256InternalTag to CmacAes256InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::HmacSha3_384InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant HmacSha3_384InternalTag to CmacAes256InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::HmacSha3_512InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant HmacSha3_512InternalTag to CmacAes256InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::CmacAes128InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant CmacAes128InternalTag to CmacAes256InternalTag",
-                        )
-                    }
-                    RustCryptoOutput::CmacAes192InternalTag(v) => {
-                        Err(
-                            "Tried to convert variant CmacAes192InternalTag to CmacAes256InternalTag",
-                        )
-                    }
-                }
+        impl DigestOutput for RingOutput {
+            fn truncatable(&self) -> bool {
+                true
             }
         }
-        impl MacRustCryptoOutput for RustCryptoOutput {}
+        impl From<ring_compat::ring::hmac::Tag> for Output {
+            fn from(output: ring_compat::ring::hmac::Tag) -> Self {
+                Self::Ring(RingOutput(output))
+            }
+        }
+        pub(super) struct Blake3Output(blake3::Hash);
+        #[automatically_derived]
+        impl ::core::clone::Clone for Blake3Output {
+            #[inline]
+            fn clone(&self) -> Blake3Output {
+                Blake3Output(::core::clone::Clone::clone(&self.0))
+            }
+        }
+        impl DigestOutput for Blake3Output {
+            fn truncatable(&self) -> bool {
+                true
+            }
+        }
+        impl From<blake3::Hash> for Blake3Output {
+            fn from(hash: blake3::Hash) -> Self {
+                Self(hash)
+            }
+        }
+        impl AsRef<[u8]> for Blake3Output {
+            fn as_ref(&self) -> &[u8] {
+                self.0.as_bytes()
+            }
+        }
+        impl From<Blake3Output> for Output {
+            fn from(output: Blake3Output) -> Self {
+                Self::Blake3(output)
+            }
+        }
+        pub(super) use rust_crypto_internal_tag;
+        pub(super) use rust_crypto_internal_tags;
+        use crate::error::{MacError, TruncationError};
     }
     pub use algorithm::Algorithm;
     pub use tag::Tag;
-    use tag::Output;
+    use context::*;
+    use key::*;
+    use tag::*;
+    pub(super) enum RustCryptoOutput {
+        #[cfg(feature = "hmac_sha2")]
+        Sha224(crate::mac::HmacSha224InternalTag),
+        #[cfg(feature = "hmac_sha2")]
+        Sha512_224(crate::mac::HmacSha512_224InternalTag),
+        #[cfg(feature = "hmac_sha2")]
+        Sha512_256(crate::mac::HmacSha512_256InternalTag),
+        #[cfg(feature = "hmac_sha3")]
+        Sha3_224(crate::mac::HmacSha3_224InternalTag),
+        #[cfg(feature = "hmac_sha3")]
+        Sha3_256(crate::mac::HmacSha3_256InternalTag),
+        #[cfg(feature = "hmac_sha3")]
+        Sha3_384(crate::mac::HmacSha3_384InternalTag),
+        #[cfg(feature = "hmac_sha3")]
+        Sha3_512(crate::mac::HmacSha3_512InternalTag),
+        #[cfg(feature = "cmac_aes")]
+        Aes128(crate::mac::CmacAes128InternalTag),
+        #[cfg(feature = "cmac_aes")]
+        Aes192(crate::mac::CmacAes192InternalTag),
+        #[cfg(feature = "cmac_aes")]
+        Aes256(crate::mac::CmacAes256InternalTag),
+    }
+    #[automatically_derived]
+    impl ::core::clone::Clone for RustCryptoOutput {
+        #[inline]
+        fn clone(&self) -> RustCryptoOutput {
+            match self {
+                RustCryptoOutput::Sha224(__self_0) => {
+                    RustCryptoOutput::Sha224(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoOutput::Sha512_224(__self_0) => {
+                    RustCryptoOutput::Sha512_224(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoOutput::Sha512_256(__self_0) => {
+                    RustCryptoOutput::Sha512_256(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoOutput::Sha3_224(__self_0) => {
+                    RustCryptoOutput::Sha3_224(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoOutput::Sha3_256(__self_0) => {
+                    RustCryptoOutput::Sha3_256(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoOutput::Sha3_384(__self_0) => {
+                    RustCryptoOutput::Sha3_384(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoOutput::Sha3_512(__self_0) => {
+                    RustCryptoOutput::Sha3_512(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoOutput::Aes128(__self_0) => {
+                    RustCryptoOutput::Aes128(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoOutput::Aes192(__self_0) => {
+                    RustCryptoOutput::Aes192(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoOutput::Aes256(__self_0) => {
+                    RustCryptoOutput::Aes256(::core::clone::Clone::clone(__self_0))
+                }
+            }
+        }
+    }
+    impl From<RustCryptoOutput> for Output {
+        fn from(output: RustCryptoOutput) -> Self {
+            Self::RustCrypto(output)
+        }
+    }
+    pub(super) struct HmacSha224InternalTag(digest::Output<hmac::Hmac<sha2::Sha224>>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha224InternalTag {
+        #[inline]
+        fn clone(&self) -> HmacSha224InternalTag {
+            HmacSha224InternalTag(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl AsRef<[u8]> for HmacSha224InternalTag {
+        fn as_ref(&self) -> &[u8] {
+            self.0.as_ref()
+        }
+    }
+    impl From<digest::CtOutput<hmac::Hmac<sha2::Sha224>>> for HmacSha224InternalTag {
+        fn from(output: digest::CtOutput<hmac::Hmac<sha2::Sha224>>) -> Self {
+            Self(output.into_bytes())
+        }
+    }
+    impl DigestOutput for HmacSha224InternalTag {
+        fn truncatable(&self) -> bool {
+            true
+        }
+    }
+    impl From<HmacSha224InternalTag> for Output {
+        fn from(output: HmacSha224InternalTag) -> Self {
+            RustCryptoOutput::Sha224(output).into()
+        }
+    }
+    impl From<digest::CtOutput<hmac::Hmac<sha2::Sha224>>> for Output {
+        fn from(output: digest::CtOutput<hmac::Hmac<sha2::Sha224>>) -> Self {
+            HmacSha224InternalTag::from(output).into()
+        }
+    }
+    pub(super) struct HmacSha512_224InternalTag(
+        digest::Output<hmac::Hmac<sha2::Sha512_224>>,
+    );
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha512_224InternalTag {
+        #[inline]
+        fn clone(&self) -> HmacSha512_224InternalTag {
+            HmacSha512_224InternalTag(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl AsRef<[u8]> for HmacSha512_224InternalTag {
+        fn as_ref(&self) -> &[u8] {
+            self.0.as_ref()
+        }
+    }
+    impl From<digest::CtOutput<hmac::Hmac<sha2::Sha512_224>>>
+    for HmacSha512_224InternalTag {
+        fn from(output: digest::CtOutput<hmac::Hmac<sha2::Sha512_224>>) -> Self {
+            Self(output.into_bytes())
+        }
+    }
+    impl DigestOutput for HmacSha512_224InternalTag {
+        fn truncatable(&self) -> bool {
+            true
+        }
+    }
+    impl From<HmacSha512_224InternalTag> for Output {
+        fn from(output: HmacSha512_224InternalTag) -> Self {
+            RustCryptoOutput::Sha512_224(output).into()
+        }
+    }
+    impl From<digest::CtOutput<hmac::Hmac<sha2::Sha512_224>>> for Output {
+        fn from(output: digest::CtOutput<hmac::Hmac<sha2::Sha512_224>>) -> Self {
+            HmacSha512_224InternalTag::from(output).into()
+        }
+    }
+    pub(super) struct HmacSha512_256InternalTag(
+        digest::Output<hmac::Hmac<sha2::Sha512_256>>,
+    );
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha512_256InternalTag {
+        #[inline]
+        fn clone(&self) -> HmacSha512_256InternalTag {
+            HmacSha512_256InternalTag(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl AsRef<[u8]> for HmacSha512_256InternalTag {
+        fn as_ref(&self) -> &[u8] {
+            self.0.as_ref()
+        }
+    }
+    impl From<digest::CtOutput<hmac::Hmac<sha2::Sha512_256>>>
+    for HmacSha512_256InternalTag {
+        fn from(output: digest::CtOutput<hmac::Hmac<sha2::Sha512_256>>) -> Self {
+            Self(output.into_bytes())
+        }
+    }
+    impl DigestOutput for HmacSha512_256InternalTag {
+        fn truncatable(&self) -> bool {
+            true
+        }
+    }
+    impl From<HmacSha512_256InternalTag> for Output {
+        fn from(output: HmacSha512_256InternalTag) -> Self {
+            RustCryptoOutput::Sha512_256(output).into()
+        }
+    }
+    impl From<digest::CtOutput<hmac::Hmac<sha2::Sha512_256>>> for Output {
+        fn from(output: digest::CtOutput<hmac::Hmac<sha2::Sha512_256>>) -> Self {
+            HmacSha512_256InternalTag::from(output).into()
+        }
+    }
+    pub(super) struct HmacSha3_224InternalTag(
+        digest::Output<hmac::Hmac<sha3::Sha3_224>>,
+    );
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha3_224InternalTag {
+        #[inline]
+        fn clone(&self) -> HmacSha3_224InternalTag {
+            HmacSha3_224InternalTag(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl AsRef<[u8]> for HmacSha3_224InternalTag {
+        fn as_ref(&self) -> &[u8] {
+            self.0.as_ref()
+        }
+    }
+    impl From<digest::CtOutput<hmac::Hmac<sha3::Sha3_224>>> for HmacSha3_224InternalTag {
+        fn from(output: digest::CtOutput<hmac::Hmac<sha3::Sha3_224>>) -> Self {
+            Self(output.into_bytes())
+        }
+    }
+    impl DigestOutput for HmacSha3_224InternalTag {
+        fn truncatable(&self) -> bool {
+            true
+        }
+    }
+    impl From<HmacSha3_224InternalTag> for Output {
+        fn from(output: HmacSha3_224InternalTag) -> Self {
+            RustCryptoOutput::Sha3_224(output).into()
+        }
+    }
+    impl From<digest::CtOutput<hmac::Hmac<sha3::Sha3_224>>> for Output {
+        fn from(output: digest::CtOutput<hmac::Hmac<sha3::Sha3_224>>) -> Self {
+            HmacSha3_224InternalTag::from(output).into()
+        }
+    }
+    pub(super) struct HmacSha3_256InternalTag(
+        digest::Output<hmac::Hmac<sha3::Sha3_256>>,
+    );
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha3_256InternalTag {
+        #[inline]
+        fn clone(&self) -> HmacSha3_256InternalTag {
+            HmacSha3_256InternalTag(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl AsRef<[u8]> for HmacSha3_256InternalTag {
+        fn as_ref(&self) -> &[u8] {
+            self.0.as_ref()
+        }
+    }
+    impl From<digest::CtOutput<hmac::Hmac<sha3::Sha3_256>>> for HmacSha3_256InternalTag {
+        fn from(output: digest::CtOutput<hmac::Hmac<sha3::Sha3_256>>) -> Self {
+            Self(output.into_bytes())
+        }
+    }
+    impl DigestOutput for HmacSha3_256InternalTag {
+        fn truncatable(&self) -> bool {
+            true
+        }
+    }
+    impl From<HmacSha3_256InternalTag> for Output {
+        fn from(output: HmacSha3_256InternalTag) -> Self {
+            RustCryptoOutput::Sha3_256(output).into()
+        }
+    }
+    impl From<digest::CtOutput<hmac::Hmac<sha3::Sha3_256>>> for Output {
+        fn from(output: digest::CtOutput<hmac::Hmac<sha3::Sha3_256>>) -> Self {
+            HmacSha3_256InternalTag::from(output).into()
+        }
+    }
+    pub(super) struct HmacSha3_384InternalTag(
+        digest::Output<hmac::Hmac<sha3::Sha3_384>>,
+    );
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha3_384InternalTag {
+        #[inline]
+        fn clone(&self) -> HmacSha3_384InternalTag {
+            HmacSha3_384InternalTag(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl AsRef<[u8]> for HmacSha3_384InternalTag {
+        fn as_ref(&self) -> &[u8] {
+            self.0.as_ref()
+        }
+    }
+    impl From<digest::CtOutput<hmac::Hmac<sha3::Sha3_384>>> for HmacSha3_384InternalTag {
+        fn from(output: digest::CtOutput<hmac::Hmac<sha3::Sha3_384>>) -> Self {
+            Self(output.into_bytes())
+        }
+    }
+    impl DigestOutput for HmacSha3_384InternalTag {
+        fn truncatable(&self) -> bool {
+            true
+        }
+    }
+    impl From<HmacSha3_384InternalTag> for Output {
+        fn from(output: HmacSha3_384InternalTag) -> Self {
+            RustCryptoOutput::Sha3_384(output).into()
+        }
+    }
+    impl From<digest::CtOutput<hmac::Hmac<sha3::Sha3_384>>> for Output {
+        fn from(output: digest::CtOutput<hmac::Hmac<sha3::Sha3_384>>) -> Self {
+            HmacSha3_384InternalTag::from(output).into()
+        }
+    }
+    pub(super) struct HmacSha3_512InternalTag(
+        digest::Output<hmac::Hmac<sha3::Sha3_512>>,
+    );
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha3_512InternalTag {
+        #[inline]
+        fn clone(&self) -> HmacSha3_512InternalTag {
+            HmacSha3_512InternalTag(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl AsRef<[u8]> for HmacSha3_512InternalTag {
+        fn as_ref(&self) -> &[u8] {
+            self.0.as_ref()
+        }
+    }
+    impl From<digest::CtOutput<hmac::Hmac<sha3::Sha3_512>>> for HmacSha3_512InternalTag {
+        fn from(output: digest::CtOutput<hmac::Hmac<sha3::Sha3_512>>) -> Self {
+            Self(output.into_bytes())
+        }
+    }
+    impl DigestOutput for HmacSha3_512InternalTag {
+        fn truncatable(&self) -> bool {
+            true
+        }
+    }
+    impl From<HmacSha3_512InternalTag> for Output {
+        fn from(output: HmacSha3_512InternalTag) -> Self {
+            RustCryptoOutput::Sha3_512(output).into()
+        }
+    }
+    impl From<digest::CtOutput<hmac::Hmac<sha3::Sha3_512>>> for Output {
+        fn from(output: digest::CtOutput<hmac::Hmac<sha3::Sha3_512>>) -> Self {
+            HmacSha3_512InternalTag::from(output).into()
+        }
+    }
+    pub(super) struct CmacAes128InternalTag(digest::Output<cmac::Cmac<aes::Aes128>>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for CmacAes128InternalTag {
+        #[inline]
+        fn clone(&self) -> CmacAes128InternalTag {
+            CmacAes128InternalTag(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl AsRef<[u8]> for CmacAes128InternalTag {
+        fn as_ref(&self) -> &[u8] {
+            self.0.as_ref()
+        }
+    }
+    impl From<digest::CtOutput<cmac::Cmac<aes::Aes128>>> for CmacAes128InternalTag {
+        fn from(output: digest::CtOutput<cmac::Cmac<aes::Aes128>>) -> Self {
+            Self(output.into_bytes())
+        }
+    }
+    impl DigestOutput for CmacAes128InternalTag {
+        fn truncatable(&self) -> bool {
+            true
+        }
+    }
+    impl From<CmacAes128InternalTag> for Output {
+        fn from(output: CmacAes128InternalTag) -> Self {
+            RustCryptoOutput::Aes128(output).into()
+        }
+    }
+    impl From<digest::CtOutput<cmac::Cmac<aes::Aes128>>> for Output {
+        fn from(output: digest::CtOutput<cmac::Cmac<aes::Aes128>>) -> Self {
+            CmacAes128InternalTag::from(output).into()
+        }
+    }
+    pub(super) struct CmacAes192InternalTag(digest::Output<cmac::Cmac<aes::Aes192>>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for CmacAes192InternalTag {
+        #[inline]
+        fn clone(&self) -> CmacAes192InternalTag {
+            CmacAes192InternalTag(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl AsRef<[u8]> for CmacAes192InternalTag {
+        fn as_ref(&self) -> &[u8] {
+            self.0.as_ref()
+        }
+    }
+    impl From<digest::CtOutput<cmac::Cmac<aes::Aes192>>> for CmacAes192InternalTag {
+        fn from(output: digest::CtOutput<cmac::Cmac<aes::Aes192>>) -> Self {
+            Self(output.into_bytes())
+        }
+    }
+    impl DigestOutput for CmacAes192InternalTag {
+        fn truncatable(&self) -> bool {
+            true
+        }
+    }
+    impl From<CmacAes192InternalTag> for Output {
+        fn from(output: CmacAes192InternalTag) -> Self {
+            RustCryptoOutput::Aes192(output).into()
+        }
+    }
+    impl From<digest::CtOutput<cmac::Cmac<aes::Aes192>>> for Output {
+        fn from(output: digest::CtOutput<cmac::Cmac<aes::Aes192>>) -> Self {
+            CmacAes192InternalTag::from(output).into()
+        }
+    }
+    pub(super) struct CmacAes256InternalTag(digest::Output<cmac::Cmac<aes::Aes256>>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for CmacAes256InternalTag {
+        #[inline]
+        fn clone(&self) -> CmacAes256InternalTag {
+            CmacAes256InternalTag(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl AsRef<[u8]> for CmacAes256InternalTag {
+        fn as_ref(&self) -> &[u8] {
+            self.0.as_ref()
+        }
+    }
+    impl From<digest::CtOutput<cmac::Cmac<aes::Aes256>>> for CmacAes256InternalTag {
+        fn from(output: digest::CtOutput<cmac::Cmac<aes::Aes256>>) -> Self {
+            Self(output.into_bytes())
+        }
+    }
+    impl DigestOutput for CmacAes256InternalTag {
+        fn truncatable(&self) -> bool {
+            true
+        }
+    }
+    impl From<CmacAes256InternalTag> for Output {
+        fn from(output: CmacAes256InternalTag) -> Self {
+            RustCryptoOutput::Aes256(output).into()
+        }
+    }
+    impl From<digest::CtOutput<cmac::Cmac<aes::Aes256>>> for Output {
+        fn from(output: digest::CtOutput<cmac::Cmac<aes::Aes256>>) -> Self {
+            CmacAes256InternalTag::from(output).into()
+        }
+    }
+    impl AsRef<[u8]> for RustCryptoOutput {
+        fn as_ref(&self) -> &[u8] {
+            match self {
+                #[cfg(feature = "hmac_sha2")]
+                Self::Sha224(tag) => tag.as_ref(),
+                #[cfg(feature = "hmac_sha2")]
+                Self::Sha512_224(tag) => tag.as_ref(),
+                #[cfg(feature = "hmac_sha2")]
+                Self::Sha512_256(tag) => tag.as_ref(),
+                #[cfg(feature = "hmac_sha3")]
+                Self::Sha3_224(tag) => tag.as_ref(),
+                #[cfg(feature = "hmac_sha3")]
+                Self::Sha3_256(tag) => tag.as_ref(),
+                #[cfg(feature = "hmac_sha3")]
+                Self::Sha3_384(tag) => tag.as_ref(),
+                #[cfg(feature = "hmac_sha3")]
+                Self::Sha3_512(tag) => tag.as_ref(),
+                #[cfg(feature = "cmac_aes")]
+                Self::Aes128(tag) => tag.as_ref(),
+                #[cfg(feature = "cmac_aes")]
+                Self::Aes192(tag) => tag.as_ref(),
+                #[cfg(feature = "cmac_aes")]
+                Self::Aes256(tag) => tag.as_ref(),
+            }
+        }
+    }
+    impl crate::mac::tag::DigestOutput for RustCryptoOutput {
+        fn truncatable(&self) -> bool {
+            true
+        }
+    }
+    pub(crate) enum RustCryptoContext {
+        #[cfg(feature = "hmac_sha2")]
+        Sha224(HmacSha224Context),
+        #[cfg(feature = "hmac_sha2")]
+        Sha512_224(HmacSha512_224Context),
+        #[cfg(feature = "hmac_sha2")]
+        Sha512_256(HmacSha512_256Context),
+        #[cfg(feature = "hmac_sha3")]
+        Sha3_224(HmacSha3_224Context),
+        #[cfg(feature = "hmac_sha3")]
+        Sha3_256(HmacSha3_256Context),
+        #[cfg(feature = "hmac_sha3")]
+        Sha3_384(HmacSha3_384Context),
+        #[cfg(feature = "hmac_sha3")]
+        Sha3_512(HmacSha3_512Context),
+        #[cfg(feature = "cmac_aes")]
+        Aes128(CmacAes128Context),
+        #[cfg(feature = "cmac_aes")]
+        Aes192(CmacAes192Context),
+        #[cfg(feature = "cmac_aes")]
+        Aes256(CmacAes256Context),
+    }
+    impl From<crate::mac::RustCryptoContext> for ContextInner {
+        fn from(ctx: crate::mac::RustCryptoContext) -> Self {
+            ContextInner::RustCrypto(Box::new(ctx))
+        }
+    }
+    impl MacContext for crate::mac::RustCryptoContext {
+        fn update(&mut self, data: &[u8]) {
+            match self {
+                #[cfg(feature = "hmac_sha2")]
+                RustCryptoContext::Sha224(ctx) => ctx.update(data),
+                #[cfg(feature = "hmac_sha2")]
+                RustCryptoContext::Sha512_224(ctx) => ctx.update(data),
+                #[cfg(feature = "hmac_sha2")]
+                RustCryptoContext::Sha512_256(ctx) => ctx.update(data),
+                #[cfg(feature = "hmac_sha3")]
+                RustCryptoContext::Sha3_224(ctx) => ctx.update(data),
+                #[cfg(feature = "hmac_sha3")]
+                RustCryptoContext::Sha3_256(ctx) => ctx.update(data),
+                #[cfg(feature = "hmac_sha3")]
+                RustCryptoContext::Sha3_384(ctx) => ctx.update(data),
+                #[cfg(feature = "hmac_sha3")]
+                RustCryptoContext::Sha3_512(ctx) => ctx.update(data),
+                #[cfg(feature = "cmac_aes")]
+                RustCryptoContext::Aes128(ctx) => ctx.update(data),
+                #[cfg(feature = "cmac_aes")]
+                RustCryptoContext::Aes192(ctx) => ctx.update(data),
+                #[cfg(feature = "cmac_aes")]
+                RustCryptoContext::Aes256(ctx) => ctx.update(data),
+            }
+        }
+        fn finalize(self) -> Output {
+            match self {
+                #[cfg(feature = "hmac_sha2")]
+                RustCryptoContext::Sha224(ctx) => ctx.finalize(),
+                #[cfg(feature = "hmac_sha2")]
+                RustCryptoContext::Sha512_224(ctx) => ctx.finalize(),
+                #[cfg(feature = "hmac_sha2")]
+                RustCryptoContext::Sha512_256(ctx) => ctx.finalize(),
+                #[cfg(feature = "hmac_sha3")]
+                RustCryptoContext::Sha3_224(ctx) => ctx.finalize(),
+                #[cfg(feature = "hmac_sha3")]
+                RustCryptoContext::Sha3_256(ctx) => ctx.finalize(),
+                #[cfg(feature = "hmac_sha3")]
+                RustCryptoContext::Sha3_384(ctx) => ctx.finalize(),
+                #[cfg(feature = "hmac_sha3")]
+                RustCryptoContext::Sha3_512(ctx) => ctx.finalize(),
+                #[cfg(feature = "cmac_aes")]
+                RustCryptoContext::Aes128(ctx) => ctx.finalize(),
+                #[cfg(feature = "cmac_aes")]
+                RustCryptoContext::Aes192(ctx) => ctx.finalize(),
+                #[cfg(feature = "cmac_aes")]
+                RustCryptoContext::Aes256(ctx) => ctx.finalize(),
+            }
+        }
+    }
+    pub(super) struct HmacSha224Context(hmac::Hmac<sha2::Sha224>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha224Context {
+        #[inline]
+        fn clone(&self) -> HmacSha224Context {
+            HmacSha224Context(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    #[automatically_derived]
+    impl ::core::fmt::Debug for HmacSha224Context {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            ::core::fmt::Formatter::debug_tuple_field1_finish(
+                f,
+                "HmacSha224Context",
+                &&self.0,
+            )
+        }
+    }
+    impl MacContext for HmacSha224Context {
+        fn update(&mut self, data: &[u8]) {
+            use hmac::Mac;
+            self.0.update(data);
+        }
+        fn finalize(self) -> crate::mac::Output {
+            use hmac::Mac;
+            self.0.finalize().into()
+        }
+    }
+    impl From<HmacSha224Context> for RustCryptoContext {
+        fn from(ctx: HmacSha224Context) -> Self {
+            RustCryptoContext::Sha224(ctx)
+        }
+    }
+    pub(super) struct HmacSha512_224Context(hmac::Hmac<sha2::Sha512_224>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha512_224Context {
+        #[inline]
+        fn clone(&self) -> HmacSha512_224Context {
+            HmacSha512_224Context(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    #[automatically_derived]
+    impl ::core::fmt::Debug for HmacSha512_224Context {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            ::core::fmt::Formatter::debug_tuple_field1_finish(
+                f,
+                "HmacSha512_224Context",
+                &&self.0,
+            )
+        }
+    }
+    impl MacContext for HmacSha512_224Context {
+        fn update(&mut self, data: &[u8]) {
+            use hmac::Mac;
+            self.0.update(data);
+        }
+        fn finalize(self) -> crate::mac::Output {
+            use hmac::Mac;
+            self.0.finalize().into()
+        }
+    }
+    impl From<HmacSha512_224Context> for RustCryptoContext {
+        fn from(ctx: HmacSha512_224Context) -> Self {
+            RustCryptoContext::Sha512_224(ctx)
+        }
+    }
+    pub(super) struct HmacSha512_256Context(hmac::Hmac<sha2::Sha512_256>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha512_256Context {
+        #[inline]
+        fn clone(&self) -> HmacSha512_256Context {
+            HmacSha512_256Context(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    #[automatically_derived]
+    impl ::core::fmt::Debug for HmacSha512_256Context {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            ::core::fmt::Formatter::debug_tuple_field1_finish(
+                f,
+                "HmacSha512_256Context",
+                &&self.0,
+            )
+        }
+    }
+    impl MacContext for HmacSha512_256Context {
+        fn update(&mut self, data: &[u8]) {
+            use hmac::Mac;
+            self.0.update(data);
+        }
+        fn finalize(self) -> crate::mac::Output {
+            use hmac::Mac;
+            self.0.finalize().into()
+        }
+    }
+    impl From<HmacSha512_256Context> for RustCryptoContext {
+        fn from(ctx: HmacSha512_256Context) -> Self {
+            RustCryptoContext::Sha512_256(ctx)
+        }
+    }
+    pub(super) struct HmacSha3_224Context(hmac::Hmac<sha3::Sha3_224>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha3_224Context {
+        #[inline]
+        fn clone(&self) -> HmacSha3_224Context {
+            HmacSha3_224Context(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    #[automatically_derived]
+    impl ::core::fmt::Debug for HmacSha3_224Context {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            ::core::fmt::Formatter::debug_tuple_field1_finish(
+                f,
+                "HmacSha3_224Context",
+                &&self.0,
+            )
+        }
+    }
+    impl MacContext for HmacSha3_224Context {
+        fn update(&mut self, data: &[u8]) {
+            use hmac::Mac;
+            self.0.update(data);
+        }
+        fn finalize(self) -> crate::mac::Output {
+            use hmac::Mac;
+            self.0.finalize().into()
+        }
+    }
+    impl From<HmacSha3_224Context> for RustCryptoContext {
+        fn from(ctx: HmacSha3_224Context) -> Self {
+            RustCryptoContext::Sha3_224(ctx)
+        }
+    }
+    pub(super) struct HmacSha3_256Context(hmac::Hmac<sha3::Sha3_256>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha3_256Context {
+        #[inline]
+        fn clone(&self) -> HmacSha3_256Context {
+            HmacSha3_256Context(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    #[automatically_derived]
+    impl ::core::fmt::Debug for HmacSha3_256Context {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            ::core::fmt::Formatter::debug_tuple_field1_finish(
+                f,
+                "HmacSha3_256Context",
+                &&self.0,
+            )
+        }
+    }
+    impl MacContext for HmacSha3_256Context {
+        fn update(&mut self, data: &[u8]) {
+            use hmac::Mac;
+            self.0.update(data);
+        }
+        fn finalize(self) -> crate::mac::Output {
+            use hmac::Mac;
+            self.0.finalize().into()
+        }
+    }
+    impl From<HmacSha3_256Context> for RustCryptoContext {
+        fn from(ctx: HmacSha3_256Context) -> Self {
+            RustCryptoContext::Sha3_256(ctx)
+        }
+    }
+    pub(super) struct HmacSha3_384Context(hmac::Hmac<sha3::Sha3_384>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha3_384Context {
+        #[inline]
+        fn clone(&self) -> HmacSha3_384Context {
+            HmacSha3_384Context(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    #[automatically_derived]
+    impl ::core::fmt::Debug for HmacSha3_384Context {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            ::core::fmt::Formatter::debug_tuple_field1_finish(
+                f,
+                "HmacSha3_384Context",
+                &&self.0,
+            )
+        }
+    }
+    impl MacContext for HmacSha3_384Context {
+        fn update(&mut self, data: &[u8]) {
+            use hmac::Mac;
+            self.0.update(data);
+        }
+        fn finalize(self) -> crate::mac::Output {
+            use hmac::Mac;
+            self.0.finalize().into()
+        }
+    }
+    impl From<HmacSha3_384Context> for RustCryptoContext {
+        fn from(ctx: HmacSha3_384Context) -> Self {
+            RustCryptoContext::Sha3_384(ctx)
+        }
+    }
+    pub(super) struct HmacSha3_512Context(hmac::Hmac<sha3::Sha3_512>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha3_512Context {
+        #[inline]
+        fn clone(&self) -> HmacSha3_512Context {
+            HmacSha3_512Context(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    #[automatically_derived]
+    impl ::core::fmt::Debug for HmacSha3_512Context {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            ::core::fmt::Formatter::debug_tuple_field1_finish(
+                f,
+                "HmacSha3_512Context",
+                &&self.0,
+            )
+        }
+    }
+    impl MacContext for HmacSha3_512Context {
+        fn update(&mut self, data: &[u8]) {
+            use hmac::Mac;
+            self.0.update(data);
+        }
+        fn finalize(self) -> crate::mac::Output {
+            use hmac::Mac;
+            self.0.finalize().into()
+        }
+    }
+    impl From<HmacSha3_512Context> for RustCryptoContext {
+        fn from(ctx: HmacSha3_512Context) -> Self {
+            RustCryptoContext::Sha3_512(ctx)
+        }
+    }
+    pub(super) struct CmacAes128Context(cmac::Cmac<aes::Aes128>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for CmacAes128Context {
+        #[inline]
+        fn clone(&self) -> CmacAes128Context {
+            CmacAes128Context(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    #[automatically_derived]
+    impl ::core::fmt::Debug for CmacAes128Context {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            ::core::fmt::Formatter::debug_tuple_field1_finish(
+                f,
+                "CmacAes128Context",
+                &&self.0,
+            )
+        }
+    }
+    impl MacContext for CmacAes128Context {
+        fn update(&mut self, data: &[u8]) {
+            use cmac::Mac;
+            self.0.update(data);
+        }
+        fn finalize(self) -> crate::mac::Output {
+            use cmac::Mac;
+            self.0.finalize().into()
+        }
+    }
+    impl From<CmacAes128Context> for RustCryptoContext {
+        fn from(ctx: CmacAes128Context) -> Self {
+            RustCryptoContext::Aes128(ctx)
+        }
+    }
+    pub(super) struct CmacAes192Context(cmac::Cmac<aes::Aes192>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for CmacAes192Context {
+        #[inline]
+        fn clone(&self) -> CmacAes192Context {
+            CmacAes192Context(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    #[automatically_derived]
+    impl ::core::fmt::Debug for CmacAes192Context {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            ::core::fmt::Formatter::debug_tuple_field1_finish(
+                f,
+                "CmacAes192Context",
+                &&self.0,
+            )
+        }
+    }
+    impl MacContext for CmacAes192Context {
+        fn update(&mut self, data: &[u8]) {
+            use cmac::Mac;
+            self.0.update(data);
+        }
+        fn finalize(self) -> crate::mac::Output {
+            use cmac::Mac;
+            self.0.finalize().into()
+        }
+    }
+    impl From<CmacAes192Context> for RustCryptoContext {
+        fn from(ctx: CmacAes192Context) -> Self {
+            RustCryptoContext::Aes192(ctx)
+        }
+    }
+    pub(super) struct CmacAes256Context(cmac::Cmac<aes::Aes256>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for CmacAes256Context {
+        #[inline]
+        fn clone(&self) -> CmacAes256Context {
+            CmacAes256Context(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    #[automatically_derived]
+    impl ::core::fmt::Debug for CmacAes256Context {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            ::core::fmt::Formatter::debug_tuple_field1_finish(
+                f,
+                "CmacAes256Context",
+                &&self.0,
+            )
+        }
+    }
+    impl MacContext for CmacAes256Context {
+        fn update(&mut self, data: &[u8]) {
+            use cmac::Mac;
+            self.0.update(data);
+        }
+        fn finalize(self) -> crate::mac::Output {
+            use cmac::Mac;
+            self.0.finalize().into()
+        }
+    }
+    impl From<CmacAes256Context> for RustCryptoContext {
+        fn from(ctx: CmacAes256Context) -> Self {
+            RustCryptoContext::Aes256(ctx)
+        }
+    }
+    pub(crate) enum RustCryptoKey {
+        #[cfg(feature = "hmac_sha2")]
+        Sha224(HmacSha224Key),
+        #[cfg(feature = "hmac_sha2")]
+        Sha512_224(HmacSha512_224Key),
+        #[cfg(feature = "hmac_sha2")]
+        Sha512_256(HmacSha512_256Key),
+        #[cfg(feature = "hmac_sha3")]
+        Sha3_224(HmacSha3_224Key),
+        #[cfg(feature = "hmac_sha3")]
+        Sha3_256(HmacSha3_256Key),
+        #[cfg(feature = "hmac_sha3")]
+        Sha3_384(HmacSha3_384Key),
+        #[cfg(feature = "hmac_sha3")]
+        Sha3_512(HmacSha3_512Key),
+        #[cfg(feature = "cmac_aes")]
+        Aes128(CmacAes128Key),
+        #[cfg(feature = "cmac_aes")]
+        Aes192(CmacAes192Key),
+        #[cfg(feature = "cmac_aes")]
+        Aes256(CmacAes256Key),
+    }
+    #[automatically_derived]
+    impl ::core::clone::Clone for RustCryptoKey {
+        #[inline]
+        fn clone(&self) -> RustCryptoKey {
+            match self {
+                RustCryptoKey::Sha224(__self_0) => {
+                    RustCryptoKey::Sha224(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoKey::Sha512_224(__self_0) => {
+                    RustCryptoKey::Sha512_224(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoKey::Sha512_256(__self_0) => {
+                    RustCryptoKey::Sha512_256(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoKey::Sha3_224(__self_0) => {
+                    RustCryptoKey::Sha3_224(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoKey::Sha3_256(__self_0) => {
+                    RustCryptoKey::Sha3_256(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoKey::Sha3_384(__self_0) => {
+                    RustCryptoKey::Sha3_384(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoKey::Sha3_512(__self_0) => {
+                    RustCryptoKey::Sha3_512(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoKey::Aes128(__self_0) => {
+                    RustCryptoKey::Aes128(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoKey::Aes192(__self_0) => {
+                    RustCryptoKey::Aes192(::core::clone::Clone::clone(__self_0))
+                }
+                RustCryptoKey::Aes256(__self_0) => {
+                    RustCryptoKey::Aes256(::core::clone::Clone::clone(__self_0))
+                }
+            }
+        }
+    }
+    pub(super) struct HmacSha224Key(hmac::Hmac<sha2::Sha224>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha224Key {
+        #[inline]
+        fn clone(&self) -> HmacSha224Key {
+            HmacSha224Key(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl From<hmac::Hmac<sha2::Sha224>> for HmacSha224Key {
+        fn from(key: hmac::Hmac<sha2::Sha224>) -> Self {
+            Self(key)
+        }
+    }
+    impl From<HmacSha224Key> for MacKey {
+        fn from(key: HmacSha224Key) -> Self {
+            Self::RustCrypto(RustCryptoKey::Hmac(key.0))
+        }
+    }
+    pub(super) struct HmacSha512_224Key(hmac::Hmac<sha2::Sha512_224>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha512_224Key {
+        #[inline]
+        fn clone(&self) -> HmacSha512_224Key {
+            HmacSha512_224Key(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl From<hmac::Hmac<sha2::Sha512_224>> for HmacSha512_224Key {
+        fn from(key: hmac::Hmac<sha2::Sha512_224>) -> Self {
+            Self(key)
+        }
+    }
+    impl From<HmacSha512_224Key> for MacKey {
+        fn from(key: HmacSha512_224Key) -> Self {
+            Self::RustCrypto(RustCryptoKey::Hmac(key.0))
+        }
+    }
+    pub(super) struct HmacSha512_256Key(hmac::Hmac<sha2::Sha512_256>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha512_256Key {
+        #[inline]
+        fn clone(&self) -> HmacSha512_256Key {
+            HmacSha512_256Key(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl From<hmac::Hmac<sha2::Sha512_256>> for HmacSha512_256Key {
+        fn from(key: hmac::Hmac<sha2::Sha512_256>) -> Self {
+            Self(key)
+        }
+    }
+    impl From<HmacSha512_256Key> for MacKey {
+        fn from(key: HmacSha512_256Key) -> Self {
+            Self::RustCrypto(RustCryptoKey::Hmac(key.0))
+        }
+    }
+    pub(super) struct HmacSha3_224Key(hmac::Hmac<sha3::Sha3_224>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha3_224Key {
+        #[inline]
+        fn clone(&self) -> HmacSha3_224Key {
+            HmacSha3_224Key(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl From<hmac::Hmac<sha3::Sha3_224>> for HmacSha3_224Key {
+        fn from(key: hmac::Hmac<sha3::Sha3_224>) -> Self {
+            Self(key)
+        }
+    }
+    impl From<HmacSha3_224Key> for MacKey {
+        fn from(key: HmacSha3_224Key) -> Self {
+            Self::RustCrypto(RustCryptoKey::Hmac(key.0))
+        }
+    }
+    pub(super) struct HmacSha3_256Key(hmac::Hmac<sha3::Sha3_256>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha3_256Key {
+        #[inline]
+        fn clone(&self) -> HmacSha3_256Key {
+            HmacSha3_256Key(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl From<hmac::Hmac<sha3::Sha3_256>> for HmacSha3_256Key {
+        fn from(key: hmac::Hmac<sha3::Sha3_256>) -> Self {
+            Self(key)
+        }
+    }
+    impl From<HmacSha3_256Key> for MacKey {
+        fn from(key: HmacSha3_256Key) -> Self {
+            Self::RustCrypto(RustCryptoKey::Hmac(key.0))
+        }
+    }
+    pub(super) struct HmacSha3_384Key(hmac::Hmac<sha3::Sha3_384>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha3_384Key {
+        #[inline]
+        fn clone(&self) -> HmacSha3_384Key {
+            HmacSha3_384Key(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl From<hmac::Hmac<sha3::Sha3_384>> for HmacSha3_384Key {
+        fn from(key: hmac::Hmac<sha3::Sha3_384>) -> Self {
+            Self(key)
+        }
+    }
+    impl From<HmacSha3_384Key> for MacKey {
+        fn from(key: HmacSha3_384Key) -> Self {
+            Self::RustCrypto(RustCryptoKey::Hmac(key.0))
+        }
+    }
+    pub(super) struct HmacSha3_512Key(hmac::Hmac<sha3::Sha3_512>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for HmacSha3_512Key {
+        #[inline]
+        fn clone(&self) -> HmacSha3_512Key {
+            HmacSha3_512Key(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl From<hmac::Hmac<sha3::Sha3_512>> for HmacSha3_512Key {
+        fn from(key: hmac::Hmac<sha3::Sha3_512>) -> Self {
+            Self(key)
+        }
+    }
+    impl From<HmacSha3_512Key> for MacKey {
+        fn from(key: HmacSha3_512Key) -> Self {
+            Self::RustCrypto(RustCryptoKey::Hmac(key.0))
+        }
+    }
+    pub(super) struct CmacAes128Key(cmac::Cmac<aes::Aes128>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for CmacAes128Key {
+        #[inline]
+        fn clone(&self) -> CmacAes128Key {
+            CmacAes128Key(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl From<cmac::Cmac<aes::Aes128>> for CmacAes128Key {
+        fn from(key: cmac::Cmac<aes::Aes128>) -> Self {
+            Self(key)
+        }
+    }
+    impl From<CmacAes128Key> for MacKey {
+        fn from(key: CmacAes128Key) -> Self {
+            Self::RustCrypto(RustCryptoKey::Cmac(key.0))
+        }
+    }
+    pub(super) struct CmacAes192Key(cmac::Cmac<aes::Aes192>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for CmacAes192Key {
+        #[inline]
+        fn clone(&self) -> CmacAes192Key {
+            CmacAes192Key(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl From<cmac::Cmac<aes::Aes192>> for CmacAes192Key {
+        fn from(key: cmac::Cmac<aes::Aes192>) -> Self {
+            Self(key)
+        }
+    }
+    impl From<CmacAes192Key> for MacKey {
+        fn from(key: CmacAes192Key) -> Self {
+            Self::RustCrypto(RustCryptoKey::Cmac(key.0))
+        }
+    }
+    pub(super) struct CmacAes256Key(cmac::Cmac<aes::Aes256>);
+    #[automatically_derived]
+    impl ::core::clone::Clone for CmacAes256Key {
+        #[inline]
+        fn clone(&self) -> CmacAes256Key {
+            CmacAes256Key(::core::clone::Clone::clone(&self.0))
+        }
+    }
+    impl From<cmac::Cmac<aes::Aes256>> for CmacAes256Key {
+        fn from(key: cmac::Cmac<aes::Aes256>) -> Self {
+            Self(key)
+        }
+    }
+    impl From<CmacAes256Key> for MacKey {
+        fn from(key: CmacAes256Key) -> Self {
+            Self::RustCrypto(RustCryptoKey::Cmac(key.0))
+        }
+    }
 }
 pub mod constant_time {
     use crate::error::UnspecifiedError;
-    #[cfg(feature = "ring")]
     pub fn verify_slices_are_equal(a: &[u8], b: &[u8]) -> Result<(), UnspecifiedError> {
-        match ring_compat::ring::constant_time::verify_slices_are_equal(a, b) {
-            Ok(()) => Ok(()),
-            Err(_) => Err(UnspecifiedError),
-        }
+        ring_compat::ring::constant_time::verify_slices_are_equal(a, b)
+            .map_err(|_| UnspecifiedError)
     }
 }
 pub mod hash {

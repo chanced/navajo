@@ -74,6 +74,7 @@ optional = true
 # hmac
 [dependencies.hmac]
 version = "0.12"
+optional = true
 
 # aes-gcm
 [dependencies.aes-gcm]
@@ -103,12 +104,13 @@ optional = true
 # sha2
 [dependencies.sha2]
 version = "0.10"
+optional = true
 
 # sha3
 [dependencies.sha3]
 version = "0.10"
+optional = true
 default-features = false
-
 
 # pkcs8
 [dependencies.pkcs8]
@@ -133,11 +135,17 @@ version = "0.8"
 [dependencies.aes]
 features = ["zeroize"]
 version = "0.8"
+optional = true
 
 # cmac
 [dependencies.cmac]
 version = "0.7"
 features = ["zeroize"]
+optional = true
+
+# subtle
+[dependencies.subtle]
+version = "2.4"
 
 # digest
 [dependencies.digest]
@@ -160,15 +168,28 @@ version = "0.4"
 [dependencies.opaque-debug]
 version = "0.3"
 
-# # blake3
-# [dependencies.blake3]
-# version = "1.3"
-# features = ["traits-preview"]
+# blake3
+[dependencies.blake3]
+version = "1.3"
+optional = true
 
 [features]
-default = ["ring", "aead", "signature"]
+default = [
+	"ring",
+	"aead",
+	"signature",
+	"mac",
+	"blake3",
+	"hmac_sha2",
+	"hmac_sha3",
+	"cmac_aes",
+]
+hmac_sha2 = ["hmac", "sha2"]
+hmac_sha3 = ["hmac", "sha3"]
+cmac_aes = ["cmac", "aes"]
 ring = ["ring-compat"]
 signature = ["ed25519", "p256", "p384"]
+mac = []
 aead = ["dep:aes-gcm"]
 std = [
 	"ring-compat?/std",
@@ -186,5 +207,4 @@ std = [
 	"cipher/std",
 	"sha2/std",
 	"sha3/std",
-
 ]

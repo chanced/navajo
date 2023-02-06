@@ -3,12 +3,17 @@ use ring_compat::ring::rand::{SecureRandom as _, SystemRandom};
 
 use random::{rngs::OsRng, CryptoRng, RngCore};
 
+#[cfg(feature = "ring")]
 pub(crate) fn fill(dst: &mut [u8]) {
     SecureRandom::new().fill_bytes(dst)
 }
-#[cfg(feature = "ring")]
+
 pub struct SecureRandom;
+
+#[cfg(feature = "ring")]
 impl CryptoRng for SecureRandom {}
+
+#[cfg(feature = "ring")]
 impl SecureRandom {
     pub fn new() -> Self {
         Self
@@ -60,7 +65,7 @@ impl RngCore for SecureRandom {
         OsRng.fill_bytes(dest)
     }
 
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), random::Error> {
         OsRng.try_fill_bytes(dest)
     }
 }
