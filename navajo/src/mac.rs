@@ -1,17 +1,18 @@
 mod algorithm;
-mod bytes;
 mod context;
 mod hasher;
+mod key;
 mod sink;
 mod tag;
 
-use std::sync::Arc;
+use alloc::{sync::Arc, vec};
 
 pub use algorithm::Algorithm;
+use alloc::vec::Vec;
 pub use tag::Tag;
 
-use bytes::*;
 use context::*;
+use key::*;
 use tag::*;
 
 use crate::{error::InvalidKeyLength, KeyStatus};

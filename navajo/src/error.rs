@@ -1,6 +1,6 @@
-use core::fmt;
-use std::{borrow::Cow, fmt::Display};
+use core::fmt::{self, Debug};
 
+use alloc::{borrow::Cow, string::String};
 pub use random::Error as RandError;
 
 #[cfg(feature = "ring")]
@@ -14,8 +14,8 @@ impl fmt::Display for KeyNotFoundError {
         write!(f, "missing key: {}", self.0)
     }
 }
-
-impl std::error::Error for KeyNotFoundError {}
+#[cfg(feature = "std")]
+impl core::error::Error for KeyNotFoundError {}
 
 #[derive(Clone, Debug)]
 pub struct UnspecifiedError;
@@ -32,6 +32,7 @@ impl fmt::Display for UnspecifiedError {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for UnspecifiedError {}
 
 #[derive(Clone, Debug)]
@@ -48,7 +49,9 @@ impl fmt::Display for EncryptError {
         }
     }
 }
+#[cfg(feature = "std")]
 impl std::error::Error for EncryptError {}
+
 impl From<UnspecifiedError> for EncryptError {
     fn from(_: UnspecifiedError) -> Self {
         Self::Unspecified
@@ -74,7 +77,7 @@ pub enum DecryptStreamError<E> {
 
 impl<E> fmt::Display for DecryptStreamError<E>
 where
-    E: std::error::Error,
+    E: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -85,10 +88,11 @@ where
         }
     }
 }
+#[cfg(feature = "std")]
 impl<E> std::error::Error for DecryptStreamError<E> where E: std::error::Error {}
 impl<E> From<DecryptError> for DecryptStreamError<E>
 where
-    E: std::error::Error,
+    E: Debug,
 {
     fn from(e: DecryptError) -> Self {
         match e {
@@ -121,9 +125,10 @@ impl<E> From<NonceSequenceError> for EncryptStreamError<E> {
         }
     }
 }
+
 impl<E> fmt::Display for EncryptStreamError<E>
 where
-    E: std::error::Error,
+    E: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -135,7 +140,10 @@ where
         }
     }
 }
+
+#[cfg(feature = "std")]
 impl<E> std::error::Error for EncryptStreamError<E> where E: std::error::Error {}
+
 impl<E> From<UnspecifiedError> for EncryptStreamError<E> {
     fn from(e: UnspecifiedError) -> Self {
         Self::Unspecified
@@ -151,11 +159,13 @@ pub enum DecryptError {
     /// The ciphertext is malformed. See the opaque error message for details.
     Malformed(MalformedError),
 }
+
 impl From<KeyNotFoundError> for DecryptError {
     fn from(e: KeyNotFoundError) -> Self {
         Self::KeyNotFound(e)
     }
 }
+
 impl fmt::Display for DecryptError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -165,6 +175,8 @@ impl fmt::Display for DecryptError {
         }
     }
 }
+
+#[cfg(feature = "std")]
 impl std::error::Error for DecryptError {}
 impl From<UnspecifiedError> for DecryptError {
     fn from(e: UnspecifiedError) -> Self {
@@ -179,31 +191,38 @@ impl From<ring::error::Unspecified> for DecryptError {
 
 #[derive(Debug, Clone)]
 pub struct MalformedError(Cow<'static, str>);
+
 impl<E> From<MalformedError> for DecryptStreamError<E> {
     fn from(e: MalformedError) -> Self {
         Self::Malformed(e)
     }
 }
+
 impl From<MalformedError> for DecryptError {
     fn from(e: MalformedError) -> Self {
         Self::Malformed(e)
     }
 }
+
 impl From<&'static str> for MalformedError {
     fn from(s: &'static str) -> Self {
         Self(Cow::Borrowed(s))
     }
 }
+
 impl From<String> for MalformedError {
     fn from(s: String) -> Self {
         Self(Cow::Owned(s))
     }
 }
+
 impl fmt::Display for MalformedError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "malformed ciphertext: {}", &self.0)
     }
 }
+
+#[cfg(feature = "std")]
 impl std::error::Error for MalformedError {}
 
 pub(crate) enum HeaderError {
@@ -220,6 +239,7 @@ impl fmt::Display for InvalidAlgorithm {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for InvalidAlgorithm {}
 
 impl From<u8> for InvalidAlgorithm {
@@ -237,11 +257,14 @@ pub enum MacError {}
 
 #[derive(Debug, Clone)]
 pub struct InvalidKeyLength;
-impl Display for InvalidKeyLength {
+
+impl core::fmt::Display for InvalidKeyLength {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "invalid key length")
     }
 }
+
+#[cfg(feature = "std")]
 impl std::error::Error for InvalidKeyLength {}
 
 impl From<crypto_common::InvalidLength> for InvalidKeyLength {

@@ -13,6 +13,10 @@ description = "cryptographic APIs"
 [dependencies.futures]
 version = "0.3"
 
+# time
+[dependencies.time]
+version = "0.3"
+
 # pin-project
 [dependencies.pin-project]
 version = "1.0"

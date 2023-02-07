@@ -1,4 +1,7 @@
-use alloc::sync::{Arc, Weak};
+use alloc::{
+    sync::{Arc, Weak},
+    vec::Vec,
+};
 
 /// Tags are used to verify the integrity of data. They are generated for each
 /// active key within the keyring at the point of computation. If new keys are

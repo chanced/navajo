@@ -1,8 +1,4 @@
-use super::{
-    bytes::{Key, MacKey},
-    tag::Blake3Output,
-    Output, RustCryptoKey,
-};
+use super::{key::MacKey, Output};
 
 #[allow(clippy::large_enum_variant)]
 pub(super) enum Context {
@@ -15,9 +11,18 @@ pub(super) enum Context {
 impl Context {
     pub(super) fn new(key: &MacKey) -> Context {
         match &key {
-            MacKey::Ring(key) => key.into(),
+            MacKey::Ring(key) => key.as_ref().into(),
             MacKey::RustCrypto(key) => Context::RustCrypto(Box::new(key.as_ref().into())),
-            MacKey::Blake3(key) => key.into(),
+            MacKey::Blake3(key) => key.as_ref().into(),
+        }
+    }
+    pub(super) fn update(&mut self, data: &[u8]) {
+        match self {
+            #[cfg(feature = "blake3")]
+            Self::Blake3(ctx) => ctx.update(data),
+            #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+            Self::Ring(ctx) => ctx.update(data),
+            Self::RustCrypto(ctx) => ctx.update(data),
         }
     }
 }
@@ -206,5 +211,6 @@ macro_rules! rust_crypto_contexts {
         }
 	}
 }
+use alloc::boxed::Box;
 pub(super) use rust_crypto_context_inner;
 pub(super) use rust_crypto_contexts;

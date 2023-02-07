@@ -1,3 +1,4 @@
+use alloc::vec::{self, Vec};
 use random::RngCore;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -54,7 +55,7 @@ pub enum Algorithm {
 
 impl Algorithm {
     pub(super) fn generate_key(&self) -> Vec<u8> {
-        let mut key = vec![0u8; self.default_key_len()];
+        let mut key = alloc::vec![0u8; self.default_key_len()];
         crate::rand::fill(&mut key);
         key
     }
