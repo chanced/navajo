@@ -150,7 +150,7 @@ where
 impl<E> std::error::Error for EncryptStreamError<E> where E: std::error::Error {}
 
 impl<E> From<UnspecifiedError> for EncryptStreamError<E> {
-    fn from(e: UnspecifiedError) -> Self {
+    fn from(_: UnspecifiedError) -> Self {
         Self::Unspecified
     }
 }

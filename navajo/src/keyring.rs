@@ -184,16 +184,14 @@ where
         let id = id.into();
         self.lookup
             .get(&id)
-            .map(|idx| self.keys.get(*idx))
-            .flatten()
+            .and_then(|idx| self.keys.get(*idx))
             .ok_or(KeyNotFoundError(id))
     }
     pub(crate) fn get_mut(&mut self, id: impl Into<u32>) -> Result<&mut Key<M>, KeyNotFoundError> {
         let id = id.into();
         self.lookup
             .get(&id)
-            .map(|idx| self.keys.get_mut(*idx))
-            .flatten()
+            .and_then(|idx| self.keys.get_mut(*idx))
             .ok_or(KeyNotFoundError(id))
     }
 
@@ -226,7 +224,7 @@ where
         let id = id.as_ref();
         if let Some(key_id) = self.lookup.get(id) {
             let key = &mut self.keys[*key_id];
-            key.set_meta(meta);
+            key.update_meta(meta);
             Ok(key)
         } else {
             Err(KeyNotFoundError(*id))
@@ -383,9 +381,8 @@ where
         let mut cipher = ChaCha20Poly1305::new_from_slice(&key)?;
         cipher.decrypt_in_place(&nonce, associated_data, &mut buffer)?;
 
-        // let result: Keyring<M> = serde_json::from_slice(&buffer)?;
-        // Ok(result)
-        todo!()
+        let result: Keyring<M> = serde_json::from_slice(&buffer)?;
+        Ok(result)
     }
 }
 

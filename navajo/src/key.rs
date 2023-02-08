@@ -48,9 +48,7 @@ where
     pub(crate) fn meta(&self) -> Option<&Value> {
         self.meta.as_ref().map(Arc::as_ref)
     }
-    pub(crate) fn set_meta(&mut self, meta: Option<serde_json::Value>) {
-        self.meta = meta.map(Arc::new);
-    }
+
     pub(crate) fn disable(
         &mut self,
     ) -> Result<KeyInfo<M::Algorithm>, DisableKeyError<M::Algorithm>> {
