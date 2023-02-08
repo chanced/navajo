@@ -23,7 +23,7 @@ where
     }
 
     pub(super) fn verify(&self) -> Result<(), MacVerificationError> {
-        let mut computed_tag = self.hasher.finalize();
+        // let mut computed_tag = self.hasher.finalize();
         let tag = self.tag.as_ref();
         // if tag.is
         todo!()

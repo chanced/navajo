@@ -1,4 +1,4 @@
-use super::key::Material;
+use super::material::Material;
 
 use crate::{
     constant_time::verify_slices_are_equal,
@@ -165,10 +165,7 @@ impl Tag {
             truncate_to: Some(len),
         })
     }
-    pub(super) fn new(
-        primary_key: &Arc<Key<Material>>,
-        output: Vec<(Arc<Key<Material>>, Output)>,
-    ) -> Self {
+    pub(super) fn new(primary_key: &Key<Material>, output: Vec<(Key<Material>, Output)>) -> Self {
         let mut primary_entry: Option<Arc<Entry>> = None;
         let mut entries = Vec::with_capacity(output.len());
         for (key, output) in output {
@@ -187,20 +184,20 @@ impl Tag {
         }
     }
 
-    pub(super) fn keys(&self) -> impl Iterator<Item = Arc<Key<Material>>> + '_ {
-        self.entries.iter().map(|e| e.key.clone())
+    pub(super) fn keys(&self) -> impl Iterator<Item = &Key<Material>> {
+        self.entries.iter().map(|e| &e.key)
     }
 }
 
 #[derive(Clone)]
 struct Entry {
-    key: Arc<Key<Material>>,
+    key: Key<Material>,
     truncate_to: Option<usize>,
     output: Output,
 }
 
 impl Entry {
-    pub(super) fn new(key: &Arc<Key<Material>>, output: Output) -> Self {
+    pub(super) fn new(key: &Key<Material>, output: Output) -> Self {
         Self {
             key: key.clone(),
             output,

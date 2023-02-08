@@ -9,6 +9,8 @@ pub use random::Error as RandError;
 #[cfg(feature = "ring")]
 use ring_compat::ring;
 
+use crate::KeyInfo;
+
 #[derive(Debug, Clone, Copy)]
 pub struct KeyNotFoundError(pub u32);
 
@@ -358,4 +360,60 @@ impl From<&str> for OpenError {
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for SealError {}
+impl std::error::Error for OpenError {}
+
+#[derive(Debug, Clone)]
+pub enum RemoveKeyError<A> {
+    IsPrimaryKey(KeyInfo<A>),
+    KeyNotFound(KeyNotFoundError),
+}
+
+impl<A> fmt::Display for RemoveKeyError<A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IsPrimaryKey(_) => write!(f, "cannot remove primary key"),
+            Self::KeyNotFound(e) => write!(f, "{}", e),
+        }
+    }
+}
+impl<A> From<KeyInfo<A>> for RemoveKeyError<A> {
+    fn from(info: KeyInfo<A>) -> Self {
+        Self::IsPrimaryKey(info)
+    }
+}
+impl<A> From<KeyNotFoundError> for RemoveKeyError<A> {
+    fn from(e: KeyNotFoundError) -> Self {
+        Self::KeyNotFound(e)
+    }
+}
+
+#[cfg(feature = "std")]
+impl<A> std::error::Error for RemoveKeyError<A> {}
+
+#[derive(Debug, Clone)]
+pub enum DisableKeyError<A> {
+    IsPrimaryKey(KeyInfo<A>),
+    KeyNotFound(KeyNotFoundError),
+}
+
+impl<A> fmt::Display for DisableKeyError<A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IsPrimaryKey(_) => write!(f, "cannot Disable primary key"),
+            Self::KeyNotFound(e) => write!(f, "{}", e),
+        }
+    }
+}
+impl<A> From<KeyInfo<A>> for DisableKeyError<A> {
+    fn from(info: KeyInfo<A>) -> Self {
+        Self::IsPrimaryKey(info)
+    }
+}
+impl<A> From<KeyNotFoundError> for DisableKeyError<A> {
+    fn from(e: KeyNotFoundError) -> Self {
+        Self::KeyNotFound(e)
+    }
+}
+
+#[cfg(feature = "std")]
+impl<A> std::error::Error for DisableKeyError<A> {}

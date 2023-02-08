@@ -1,21 +1,24 @@
 mod algorithm;
 mod context;
 mod hasher;
-mod key;
+mod material;
 mod sink;
 mod stream;
 mod tag;
 mod verifier;
 
 pub use algorithm::Algorithm;
+use alloc::vec::Vec;
 pub use stream::{ComputeMacStream, MacStream, VerifyMacStream};
 pub use tag::Tag;
 
-use crate::error::InvalidKeyLength;
-use crate::{KeyInfo, Keyring};
+pub use material::MacKeyInfo;
+
+use crate::error::{InvalidKeyLength, KeyNotFoundError};
+use crate::{origin, KeyInfo, Keyring, Origin};
 use context::*;
 use hasher::Hasher;
-use key::*;
+use material::*;
 use tag::*;
 
 pub struct Mac {
@@ -35,7 +38,7 @@ impl Mac {
             inner,
         };
         Self {
-            keyring: Keyring::new(key, meta),
+            keyring: Keyring::new(key, Origin::Navajo, meta),
         }
     }
 
@@ -61,7 +64,7 @@ impl Mac {
         };
 
         Ok(Self {
-            keyring: Keyring::new(key, meta),
+            keyring: Keyring::new(key, Origin::External, meta),
         })
     }
 
@@ -77,15 +80,34 @@ impl Mac {
     ) -> Result<(), InvalidKeyLength> {
         self.create_key(algorithm, key, prefix)
     }
+    /// Returns [`KeyInfo`] for the primary key.
     pub fn primary_key(&self) -> KeyInfo<Algorithm> {
         self.keyring.primary_key().info()
     }
-
-    pub fn keys(&self) -> impl Iterator<Item = KeyInfo<Algorithm>> + '_ {
-        self.keyring.keys().map(|k| k.info())
+    /// Returns a [`Vec`] containing a [`KeyInfo`](crate::key::KeyInfo) for each key in this keyring.
+    pub fn keys(&self) -> Vec<MacKeyInfo> {
+        self.keyring.keys().iter().map(MacKeyInfo::new).collect()
     }
 
-    pub(super) fn keyring(&self) -> &Keyring<Material> {
+    pub fn promote_key(
+        &mut self,
+        key_id: impl Into<u32>,
+    ) -> Result<MacKeyInfo, crate::error::KeyNotFoundError> {
+        self.keyring.promote(key_id).map(MacKeyInfo::new)
+    }
+
+    pub fn disable_key(
+        &mut self,
+        key_id: impl Into<u32>,
+    ) -> Result<MacKeyInfo, crate::error::DisableKeyError<Algorithm>> {
+        self.keyring.disable(key_id).map(MacKeyInfo::new)
+    }
+
+    pub fn enable_key(&mut self, key_id: impl Into<u32>) -> Result<MacKeyInfo, KeyNotFoundError> {
+        self.keyring.enable(key_id).map(MacKeyInfo::new)
+    }
+
+    fn keyring(&self) -> &Keyring<Material> {
         &self.keyring
     }
 

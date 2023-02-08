@@ -1,9 +1,36 @@
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::{error::InvalidKeyLength, KeyInfo, KeyStatus};
+use crate::{error::InvalidKeyLength, Key, Status};
 
 use super::Algorithm;
+
+pub struct MacKeyInfo {
+    pub id: u32,
+    pub origin: crate::Origin,
+    pub algorithm: Algorithm,
+    pub status: Status,
+    pub prefix: Option<Vec<u8>>,
+    pub meta: Option<serde_json::Value>,
+}
+
+impl MacKeyInfo {
+    pub(super) fn new(key: &Key<super::Material>) -> Self {
+        Self {
+            id: key.id(),
+            algorithm: key.algorithm(),
+            origin: key.origin(),
+            status: key.status(),
+            prefix: key.material().prefix().map(|p| p.to_vec()),
+            meta: key.meta().cloned(),
+        }
+    }
+}
+impl From<&Key<super::Material>> for MacKeyInfo {
+    fn from(key: &Key<super::Material>) -> Self {
+        Self::new(key)
+    }
+}
 
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub(super) struct Material {
@@ -11,7 +38,7 @@ pub(super) struct Material {
     pub(super) algorithm: Algorithm,
     #[zeroize(skip)]
     pub(super) inner: MacKey,
-    bytes: Vec<u8>,
+    pub(super) bytes: Vec<u8>,
     pub(super) prefix: Option<Vec<u8>>,
 }
 impl PartialEq for Material {

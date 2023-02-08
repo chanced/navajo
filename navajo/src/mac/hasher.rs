@@ -1,23 +1,19 @@
-use cfg_if::cfg_if;
-use pbkdf2::password_hash::Output;
-use rayon::prelude::*;
-
-use alloc::sync::Arc;
 use alloc::{collections::VecDeque, vec::Vec};
+use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
 
 #[cfg(feature = "std")]
 use std::io::Read;
 
 const BUFFER_SIZE: usize = 64;
 
-use crate::Key;
+use crate::key::Key;
 
 use super::{context::Context, Material, Tag};
 
 /// Generates a [`Tag`] for the given data using a set of keys.
 pub(super) struct Hasher {
-    primary_key: Arc<Key<Material>>,
-    contexts: Vec<(Arc<Key<Material>>, Context)>,
+    primary_key: Key<Material>,
+    contexts: Vec<(Key<Material>, Context)>,
     #[cfg(not(feature = "std"))]
     buffer: VecDeque<u8>,
     #[cfg(feature = "std")]
@@ -25,7 +21,7 @@ pub(super) struct Hasher {
 }
 
 impl Hasher {
-    pub(super) fn new(keys: impl Iterator<Item = Arc<Key<Material>>>) -> Self {
+    pub(super) fn new<'a>(keys: impl Iterator<Item = &'a Key<Material>>) -> Self {
         let mut contexts = Vec::new();
         let mut primary_key = None;
         let mut primary_key_found = false;
@@ -37,8 +33,7 @@ impl Hasher {
                 // this shouldn't matter but it's a safeguard to avoid panicing
                 primary_key = Some(key.clone());
             }
-            let k = key.clone();
-            contexts.push((key, Context::new(&k.material().inner)));
+            contexts.push((key.clone(), Context::new(&key.material().inner)));
         }
         let primary_key = primary_key.expect("keys were empty in Hasher::new\nthis is a bug!\nplease report it to https://github.com/chanced/navajo/issues/new");
         #[cfg(feature = "std")]

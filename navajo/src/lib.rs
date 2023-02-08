@@ -6,9 +6,7 @@ mod keyring;
 pub(crate) use keyring::Keyring;
 
 mod key;
-
 pub(crate) use key::{Key, KeyMaterial};
-pub use key::{KeyInfo, KeyStatus};
 
 pub mod aead;
 // pub use aead::Aead;
@@ -35,3 +33,12 @@ pub use kms::{Kms, KmsSync};
 
 mod primitive;
 // pub use primitive::{seal, seal_sync, unseal, unseal_sync, Primitive};
+
+mod origin;
+pub use origin::Origin;
+
+mod status;
+pub use status::Status;
+
+mod key_info;
+pub use key_info::KeyInfo;

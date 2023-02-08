@@ -1,4 +1,4 @@
-use super::{key::MacKey, Output};
+use super::{material::MacKey, Output};
 
 #[allow(clippy::large_enum_variant)]
 pub(super) enum Context {

@@ -1,16 +1,17 @@
+use crate::error::DisableKeyError;
+use crate::error::KeyNotFoundError;
 use crate::error::OpenError;
+use crate::error::RemoveKeyError;
 use crate::error::SealError;
 use crate::key::Key;
 use crate::key::KeyMaterial;
-use crate::kms;
 use crate::kms::Kms;
 use crate::rand;
-use crate::KeyStatus;
+use crate::Origin;
+use crate::Status;
 use aes_gcm::aead::AeadMutInPlace;
-use alloc::format;
-use alloc::string::String;
 use alloc::string::ToString;
-use alloc::sync::Arc;
+use alloc::vec;
 use alloc::vec::Vec;
 use chacha20poly1305::{
     aead::{AeadCore, KeyInit},
@@ -24,6 +25,7 @@ use serde_json::Value;
 
 const CHACHA20_POLY1305_KEY_SIZE: usize = 32;
 const CHACHA20_POLY1305_NONCE_SIZE: usize = 12;
+const PRIMARY_KEY_NOT_FOUND_MSG:&str = "primary key not found in keyring\n\nthis is a bug. please report it to https://github.com/chanced/navajo/issues/new";
 
 pub(crate) const KEY_ID_LEN: usize = 4;
 
@@ -33,7 +35,7 @@ where
     M: KeyMaterial,
 {
     keys: Vec<Key<M>>,
-    primary_key_id: u32,
+    primary_key_idx: usize,
     lookup: HashMap<u32, usize>,
 }
 impl<M> Serialize for Keyring<M>
@@ -46,7 +48,6 @@ where
     {
         let mut state = serializer.serialize_struct("Keyring", 2)?;
         state.serialize_field("keys", &self.keys)?;
-        state.serialize_field("primary_key_id", &self.primary_key_id)?;
         state.end()
     }
 }
@@ -59,93 +60,93 @@ where
     where
         D: serde::Deserializer<'de>,
     {
-        let KeyringData {
-            mut keys,
-            mut primary_key_id,
-        } = KeyringData::deserialize(deserializer)?;
+        // let KeyringData {
+        //     mut keys,
+        //     mut primary_key_id,
+        // } = KeyringData::deserialize(deserializer)?;
 
-        let mut lookup: HashMap<u32, Arc<Key<Material>>> = HashMap::new();
-        // this is a safeguard that should never have to be used.
-        let mut corrective_primary_key_id = None;
-        let mut primary_key = None;
-        if keys.len() == 0 {
-            return Err(serde::de::Error::custom("empty keyring"));
-        }
-        for key in keys.iter() {
-            if lookup.contains_key(&key.id) {
-                if key.material == lookup[&key.id].material {
-                    lookup.remove(&key.id);
-                } else {
-                    return Err(serde::de::Error::custom(format!(
-                        "duplicate key id: {}",
-                        key.id
-                    )));
-                }
-            }
-            if key.id == primary_key_id {
-                primary_key = Some(key.id);
-            } else if key.status == KeyStatus::Primary {
-                corrective_primary_key_id = Some(key.id);
-            }
-        }
-        if let Some(possible_corrective_id) = Some(primary_key_id) {
-            if primary_key == None {
-                for key in keys.iter() {
-                    if key.id == possible_corrective_id {
-                        primary_key = Some(key.id);
-                        break;
-                    }
-                }
-            } else {
-                for mut key in keys.iter_mut() {
-                    if key.id == possible_corrective_id {
-                        key.status = KeyStatus::Secondary;
-                        break;
-                    }
-                }
-            }
-        }
-        if primary_key.is_none() {
-            if let Some(new_pk_id) = corrective_primary_key_id.take() {
-                primary_key_id = new_pk_id;
-                for mut key in keys.iter_mut() {
-                    if key.id == new_pk_id {
-                        key.status = KeyStatus::Primary;
-                        break;
-                    }
-                }
-            } else {
-                let last = keys.last_mut().unwrap();
-                last.status = KeyStatus::Primary;
-                primary_key_id = last.id;
-            }
-        }
+        // let mut lookup: HashMap<u32, usize> = HashMap::new();
+        // // this is a safeguard that should never have to be used.
+        // let mut corrective_primary_key_id = None;
+        // let mut primary_key = None;
+        // if keys.len() == 0 {
+        //     return Err(serde::de::Error::custom("empty keyring"));
+        // }
+        // for key in keys.iter() {
+        //     if lookup.contains_key(&key.id) {
+        //         if key.material == lookup[&key.id].material {
+        //             lookup.remove(&key.id);
+        //         } else {
+        //             return Err(serde::de::Error::custom(format!(
+        //                 "duplicate key id: {}",
+        //                 key.id
+        //             )));
+        //         }
+        //     }
+        //     if key.id == primary_key_id {
+        //         primary_key = Some(key.id);
+        //     } else if key.status == KeyStatus::Primary {
+        //         corrective_primary_key_id = Some(key.id);
+        //     }
+        // }
+        // if let Some(possible_corrective_id) = Some(primary_key_id) {
+        //     if primary_key == None {
+        //         for key in keys.iter() {
+        //             if key.id == possible_corrective_id {
+        //                 primary_key = Some(key.id);
+        //                 break;
+        //             }
+        //         }
+        //     } else {
+        //         for mut key in keys.iter_mut() {
+        //             if key.id == possible_corrective_id {
+        //                 key.status = KeyStatus::Secondary;
+        //                 break;
+        //             }
+        //         }
+        //     }
+        // }
+        // if primary_key.is_none() {
+        //     if let Some(new_pk_id) = corrective_primary_key_id.take() {
+        //         primary_key_id = new_pk_id;
+        //         for mut key in keys.iter_mut() {
+        //             if key.id == new_pk_id {
+        //                 key.status = KeyStatus::Primary;
+        //                 break;
+        //             }
+        //         }
+        //     } else {
+        //         let last = keys.last_mut().unwrap();
+        //         last.status = KeyStatus::Primary;
+        //         primary_key_id = last.id;
+        //     }
+        // }
 
-        if let Some(invalid_key_id) = corrective_primary_key_id {
-            for mut key in keys.iter_mut() {
-                if key.id == invalid_key_id {
-                    key.status = KeyStatus::Secondary;
-                    break;
-                }
-            }
-        }
+        // if let Some(invalid_key_id) = corrective_primary_key_id {
+        //     for mut key in keys.iter_mut() {
+        //         if key.id == invalid_key_id {
+        //             key.status = KeyStatus::Secondary;
+        //             break;
+        //         }
+        //     }
+        // }
 
-        let mut keyring = Vec::with_capacity(keys.len());
-        let mut primary_key = None;
-        for key in keys {
-            let key = Arc::new(key);
-            keyring.push(key.clone());
-            if primary_key_id == key.id {
-                primary_key = Some(key.clone());
-            }
-            lookup.insert(key.id, key);
-        }
-        Ok(Self {
-            keys: keyring,
-            primary_key: primary_key.unwrap(),
-            primary_key_id,
-            lookup,
-        })
+        // let mut keyring = Vec::with_capacity(keys.len());
+        // let mut primary_key = None;
+        // for key in keys {
+        //     keyring.push(key.clone());
+        //     if primary_key_id == key.id {
+        //         primary_key = Some(key.clone());
+        //     }
+        //     lookup.insert(key.id, key.id);
+        // }
+        // Ok(Self {
+        //     keys: keyring,
+        //     primary_key: primary_key.unwrap(),
+        //     primary_key_id,
+        //     lookup,
+        // })
+        todo!()
     }
 }
 
@@ -153,72 +154,151 @@ impl<M> Keyring<M>
 where
     M: KeyMaterial,
 {
-    pub(crate) fn new(material: M, meta: Option<Value>) -> Self {
+    pub(crate) fn new(material: M, origin: Origin, meta: Option<Value>) -> Self {
         let id = gen_id();
-        let key = Key::new(id, KeyStatus::Primary, material, meta);
-
-        let key = key;
-        let mut keys = Vec::new();
-        keys.push(key.clone());
+        let key = Key::new(id, Status::Primary, origin, material, meta);
         let mut lookup = HashMap::new();
-        lookup.insert(id, key.clone());
+        lookup.insert(id, 0);
         Self {
-            keys,
-            primary_key: key.clone(),
-            primary_key_id: id,
+            keys: vec![key],
             lookup,
+            primary_key_idx: 0,
         }
     }
-    pub(crate) fn add(&mut self, material: M) -> u32 {
+
+    pub(crate) fn remove(
+        &mut self,
+        id: impl Into<u32>,
+    ) -> Result<Key<M>, RemoveKeyError<M::Algorithm>> {
+        let id = id.into();
+        let primary_key = self.primary_key();
+        if primary_key.id() == id {
+            return Err(primary_key.info().into());
+        }
+        let idx = self.lookup.remove(&id).ok_or(KeyNotFoundError(id))?;
+        let key = self.keys.remove(idx);
+        Ok(key)
+    }
+
+    pub(crate) fn get(&self, id: impl Into<u32>) -> Result<&Key<M>, KeyNotFoundError> {
+        let id = id.into();
+        self.lookup
+            .get(&id)
+            .map(|idx| self.keys.get(*idx))
+            .flatten()
+            .ok_or(KeyNotFoundError(id))
+    }
+    pub(crate) fn get_mut(&mut self, id: impl Into<u32>) -> Result<&mut Key<M>, KeyNotFoundError> {
+        let id = id.into();
+        self.lookup
+            .get(&id)
+            .map(|idx| self.keys.get_mut(*idx))
+            .flatten()
+            .ok_or(KeyNotFoundError(id))
+    }
+
+    pub(crate) fn get_mut_with_idx(
+        &mut self,
+        id: impl Into<u32>,
+    ) -> Result<(usize, &mut Key<M>), KeyNotFoundError> {
+        let id = id.into();
+        let (idx, key) = self
+            .lookup
+            .get(&id)
+            .map(|idx| (*idx, self.keys.get_mut(*idx)))
+            .ok_or(KeyNotFoundError(id))?;
+        key.ok_or(KeyNotFoundError(id)).map(|key| (idx, key))
+    }
+
+    pub(crate) fn add(&mut self, origin: Origin, material: M, meta: Option<Value>) -> &Key<M> {
         let id = self.gen_unique_id();
-        let key = Key {
-            id,
-            status: KeyStatus::Secondary,
-            material,
-            meta: None,
-        };
-        let key = Arc::new(key);
-        self.keys.push(key.clone());
-        self.lookup.insert(id, key.clone());
-        id
+        let key = Key::new(id, Status::Secondary, origin, material, meta);
+        self.keys.push(key);
+        self.lookup.insert(id, self.keys.len() - 1);
+        self.keys.last().unwrap()
     }
-    pub(crate) fn update_meta(&mut self, id: impl AsRef<u32>, meta: Option<Value>) {
+
+    pub(crate) fn update_meta(
+        &mut self,
+        id: impl AsRef<u32>,
+        meta: Option<Value>,
+    ) -> Result<&Key<M>, KeyNotFoundError> {
         let id = id.as_ref();
-        let key = self.lookup.get_mut(id).unwrap();
-        key.meta = meta;
-    }
-    pub(crate) fn remove(&mut self, id: impl AsRef<u32>) -> Result<(), String> {
-        let id = id.as_ref();
-        if *id == self.primary_key_id {
-            return Err("cannot remove primary key".to_string());
+        if let Some(key_id) = self.lookup.get(id) {
+            let key = &mut self.keys[*key_id];
+            key.set_meta(meta);
+            Ok(key)
+        } else {
+            Err(KeyNotFoundError(*id))
         }
-        let key = self.lookup.remove(id).ok_or("key not found")?;
-        self.keys.retain(|k| !Arc::ptr_eq(k, &key));
-        Ok(())
     }
 
-    pub(crate) fn get(&self, id: impl AsRef<u32>) -> Option<Arc<Key<M>>> {
-        self.lookup.get(id.as_ref()).cloned()
+    pub(crate) fn primary_key(&self) -> &Key<M> {
+        // Safety: if this fails to locate the primary key, the keyring is in a
+        // bad state. This would be a bug that needs to be resolved immediately.
+        //
+        // In the event that this does occur, restarting the application should,
+        // at mimimum, partially resolve the issue. There is corrective logic in
+        // place to ensure that if the primary key is not found, the last
+        // created key becomes the primary. If this were a result of a
+        // key-gone-missing scenario, then some data or messages may not be
+        // recoverable.
+        //
+        // Panicing here rather than attempting to restore to ensure that the
+        // user is aware of the corrupt state.
+        self.keys
+            .get(self.primary_key_idx)
+            .expect(PRIMARY_KEY_NOT_FOUND_MSG)
     }
-    pub(crate) fn primary_key(&self) -> Arc<Key<M>> {
-        self.primary_key.clone()
-    }
-    pub(crate) fn primary_key_info(&self) -> Arc<Key<M>> {
-        self.primary_key.clone()
-    }
-    pub(crate) fn set_primary_key(&mut self, key: impl AsRef<u32>) -> Result<(), String> {
-        let key = key.as_ref();
-        let key = self.lookup.get(key).ok_or("key not found")?;
-        let key = key.clone();
-        self.primary_key = key;
-        self.primary_key_id = key.id;
-        Ok(())
+    pub(crate) fn primary_key_mut(&mut self) -> &mut Key<M> {
+        self.keys
+            .get_mut(self.primary_key_idx)
+            .expect(PRIMARY_KEY_NOT_FOUND_MSG)
     }
 
-    pub(crate) fn keys(&self) -> impl Iterator<Item = Arc<Key<M>>> + '_ {
-        self.keys.iter().cloned()
+    pub(crate) fn disable(
+        &mut self,
+        id: impl Into<u32>,
+    ) -> Result<&Key<M>, DisableKeyError<M::Algorithm>> {
+        let id = id.into();
+        let primary_key_idx = self.primary_key_idx;
+        let (idx, key) = self.get_mut_with_idx(id)?;
+        if idx == primary_key_idx {
+            return Err(DisableKeyError::IsPrimaryKey(key.info().into()));
+        }
+        key.disable()?;
+        Ok(key)
     }
-    pub(crate) fn gen_unique_id(&self) -> u32 {
+
+    pub(crate) fn enable(&mut self, id: impl Into<u32>) -> Result<&Key<M>, KeyNotFoundError> {
+        let id = id.into();
+        let key = self.get_mut(id)?;
+        if key.status() != Status::Disabled {
+            return Ok(key);
+        }
+        key.enable();
+        Ok(key)
+    }
+    pub(crate) fn promote(&mut self, key: impl Into<u32>) -> Result<&Key<M>, KeyNotFoundError> {
+        let id = key.into();
+        if !self.lookup.contains_key(&id) {
+            return Err(KeyNotFoundError(id));
+        }
+        self.primary_key_mut().demote();
+        let idx = {
+            let (idx, key) = self.get_mut_with_idx(id).unwrap();
+            key.promote_to_primary();
+            idx
+        };
+        self.primary_key_idx = idx;
+        Ok(self.get(id).unwrap())
+    }
+
+    pub(crate) fn keys(&self) -> &[Key<M>] {
+        &self.keys
+    }
+
+    fn gen_unique_id(&self) -> u32 {
         let mut id = gen_id();
         while self.lookup.contains_key(&id) {
             id = gen_id();
