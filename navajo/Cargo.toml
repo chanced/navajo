@@ -96,9 +96,8 @@ optional = true
 
 # aes-gcm
 [dependencies.aes-gcm]
-version = "*"
+version = "0.10"
 features = ["zeroize"]
-optional = true
 
 # ed25519
 [dependencies.ed25519]
@@ -200,14 +199,14 @@ cmac_aes = ["cmac", "aes"]
 ring = ["ring-compat"]
 signature = ["ed25519", "p256", "p384"]
 mac = ["rayon"]
-aead = ["dep:aes-gcm"]
+aead = []
 std = [
 	"ring-compat?/std",
 	"hex/std",
 	"serde/std",
 	"serde_json/std",
 	"zeroize/std",
-	"aes-gcm?/std",
+	"aes-gcm/std",
 	"aes-siv?/std",
 	"hmac/std",
 	"chacha20poly1305/std",

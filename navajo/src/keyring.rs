@@ -10,6 +10,7 @@ use crate::rand;
 use crate::Origin;
 use crate::Status;
 use aes_gcm::aead::AeadMutInPlace;
+use aes_gcm::Aes256Gcm;
 use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -25,6 +26,12 @@ use serde_json::Value;
 
 const CHACHA20_POLY1305_KEY_SIZE: usize = 32;
 const CHACHA20_POLY1305_NONCE_SIZE: usize = 12;
+const CHACHA20_POLY1305_TAG_SIZE: usize = 16;
+
+const AES_256_GCM_KEY_SIZE: usize = 32;
+const AES_256_GCM_NONCE_SIZE: usize = 12;
+const AES_256_GCM_TAG_SIZE: usize = 16;
+
 const PRIMARY_KEY_NOT_FOUND_MSG:&str = "primary key not found in keyring\n\nthis is a bug. please report it to https://github.com/chanced/navajo/issues/new";
 
 pub(crate) const KEY_ID_LEN: usize = 4;
@@ -313,13 +320,21 @@ where
         associated_data: &[u8],
         envelope: impl Kms,
     ) -> Result<Vec<u8>, SealError> {
+        let mut serialized = serde_json::to_vec(self)?;
+
+        let key = Aes256Gcm::generate_key(&mut crate::Random);
+        let mut cipher = Aes256Gcm::new(&key);
+        let nonce = ChaCha20Poly1305::generate_nonce(&mut crate::Random);
+        serialized.reserve(AES_256_GCM_TAG_SIZE);
+        cipher.encrypt_in_place(&nonce, associated_data, &mut serialized);
+
         let key = ChaCha20Poly1305::generate_key(&mut crate::Random);
         let mut cipher = ChaCha20Poly1305::new(&key);
         let nonce = ChaCha20Poly1305::generate_nonce(&mut crate::Random);
-        let mut serialized = serde_json::to_vec(self)?;
+        serialized.reserve(CHACHA20_POLY1305_TAG_SIZE);
+        cipher.encrypt_in_place(&nonce, associated_data, &mut serialized);
 
-        let mut cipher_and_nonce = key.to_vec();
-        cipher_and_nonce.extend_from_slice(&nonce);
+        let cipher_and_nonce = [key.as_slice(), nonce.as_slice()].concat();
 
         let sealed_cipher_and_nonce = envelope
             .encrypt(&key, &associated_data)
@@ -338,7 +353,6 @@ where
                 return Err("kms failed to seal".into());
             }
         }
-        cipher.encrypt_in_place(&nonce, associated_data, &mut serialized)?;
         let mut result = sealed_len.to_be_bytes().to_vec();
 
         result.extend_from_slice(&sealed_cipher_and_nonce);
@@ -380,7 +394,16 @@ where
         let mut buffer = sealed[4 + sealed_cipher_and_nonce_len as usize..].to_vec();
         let mut cipher = ChaCha20Poly1305::new_from_slice(&key)?;
         cipher.decrypt_in_place(&nonce, associated_data, &mut buffer)?;
+        buffer.split_off(buffer.len() - CHACHA20_POLY1305_TAG_SIZE);
 
+        let key = buffer[0..AES_256_GCM_KEY_SIZE].to_vec();
+        let nonce =
+            buffer[AES_256_GCM_KEY_SIZE..AES_256_GCM_KEY_SIZE + AES_256_GCM_NONCE_SIZE].to_vec();
+        let mut buffer = buffer[AES_256_GCM_KEY_SIZE + AES_256_GCM_NONCE_SIZE..].to_vec();
+        let mut cipher = Aes256Gcm::new_from_slice(&key)?;
+        let nonce = aes_gcm::Nonce::from_slice(&nonce);
+        cipher.decrypt_in_place(&nonce, associated_data, &mut buffer)?;
+        _ = buffer.split_off(buffer.len() - AES_256_GCM_TAG_SIZE);
         let result: Keyring<M> = serde_json::from_slice(&buffer)?;
         Ok(result)
     }
