@@ -1,4 +1,5 @@
 use cfg_if::cfg_if;
+use pbkdf2::password_hash::Output;
 use rayon::prelude::*;
 
 use alloc::sync::Arc;
@@ -11,21 +12,33 @@ const BUFFER_SIZE: usize = 64;
 
 use super::{context::Context, Key, Tag};
 
+/// Generates a [`Tag`] for the given data using a set of keys.
 pub(super) struct Hasher {
-    keys: Vec<Arc<Key>>,
     primary_key: Arc<Key>,
-    contexts: Vec<Context>,
+    contexts: Vec<(Arc<Key>, Context)>,
     #[cfg(not(feature = "std"))]
     buffer: VecDeque<u8>,
     #[cfg(feature = "std")]
     buffer: Vec<u8>,
 }
+
 impl Hasher {
-    pub(super) fn new(primary_key: Arc<Key>, keys: Vec<Arc<Key>>) -> Self {
-        let mut ctxs = Vec::with_capacity(keys.len());
-        for key in &keys {
-            ctxs.push(Context::new(&key.inner));
+    pub(super) fn new(keys: impl Iterator<Item = Arc<Key>>) -> Self {
+        let mut contexts = Vec::new();
+        let mut primary_key = None;
+        let mut primary_key_found = false;
+        for key in keys {
+            if key.status.is_primary() {
+                primary_key_found = true;
+                primary_key = Some(key.clone());
+            } else if !primary_key_found {
+                // this shouldn't matter but it's a safeguard to avoid panicing
+                primary_key = Some(key.clone());
+            }
+            let k = key.clone();
+            contexts.push((key, Context::new(&k.inner)));
         }
+        let primary_key = primary_key.expect("keys were empty in Hasher::new\nthis is a bug!\nplease report it to https://github.com/chanced/navajo/issues/new");
         #[cfg(feature = "std")]
         {
             Self {
@@ -37,16 +50,28 @@ impl Hasher {
         }
         #[cfg(not(feature = "std"))]
         Self {
-            keys,
             primary_key,
-            contexts: ctxs,
+            contexts,
             buffer: VecDeque::new(),
         }
     }
 
-    pub(super) fn update(&mut self, data: &[u8]) {
+    pub(super) fn update(&mut self, data: &[u8], buf_size: usize) {
         self.buffer.extend(data.iter());
-        while self.buffer.len() >= BUFFER_SIZE {
+
+        // there's no reason to keep a buffer if there's only one key
+        if self.contexts.len() == 1 {
+            let mut buf = self.buffer.split_off(0);
+            #[cfg(not(feature = "std"))]
+            let buf = buf.make_contiguous();
+            self.contexts[0].1.update(buf);
+        }
+
+        // in the event there are mutliple keys, the data is buffered and
+        // chunked. This is because updates are possibly run in parallel,
+        // resulting in the potential memory usage of n * d where n is the
+        // number of keys and d is size of the data.
+        while self.buffer.len() >= buf_size {
             let chunk: Vec<u8>;
             #[cfg(feature = "std")]
             {
@@ -62,33 +87,22 @@ impl Hasher {
     }
 
     fn update_chunk(&mut self, chunk: Vec<u8>) {
-        if self.keys.len() > 1 {
-            self.contexts.par_iter_mut().for_each(|ctx| {
+        if self.contexts.len() > 1 {
+            self.contexts.par_iter_mut().for_each(|(_, ctx)| {
                 ctx.update(&chunk);
             });
         } else {
-            self.contexts.iter_mut().for_each(|ctx| {
+            self.contexts.iter_mut().for_each(|(_, ctx)| {
                 ctx.update(&chunk);
             });
         }
     }
-}
-cfg_if! {
-    if #[cfg(feature="std")] {
-        pub struct ComputeRead<R> {
-            reader: R,
-            hasher: Hasher,
+    pub(super) fn finalize(self) -> Tag {
+        let mut outputs = Vec::with_capacity(self.contexts.len());
+        for (key, ctx) in self.contexts {
+            let output = ctx.finalize();
+            outputs.push((key, output));
         }
-
-        impl<R> ComputeRead<R>
-        where
-            R: std::io::Read,
-        {
-            pub(super) fn new(reader: R, primary_key: Arc<Key>, keys: Vec<Arc<Key>>) -> Self {
-                let hasher = Hasher::new(primary_key, keys);
-                Self { reader, hasher }
-            }
-        }
-
+        Tag::new(&self.primary_key, outputs)
     }
 }

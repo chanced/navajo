@@ -1,6 +1,9 @@
-use core::fmt::{self, Debug};
+use core::fmt::{self, Debug, Display};
 
-use alloc::{borrow::Cow, string::String};
+use alloc::{
+    borrow::Cow,
+    string::{String, ToString},
+};
 pub use random::Error as RandError;
 
 #[cfg(feature = "ring")]
@@ -250,10 +253,20 @@ impl From<u8> for InvalidAlgorithm {
 
 pub enum TruncationError {
     NotTruncatable,
+    TooLong,
     TooShort,
 }
 
-pub enum MacError {}
+#[derive(Debug, Clone)]
+pub struct MacVerificationError;
+impl fmt::Display for MacVerificationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "MAC verification failed")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for MacVerificationError {}
 
 #[derive(Debug, Clone)]
 pub struct InvalidKeyLength;
@@ -272,3 +285,49 @@ impl From<crypto_common::InvalidLength> for InvalidKeyLength {
         Self {}
     }
 }
+#[derive(Debug)]
+pub struct SealError(String);
+
+impl fmt::Display for SealError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "error: failed to seal:\n\ncaused by:\n\t{}", self.0)
+    }
+}
+impl From<String> for SealError {
+    fn from(e: String) -> Self {
+        Self(e)
+    }
+}
+
+impl From<&str> for SealError {
+    fn from(e: &str) -> Self {
+        Self(e.to_string())
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for SealError {}
+
+#[derive(Debug)]
+pub struct OpenError(String);
+
+impl fmt::Display for OpenError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "error: failed to open:\n\ncaused by:\n\t{}", self.0)
+    }
+}
+
+impl From<String> for OpenError {
+    fn from(e: String) -> Self {
+        Self(e)
+    }
+}
+
+impl From<&str> for OpenError {
+    fn from(e: &str) -> Self {
+        Self(e.to_string())
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for SealError {}

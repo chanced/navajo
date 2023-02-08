@@ -31,7 +31,7 @@ version = "1.6"
 version = "1.5"
 features = ["alloc", "zeroize_derive", "serde"]
 
-# hex
+# hex -- TODO: may be able to remove this.
 [dependencies.hex]
 version = "0.4"
 default-features = false
@@ -40,6 +40,15 @@ features = ["serde"]
 # paste
 [dependencies.paste]
 version = "1.0"
+
+# hashbrown
+[dependencies.hashbrown]
+version = "0.13"
+
+# rand
+[dependencies.random]
+package = "rand"
+version = "0.8"
 
 # ring-compat
 [dependencies.ring-compat]
@@ -66,6 +75,10 @@ features = ["alloc"]
 [dependencies.serde_repr]
 version = "0.1"
 
+# serde_bytes
+[dependencies.serde_bytes]
+version = "0.11"
+
 # aes-siv
 [dependencies.aes-siv]
 version = "0.7"
@@ -78,12 +91,12 @@ version = "0.1.6"
 # chachapoly1305
 [dependencies.chacha20poly1305]
 version = "*"
-optional = true
 
-# hmac
+# hmac -- TODO: remove this. hmac is provided in each impl
 [dependencies.hmac]
 version = "0.12"
 optional = true
+
 
 # aes-gcm
 [dependencies.aes-gcm]
@@ -131,16 +144,7 @@ optional = true
 [dependencies.pbkdf2]
 version = "0.11"
 
-# hashbrown
-[dependencies.hashbrown]
-version = "0.13"
-
-# rand
-[dependencies.random]
-package = "rand"
-version = "0.8"
-
-# aes
+# aes 
 [dependencies.aes]
 features = ["zeroize"]
 version = "0.8"
@@ -210,7 +214,7 @@ std = [
 	"aes-gcm?/std",
 	"aes-siv?/std",
 	"hmac/std",
-	"chacha20poly1305?/std",
+	"chacha20poly1305/std",
 	"pkcs8?/std",
 	"cmac/std",
 	"digest/std",

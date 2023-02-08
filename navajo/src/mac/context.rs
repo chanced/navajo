@@ -25,6 +25,15 @@ impl Context {
             Self::RustCrypto(ctx) => ctx.update(data),
         }
     }
+    pub(super) fn finalize(self) -> Output {
+        match self {
+            #[cfg(feature = "blake3")]
+            Self::Blake3(ctx) => ctx.finalize(),
+            #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+            Self::Ring(ctx) => ctx.finalize(),
+            Self::RustCrypto(ctx) => ctx.finalize(),
+        }
+    }
 }
 
 #[cfg(all(feature = "ring", feature = "hmac_sha2"))]

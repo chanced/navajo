@@ -3,45 +3,40 @@ mod context;
 mod hasher;
 mod key;
 mod sink;
+mod stream;
 mod tag;
-
-use alloc::{sync::Arc, vec};
+mod verifier;
 
 pub use algorithm::Algorithm;
-use alloc::vec::Vec;
+pub use stream::{ComputeMacStream, MacStream, VerifyMacStream};
 pub use tag::Tag;
 
+use crate::error::InvalidKeyLength;
+use crate::{KeyInfo, Keyring};
 use context::*;
+use hasher::Hasher;
 use key::*;
 use tag::*;
 
-use crate::{error::InvalidKeyLength, KeyStatus};
-
 pub struct Mac {
-    keys: Vec<Arc<Key>>,
-    primary_key: Arc<Key>,
-    primary_key_id: u32,
+    keys: Keyring<Key>,
 }
 
 impl Mac {
     /// Create a new MAC keyring by generating a key for the given [`Algorithm`]
     /// as the primary.
-    pub fn new(algorithm: Algorithm) -> Result<Self, InvalidKeyLength> {
+    pub fn new(algorithm: Algorithm, meta: Option<serde_json::value::Value>) -> Self {
         let bytes = algorithm.generate_key();
-        let id = crate::id::gen_id();
-        let inner = MacKey::new(algorithm, &bytes)?;
-        let key = Arc::new(Key {
-            id,
+        let inner = MacKey::new(algorithm, &bytes).unwrap(); // safe, the key is valid
+        let key = Key {
+            bytes,
             prefix: None,
             algorithm,
             inner,
-            status: KeyStatus::Primary,
-        });
-        Ok(Self {
-            keys: vec![key.clone()],
-            primary_key: key,
-            primary_key_id: id,
-        })
+        };
+        Self {
+            keys: Keyring::new(key, meta),
+        }
     }
 
     /// Create a new MAC keyring by initializing it with the given key data as
@@ -49,25 +44,24 @@ impl Mac {
     ///
     /// If the key has a prefix, such as Tink's 5 bytes, it should be trimmed
     /// from `key` and passed as `prefix`.
-    pub fn new_with_external_key(
+    pub fn new_with_external_key<'de>(
         key: &[u8],
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
+        meta: Option<serde_json::Value>,
     ) -> Result<Self, InvalidKeyLength> {
-        let id = crate::id::gen_id();
         let inner = MacKey::new(algorithm, key)?;
         let prefix = prefix.map(|p| p.to_vec());
-        let key = Arc::new(Key {
-            id,
+
+        let key = Key {
             prefix,
             algorithm,
             inner,
-            status: KeyStatus::Primary,
-        });
+            bytes: key.to_vec(),
+        };
+
         Ok(Self {
-            keys: vec![key.clone()],
-            primary_key: key,
-            primary_key_id: id,
+            keys: Keyring::new(key, meta),
         })
     }
 
@@ -75,7 +69,6 @@ impl Mac {
         let bytes = algorithm.generate_key();
         self.create_key(algorithm, &bytes, None)
     }
-
     pub fn add_external_key(
         &mut self,
         key: &[u8],
@@ -84,29 +77,18 @@ impl Mac {
     ) -> Result<(), InvalidKeyLength> {
         self.create_key(algorithm, key, prefix)
     }
+
     fn create_key(
         &mut self,
         algorithm: Algorithm,
         bytes: &[u8],
         prefix: Option<&[u8]>,
     ) -> Result<(), InvalidKeyLength> {
-        let mut ids = hashbrown::HashSet::with_capacity(self.keys.len());
-        for key in &self.keys {
-            ids.insert(key.id);
-        }
-        let inner = MacKey::new(algorithm, bytes)?;
-        let id = crate::id::gen_unique_id(&ids);
-        self.keys.push(Arc::new(Key {
-            id,
-            prefix: prefix.map(|p| p.to_vec()),
-            algorithm,
-            inner,
-            status: KeyStatus::Secondary,
-        }));
+        algorithm.validate_key_len(bytes.len())?;
         Ok(())
     }
-    pub fn primary_key_id(&self) -> u32 {
-        self.primary_key_id
+    pub fn primary_key(&self) -> KeyInfo<Algorithm> {
+        self.keys.primary_key()
     }
 }
 

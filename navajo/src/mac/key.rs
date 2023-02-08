@@ -1,41 +1,49 @@
 use alloc::{boxed::Box, vec::Vec};
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::{error::InvalidKeyLength, KeyStatus};
+use crate::{error::InvalidKeyLength, KeyInfo, KeyMaterial, KeyStatus};
 
-use super::{algorithm, Algorithm};
+use super::Algorithm;
 
-#[derive(Clone)]
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub(super) struct Key {
-    pub(super) id: u32,
+    #[zeroize(skip)]
     pub(super) algorithm: Algorithm,
+    #[zeroize(skip)]
     pub(super) inner: MacKey,
+    bytes: Vec<u8>,
     pub(super) prefix: Option<Vec<u8>>,
-    pub(super) status: KeyStatus,
 }
 impl PartialEq for Key {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id && self.algorithm == other.algorithm
+        self.algorithm == other.algorithm && self.bytes == other.bytes
     }
 }
-impl Key {
-    pub(super) fn new(
-        id: u64,
-        algorithm: Algorithm,
-        bytes: &[u8],
-        prefix: Option<Vec<u8>>,
-        status: KeyStatus,
-    ) -> Self {
-        todo!()
-    }
+impl Eq for Key {}
 
+impl Key {
+    // pub(super) fn new(
+    //     id: u64,
+    //     algorithm: Algorithm,
+    //     bytes: Vec<u8>,
+    //     prefix: Option<Option<Vec<u8>>>,
+    //     status: KeyStatus,
+    // ) -> Self {
+    //     todo!()
+    // }
     pub(super) fn prefix(&self) -> Option<&[u8]> {
         self.prefix.as_deref()
+    }
+}
+impl<'de> KeyMaterial for Key {
+    type Algorithm = Algorithm;
+    fn algorithm(&self) -> Self::Algorithm {
+        self.algorithm
     }
 }
 
 #[derive(Clone)]
 pub(super) enum MacKey {
-    #[cfg(all(feature = "ring"))]
     Ring(Box<ring_compat::ring::hmac::Key>),
     RustCrypto(Box<crate::mac::RustCryptoKey>),
     #[cfg(feature = "blake3")]

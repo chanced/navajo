@@ -1,6 +1,9 @@
 use alloc::vec::{self, Vec};
 use random::RngCore;
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use zeroize::{Zeroize, ZeroizeOnDrop};
+
+use crate::error::InvalidKeyLength;
 
 const SHA2_256_KEY_LEN: usize = 32;
 const SHA2_224_KEY_LEN: usize = 32;
@@ -58,6 +61,63 @@ impl Algorithm {
         let mut key = alloc::vec![0u8; self.default_key_len()];
         crate::rand::fill(&mut key);
         key
+    }
+    pub fn tag_len(&self) -> usize {
+        match self {
+            #[cfg(feature = "hmac_sha2")]
+            Algorithm::Sha256 => 32,
+            Algorithm::Sha224 => 28,
+            Algorithm::Sha384 => 48,
+            Algorithm::Sha512 => 64,
+            Algorithm::Sha2_512_224 => 28,
+            Algorithm::Sha512_256 => 32,
+            Algorithm::Sha3_256 => 32,
+            Algorithm::Sha3_224 => 28,
+            Algorithm::Sha3_384 => 48,
+            Algorithm::Sha3_512 => 64,
+            Algorithm::Blake3 => 32,
+            Algorithm::Aes128 => 16,
+            Algorithm::Aes192 => 18,
+            Algorithm::Aes256 => 32,
+        }
+    }
+    pub fn validate_key_len(&self, len: usize) -> Result<(), InvalidKeyLength> {
+        if len == 0 {
+            return Err(InvalidKeyLength);
+        }
+        match self {
+            #[cfg(feature = "blake")]
+            Algorithm::Blake3 => {
+                if len != BLAKE3_KEY_LEN {
+                    return Err(InvalidKeyLength);
+                }
+            }
+            #[cfg(feature = "cmac_aes")]
+            Algorithm::Aes128 => {
+                if len != AES128_KEY_LEN {
+                    Err(InvalidKeyLength)
+                } else {
+                    Ok(())
+                }
+            }
+            #[cfg(feature = "cmac_aes")]
+            Algorithm::Aes192 => {
+                if len != AES192_KEY_LEN {
+                    Err(InvalidKeyLength)
+                } else {
+                    Ok(())
+                }
+            }
+            #[cfg(feature = "cmac_aes")]
+            Algorithm::Aes256 => {
+                if len != AES256_KEY_LEN {
+                    Err(InvalidKeyLength)
+                } else {
+                    Ok(())
+                }
+            }
+            _ => Ok(()), // todo: double check this
+        }
     }
     pub fn default_key_len(&self) -> usize {
         match self {
