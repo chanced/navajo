@@ -19,7 +19,7 @@ use key::*;
 use tag::*;
 
 pub struct Mac {
-    keys: Keyring<Key>,
+    keyring: Keyring<Material>,
 }
 
 impl Mac {
@@ -28,14 +28,14 @@ impl Mac {
     pub fn new(algorithm: Algorithm, meta: Option<serde_json::value::Value>) -> Self {
         let bytes = algorithm.generate_key();
         let inner = MacKey::new(algorithm, &bytes).unwrap(); // safe, the key is valid
-        let key = Key {
+        let key = Material {
             bytes,
             prefix: None,
             algorithm,
             inner,
         };
         Self {
-            keys: Keyring::new(key, meta),
+            keyring: Keyring::new(key, meta),
         }
     }
 
@@ -53,7 +53,7 @@ impl Mac {
         let inner = MacKey::new(algorithm, key)?;
         let prefix = prefix.map(|p| p.to_vec());
 
-        let key = Key {
+        let key = Material {
             prefix,
             algorithm,
             inner,
@@ -61,7 +61,7 @@ impl Mac {
         };
 
         Ok(Self {
-            keys: Keyring::new(key, meta),
+            keyring: Keyring::new(key, meta),
         })
     }
 
@@ -77,6 +77,17 @@ impl Mac {
     ) -> Result<(), InvalidKeyLength> {
         self.create_key(algorithm, key, prefix)
     }
+    pub fn primary_key(&self) -> KeyInfo<Algorithm> {
+        self.keyring.primary_key().info()
+    }
+
+    pub fn keys(&self) -> impl Iterator<Item = KeyInfo<Algorithm>> + '_ {
+        self.keyring.keys().map(|k| k.info())
+    }
+
+    pub(super) fn keyring(&self) -> &Keyring<Material> {
+        &self.keyring
+    }
 
     fn create_key(
         &mut self,
@@ -86,9 +97,6 @@ impl Mac {
     ) -> Result<(), InvalidKeyLength> {
         algorithm.validate_key_len(bytes.len())?;
         Ok(())
-    }
-    pub fn primary_key(&self) -> KeyInfo<Algorithm> {
-        self.keys.primary_key()
     }
 }
 

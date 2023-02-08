@@ -1,10 +1,9 @@
-use core::iter::Map;
-
-use super::key::Key;
+use super::key::Material;
 
 use crate::{
     constant_time::verify_slices_are_equal,
     error::{MacVerificationError, TruncationError},
+    Key,
 };
 use alloc::{sync::Arc, vec::Vec};
 
@@ -166,7 +165,10 @@ impl Tag {
             truncate_to: Some(len),
         })
     }
-    pub(super) fn new(primary_key: &Arc<Key>, output: Vec<(Arc<super::Key>, Output)>) -> Self {
+    pub(super) fn new(
+        primary_key: &Arc<Key<Material>>,
+        output: Vec<(Arc<Key<Material>>, Output)>,
+    ) -> Self {
         let mut primary_entry: Option<Arc<Entry>> = None;
         let mut entries = Vec::with_capacity(output.len());
         for (key, output) in output {
@@ -181,23 +183,24 @@ impl Tag {
             entries,
             primary,
             truncate_to: None,
+            omit_header: false,
         }
     }
 
-    pub(super) fn keys(&self) -> impl Iterator<Item = Arc<Key>> + '_ {
+    pub(super) fn keys(&self) -> impl Iterator<Item = Arc<Key<Material>>> + '_ {
         self.entries.iter().map(|e| e.key.clone())
     }
 }
 
 #[derive(Clone)]
 struct Entry {
-    key: Arc<super::Key>,
+    key: Arc<Key<Material>>,
     truncate_to: Option<usize>,
     output: Output,
 }
 
 impl Entry {
-    pub(super) fn new(key: &Arc<super::Key>, output: Output) -> Self {
+    pub(super) fn new(key: &Arc<Key<Material>>, output: Output) -> Self {
         Self {
             key: key.clone(),
             output,
@@ -208,7 +211,7 @@ impl Entry {
         if !self.truncatable() {
             return Err(TruncationError::NotTruncatable);
         }
-        if len >= self.key.algorithm.tag_len() {
+        if len >= self.key.algorithm().tag_len() {
             return Err(TruncationError::TooLong);
         }
         Ok(Self {
@@ -222,7 +225,7 @@ impl Entry {
             .truncate_to
             .map(|len| &self.output.as_ref()[..len])
             .unwrap_or(self.output.as_ref());
-        let header = self.key.prefix.as_deref().unwrap_or(&[]);
+        let header = self.key.material().prefix.as_deref().unwrap_or(&[]);
 
         if tag.len() != output.len() + header.len() {
             return verify_slices_are_equal(tag, output).map_err(|_| MacVerificationError);

@@ -10,12 +10,14 @@ use std::io::Read;
 
 const BUFFER_SIZE: usize = 64;
 
-use super::{context::Context, Key, Tag};
+use crate::Key;
+
+use super::{context::Context, Material, Tag};
 
 /// Generates a [`Tag`] for the given data using a set of keys.
 pub(super) struct Hasher {
-    primary_key: Arc<Key>,
-    contexts: Vec<(Arc<Key>, Context)>,
+    primary_key: Arc<Key<Material>>,
+    contexts: Vec<(Arc<Key<Material>>, Context)>,
     #[cfg(not(feature = "std"))]
     buffer: VecDeque<u8>,
     #[cfg(feature = "std")]
@@ -23,12 +25,12 @@ pub(super) struct Hasher {
 }
 
 impl Hasher {
-    pub(super) fn new(keys: impl Iterator<Item = Arc<Key>>) -> Self {
+    pub(super) fn new(keys: impl Iterator<Item = Arc<Key<Material>>>) -> Self {
         let mut contexts = Vec::new();
         let mut primary_key = None;
         let mut primary_key_found = false;
         for key in keys {
-            if key.status.is_primary() {
+            if key.status().is_primary() {
                 primary_key_found = true;
                 primary_key = Some(key.clone());
             } else if !primary_key_found {
@@ -36,7 +38,7 @@ impl Hasher {
                 primary_key = Some(key.clone());
             }
             let k = key.clone();
-            contexts.push((key, Context::new(&k.inner)));
+            contexts.push((key, Context::new(&k.material().inner)));
         }
         let primary_key = primary_key.expect("keys were empty in Hasher::new\nthis is a bug!\nplease report it to https://github.com/chanced/navajo/issues/new");
         #[cfg(feature = "std")]

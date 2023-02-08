@@ -1,6 +1,11 @@
+use crate::error::OpenError;
+use crate::error::SealError;
+use crate::key::Key;
+use crate::key::KeyMaterial;
 use crate::kms;
 use crate::kms::Kms;
 use crate::rand;
+use crate::KeyStatus;
 use aes_gcm::aead::AeadMutInPlace;
 use alloc::format;
 use alloc::string::String;
@@ -8,138 +13,28 @@ use alloc::string::ToString;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use chacha20poly1305::{
-    aead::{Aead, AeadCore, KeyInit},
-    ChaCha20Poly1305, Nonce,
+    aead::{AeadCore, KeyInit},
+    ChaCha20Poly1305,
 };
-use cipher::generic_array::sequence::GenericSequence;
 use hashbrown::HashMap;
 use serde::ser::SerializeStruct;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
-use zeroize::ZeroizeOnDrop;
+
+const CHACHA20_POLY1305_KEY_SIZE: usize = 32;
+const CHACHA20_POLY1305_NONCE_SIZE: usize = 12;
 
 pub(crate) const KEY_ID_LEN: usize = 4;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(try_from = "i8", into = "i8")]
-#[repr(i8)]
-pub enum KeyStatus {
-    /// Indicates that the key is active and the primary key in the keyring. It
-    /// will be used, by default, for encryption.
-    ///
-    /// The key will be used for decryption when aplicable (i.e. ciphertext
-    /// encrypted with it).
-    Primary = 0,
-    /// The indicates that the key is active and can be used for encryption if
-    /// specified.
-    ///
-    /// The key will be used for decryption when applicable (i.e. ciphertext
-    /// encrypted with it).
-    Secondary = 1,
-
-    /// Indicates that the key is disabled and cannot be used for encryption
-    /// except for [daead] queries. It can still be used to decrypt applicable
-    /// ciphertext.
-    Disabled = -1,
-}
-
-impl Default for KeyStatus {
-    fn default() -> Self {
-        Self::Secondary
-    }
-}
-impl KeyStatus {
-    /// Returns `true` if `Primary`.
-    pub fn is_primary(&self) -> bool {
-        *self == Self::Primary
-    }
-    pub fn is_secondary(&self) -> bool {
-        *self == Self::Secondary
-    }
-
-    /// Returns `true` if `Disabled`.
-    pub fn is_disabled(&self) -> bool {
-        matches!(self, Self::Disabled)
-    }
-}
-
-impl TryFrom<i8> for KeyStatus {
-    type Error = String;
-    fn try_from(i: i8) -> Result<Self, Self::Error> {
-        match i {
-            0 => Ok(Self::Primary),
-            1 => Ok(Self::Secondary),
-            -1 => Ok(Self::Disabled),
-            _ => Err(format!("invalid key status: {}", i)),
-        }
-    }
-}
-
-impl From<KeyStatus> for i8 {
-    fn from(s: KeyStatus) -> Self {
-        s as i8
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-/// Metadata for a particular key.
-pub struct KeyInfo<A> {
-    id: u32,
-    status: KeyStatus,
-    algorithm: A,
-}
-
-pub(crate) trait KeyMaterial:
-    Send + Sync + ZeroizeOnDrop + Clone + 'static + PartialEq + Eq
-{
-    type Algorithm: PartialEq + Eq;
-    fn algorithm(&self) -> Self::Algorithm;
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct Key<M>
-where
-    M: KeyMaterial,
-{
-    id: u32,
-    status: KeyStatus,
-    material: M,
-    meta: Option<Value>,
-}
-impl<M> Key<M>
-where
-    M: KeyMaterial,
-{
-    pub(crate) fn info(&self) -> KeyInfo<M::Algorithm>
-    where
-        M: KeyMaterial,
-    {
-        KeyInfo {
-            id: self.id,
-            status: self.status,
-            algorithm: self.material.algorithm(),
-        }
-    }
-}
-impl<M> PartialEq for Key<M>
-where
-    M: KeyMaterial,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
 
 #[derive(Clone, Debug)]
 pub(crate) struct Keyring<M>
 where
     M: KeyMaterial,
 {
-    keys: Vec<Arc<Key<M>>>,
-    primary_key: Arc<Key<M>>,
+    keys: Vec<Key<M>>,
     primary_key_id: u32,
-    lookup: HashMap<u32, Arc<Key<M>>>,
+    lookup: HashMap<u32, usize>,
 }
 impl<M> Serialize for Keyring<M>
 where
@@ -176,7 +71,7 @@ where
         if keys.len() == 0 {
             return Err(serde::de::Error::custom("empty keyring"));
         }
-        for key in keys {
+        for key in keys.iter() {
             if lookup.contains_key(&key.id) {
                 if key.material == lookup[&key.id].material {
                     lookup.remove(&key.id);
@@ -195,14 +90,14 @@ where
         }
         if let Some(possible_corrective_id) = Some(primary_key_id) {
             if primary_key == None {
-                for key in keys {
+                for key in keys.iter() {
                     if key.id == possible_corrective_id {
                         primary_key = Some(key.id);
                         break;
                     }
                 }
             } else {
-                for key in keys {
+                for mut key in keys.iter_mut() {
                     if key.id == possible_corrective_id {
                         key.status = KeyStatus::Secondary;
                         break;
@@ -211,9 +106,28 @@ where
             }
         }
         if primary_key.is_none() {
-            let last = keys.last_mut().unwrap();
-            last.status = KeyStatus::Primary;
-            primary_key_id = last.id;
+            if let Some(new_pk_id) = corrective_primary_key_id.take() {
+                primary_key_id = new_pk_id;
+                for mut key in keys.iter_mut() {
+                    if key.id == new_pk_id {
+                        key.status = KeyStatus::Primary;
+                        break;
+                    }
+                }
+            } else {
+                let last = keys.last_mut().unwrap();
+                last.status = KeyStatus::Primary;
+                primary_key_id = last.id;
+            }
+        }
+
+        if let Some(invalid_key_id) = corrective_primary_key_id {
+            for mut key in keys.iter_mut() {
+                if key.id == invalid_key_id {
+                    key.status = KeyStatus::Secondary;
+                    break;
+                }
+            }
         }
 
         let mut keyring = Vec::with_capacity(keys.len());
@@ -221,10 +135,10 @@ where
         for key in keys {
             let key = Arc::new(key);
             keyring.push(key.clone());
-            lookup.insert(key.id, key);
             if primary_key_id == key.id {
                 primary_key = Some(key.clone());
             }
+            lookup.insert(key.id, key);
         }
         Ok(Self {
             keys: keyring,
@@ -241,13 +155,9 @@ where
 {
     pub(crate) fn new(material: M, meta: Option<Value>) -> Self {
         let id = gen_id();
-        let key = Key {
-            id,
-            status: KeyStatus::Primary,
-            material,
-            meta: None,
-        };
-        let key = Arc::new(key);
+        let key = Key::new(id, KeyStatus::Primary, material, meta);
+
+        let key = key;
         let mut keys = Vec::new();
         keys.push(key.clone());
         let mut lookup = HashMap::new();
@@ -296,7 +206,7 @@ where
     pub(crate) fn primary_key_info(&self) -> Arc<Key<M>> {
         self.primary_key.clone()
     }
-    pub(crate) fn set_primary_key(&self, key: impl AsRef<u32>) -> Result<(), String> {
+    pub(crate) fn set_primary_key(&mut self, key: impl AsRef<u32>) -> Result<(), String> {
         let key = key.as_ref();
         let key = self.lookup.get(key).ok_or("key not found")?;
         let key = key.clone();
@@ -305,8 +215,8 @@ where
         Ok(())
     }
 
-    pub(crate) fn keys(&self) -> &[Arc<Key<M>>] {
-        &self.keys
+    pub(crate) fn keys(&self) -> impl Iterator<Item = Arc<Key<M>>> + '_ {
+        self.keys.iter().cloned()
     }
     pub(crate) fn gen_unique_id(&self) -> u32 {
         let mut id = gen_id();
@@ -324,35 +234,80 @@ where
         &self,
         associated_data: &[u8],
         envelope: impl Kms,
-    ) -> Result<Vec<u8>, String> {
+    ) -> Result<Vec<u8>, SealError> {
         let key = ChaCha20Poly1305::generate_key(&mut crate::Random);
-        let cipher = ChaCha20Poly1305::new(&key);
+        let mut cipher = ChaCha20Poly1305::new(&key);
         let nonce = ChaCha20Poly1305::generate_nonce(&mut crate::Random);
-        let mut serialized = serde_json::to_vec(self).map_err(|e| {
-            format!("failed to serialize ciphertext\n\ncaused by:\n\t{}", e).to_string()
-        })?;
+        let mut serialized = serde_json::to_vec(self)?;
 
-        cipher
-            .encrypt_in_place(&nonce, associated_data, &mut serialized)
-            .map_err(|e| format!("failed to seal ciphertext\n\ncaused by:\n\t{}", e).to_string())?;
+        let mut cipher_and_nonce = key.to_vec();
+        cipher_and_nonce.extend_from_slice(&nonce);
 
-        let mut sealed = envelope
-            .encrypt(&key, serialized.as_bytes())
+        let sealed_cipher_and_nonce = envelope
+            .encrypt(&key, &associated_data)
             .await
-            .map_err(|e| format!("failed to seal ciphertext\n\ncaused by:\n\t{}", e).to_string())?;
+            .map_err(|e| e.to_string())?;
+        let sealed_len: u32 = sealed_cipher_and_nonce
+            .len()
+            .try_into()
+            .map_err(|_| "result from kms too long".to_string())?;
+
+        if sealed_cipher_and_nonce.len() >= key.len() {
+            if sealed_cipher_and_nonce[0..key.len()] == key[..] {
+                return Err("kms failed to seal".into());
+            }
+            if sealed_cipher_and_nonce[sealed_cipher_and_nonce.len() - key.len()..] == key[..] {
+                return Err("kms failed to seal".into());
+            }
+        }
+        cipher.encrypt_in_place(&nonce, associated_data, &mut serialized)?;
+        let mut result = sealed_len.to_be_bytes().to_vec();
+
+        result.extend_from_slice(&sealed_cipher_and_nonce);
+        result.extend_from_slice(&serialized);
+        Ok(result)
+    }
+}
+
+impl<'de, M> Keyring<M>
+where
+    M: KeyMaterial + Deserialize<'de>,
+{
+    pub(crate) async fn open(
+        sealed: &[u8],
+        associated_data: &[u8],
+        envelope: impl Kms,
+    ) -> Result<Self, OpenError> {
+        if sealed.len() < 4 {
+            return Err("sealed data too short".into());
+        }
+
+        let sealed_cipher_and_nonce_len = u32::from_be_bytes(sealed[0..4].try_into().unwrap()); // safe: len checked above.
+
+        if sealed.len() < 4 + sealed_cipher_and_nonce_len as usize {
+            return Err("sealed data too short".into());
+        }
+
+        let sealed_cipher_and_nonce = &sealed[4..4 + sealed_cipher_and_nonce_len as usize];
+        let mut key = envelope
+            .decrypt(sealed_cipher_and_nonce, &associated_data)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        if key.len() != CHACHA20_POLY1305_KEY_SIZE + CHACHA20_POLY1305_NONCE_SIZE {
+            return Err("kms returned invalid data".into());
+        }
+        let nonce = key.split_off(CHACHA20_POLY1305_KEY_SIZE);
+        let nonce = chacha20poly1305::Nonce::from_slice(&nonce);
+        let mut buffer = sealed[4 + sealed_cipher_and_nonce_len as usize..].to_vec();
+        let mut cipher = ChaCha20Poly1305::new_from_slice(&key)?;
+        cipher.decrypt_in_place(&nonce, associated_data, &mut buffer)?;
+
+        // let result: Keyring<M> = serde_json::from_slice(&buffer)?;
+        // Ok(result)
         todo!()
     }
 }
-// impl<'de, K> Deserialize<'de> for Keyring<Key<'de, K>> {
-//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-//     where
-//         K: Key,
-//         D: serde::Deserializer<'de>,
-//     {
-//         let keys = Vec::<SecretKey>::deserialize(deserializer)?;
-//         Keyring::new(keys).map_err(serde::de::Error::custom)
-//     }
-// }
 
 pub(crate) fn gen_id() -> u32 {
     let mut data = [0; 4];

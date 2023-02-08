@@ -71,10 +71,6 @@ version = "1.0"
 default-features = false
 features = ["alloc"]
 
-# serde_repr
-[dependencies.serde_repr]
-version = "0.1"
-
 # serde_bytes
 [dependencies.serde_bytes]
 version = "0.11"

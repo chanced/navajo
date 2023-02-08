@@ -1,6 +1,7 @@
 use alloc::vec::{self, Vec};
 use random::RngCore;
-use serde_repr::{Deserialize_repr, Serialize_repr};
+use serde::{Deserialize, Serialize};
+
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::error::InvalidKeyLength;
@@ -20,40 +21,40 @@ const AES128_KEY_LEN: usize = 16;
 const AES192_KEY_LEN: usize = 24;
 const AES256_KEY_LEN: usize = 32;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Algorithm {
     // HMAC
     #[cfg(feature = "hmac_sha2")]
-    Sha256 = 0,
+    Sha256,
     #[cfg(feature = "hmac_sha2")]
-    Sha224 = 1,
+    Sha224,
     #[cfg(feature = "hmac_sha2")]
-    Sha384 = 2,
+    Sha384,
     #[cfg(feature = "hmac_sha2")]
-    Sha512 = 3,
+    Sha512,
     #[cfg(feature = "hmac_sha2")]
-    Sha2_512_224 = 4,
+    Sha2_512_224,
     #[cfg(feature = "hmac_sha2")]
-    Sha512_256 = 5,
+    Sha512_256,
     #[cfg(feature = "hmac_sha3")]
-    Sha3_256 = 6,
+    Sha3_256,
     #[cfg(feature = "hmac_sha3")]
-    Sha3_224 = 7,
+    Sha3_224,
     #[cfg(feature = "hmac_sha3")]
-    Sha3_384 = 8,
+    Sha3_384,
     #[cfg(feature = "hmac_sha3")]
-    Sha3_512 = 9,
+    Sha3_512,
     #[cfg(feature = "blake3")]
-    Blake3 = 10,
-    // leaving room for other hmac algorithms
+    Blake3,
+
     // CMAC
     #[cfg(feature = "cmac_aes")]
-    Aes128 = 128,
+    Aes128,
     #[cfg(feature = "cmac_aes")]
-    Aes192 = 129,
+    Aes192,
     #[cfg(feature = "cmac_aes")]
-    Aes256 = 130,
+    Aes256,
 }
 
 impl Algorithm {

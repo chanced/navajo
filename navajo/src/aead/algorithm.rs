@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Copy, Debug)]
 #[repr(u8)]
-#[serde(try_from = "u8", into = "u8")]
 pub enum Algorithm {
+    /// https://datatracker.ietf.org/doc/html/rfc8439
     ChaCha20Poly1305,
     Aes128Gcm,
     Aes256Gcm,

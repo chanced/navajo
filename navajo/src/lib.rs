@@ -3,7 +3,12 @@
 extern crate alloc;
 
 mod keyring;
-pub use keyring::*;
+pub(crate) use keyring::Keyring;
+
+mod key;
+
+pub(crate) use key::{Key, KeyMaterial};
+pub use key::{KeyInfo, KeyStatus};
 
 pub mod aead;
 // pub use aead::Aead;

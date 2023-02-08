@@ -16,7 +16,7 @@ pub trait MacStream: TryStream {
         let mac = mac.as_ref();
         ComputeMacStream {
             stream,
-            hasher: Hasher::new(mac.keys.iter().cloned()),
+            hasher: Hasher::new(mac.keyring.keys()),
             _phantom: PhantomData,
         }
     }

@@ -1,12 +1,12 @@
 use alloc::{boxed::Box, vec::Vec};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::{error::InvalidKeyLength, KeyInfo, KeyMaterial, KeyStatus};
+use crate::{error::InvalidKeyLength, KeyInfo, KeyStatus};
 
 use super::Algorithm;
 
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
-pub(super) struct Key {
+pub(super) struct Material {
     #[zeroize(skip)]
     pub(super) algorithm: Algorithm,
     #[zeroize(skip)]
@@ -14,14 +14,14 @@ pub(super) struct Key {
     bytes: Vec<u8>,
     pub(super) prefix: Option<Vec<u8>>,
 }
-impl PartialEq for Key {
+impl PartialEq for Material {
     fn eq(&self, other: &Self) -> bool {
         self.algorithm == other.algorithm && self.bytes == other.bytes
     }
 }
-impl Eq for Key {}
+impl Eq for Material {}
 
-impl Key {
+impl Material {
     // pub(super) fn new(
     //     id: u64,
     //     algorithm: Algorithm,
@@ -35,7 +35,7 @@ impl Key {
         self.prefix.as_deref()
     }
 }
-impl<'de> KeyMaterial for Key {
+impl crate::KeyMaterial for Material {
     type Algorithm = Algorithm;
     fn algorithm(&self) -> Self::Algorithm {
         self.algorithm

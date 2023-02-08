@@ -305,6 +305,18 @@ impl From<&str> for SealError {
     }
 }
 
+impl From<serde_json::Error> for SealError {
+    fn from(e: serde_json::Error) -> Self {
+        Self(e.to_string())
+    }
+}
+
+impl From<chacha20poly1305::Error> for SealError {
+    fn from(e: chacha20poly1305::Error) -> Self {
+        Self(e.to_string())
+    }
+}
+
 #[cfg(feature = "std")]
 impl std::error::Error for SealError {}
 
@@ -323,6 +335,22 @@ impl From<String> for OpenError {
     }
 }
 
+impl From<serde_json::Error> for OpenError {
+    fn from(e: serde_json::Error) -> Self {
+        Self(e.to_string())
+    }
+}
+
+impl From<chacha20poly1305::Error> for OpenError {
+    fn from(e: chacha20poly1305::Error) -> Self {
+        Self(e.to_string())
+    }
+}
+impl From<crypto_common::InvalidLength> for OpenError {
+    fn from(e: crypto_common::InvalidLength) -> Self {
+        Self(e.to_string())
+    }
+}
 impl From<&str> for OpenError {
     fn from(e: &str) -> Self {
         Self(e.to_string())

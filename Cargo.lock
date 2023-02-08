@@ -681,7 +681,6 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
- "serde_repr",
  "sha2",
  "sha3",
  "subtle",
@@ -698,6 +697,10 @@ version = "0.0.0"
 [[package]]
 name = "navajo-cli"
 version = "0.0.0"
+dependencies = [
+ "chacha20poly1305",
+ "rand",
+]
 
 [[package]]
 name = "navajo-gcp"
@@ -1050,17 +1053,6 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
-]
-
-[[package]]
-name = "serde_repr"
-version = "0.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a5ec9fa74a20ebbe5d9ac23dac1fc96ba0ecfe9f50f2843b52e537b10fbcb4e"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]

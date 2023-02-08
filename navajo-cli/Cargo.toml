@@ -8,3 +8,8 @@ description = "Navajo CLI"
 
 
 [dependencies]
+chacha20poly1305 = "0.10"
+rand = "*"
+
+[[bin]]
+name = "navajo"
