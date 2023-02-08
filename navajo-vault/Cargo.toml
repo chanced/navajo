@@ -1,9 +1,11 @@
 [package]
-name = "navajo-gcp"
+name = "navajo-vault"
 version = "0.0.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["Chance Dinkins"]
 description = "Navajo GCP KMS integration"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
