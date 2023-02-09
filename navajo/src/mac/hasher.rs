@@ -39,9 +39,8 @@ impl Hasher {
         #[cfg(feature = "std")]
         {
             Self {
-                keys,
                 primary_key,
-                contexts: ctxs,
+                contexts,
                 buffer: Vec::new(),
             }
         }
@@ -61,7 +60,7 @@ impl Hasher {
             let mut buf = self.buffer.split_off(0);
             #[cfg(not(feature = "std"))]
             let buf = buf.make_contiguous();
-            self.contexts[0].1.update(buf);
+            self.contexts[0].1.update(&buf);
         }
 
         // in the event there are mutliple keys, the data is buffered and

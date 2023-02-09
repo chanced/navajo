@@ -11,6 +11,7 @@ use crate::Origin;
 use crate::Status;
 use aes_gcm::aead::AeadMutInPlace;
 use aes_gcm::Aes256Gcm;
+use alloc::format;
 use alloc::string::ToString;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -19,6 +20,7 @@ use chacha20poly1305::{
     ChaCha20Poly1305,
 };
 use hashbrown::HashMap;
+use serde::de::DeserializeOwned;
 use serde::ser::SerializeStruct;
 use serde::Deserialize;
 use serde::Serialize;
@@ -45,6 +47,16 @@ where
     primary_key_idx: usize,
     lookup: HashMap<u32, usize>,
 }
+impl<Material> PartialEq for Keyring<Material>
+where
+    Material: KeyMaterial + PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.keys == other.keys
+    }
+}
+impl<Material> Eq for Keyring<Material> where Material: KeyMaterial + Eq {}
+
 impl<M> Serialize for Keyring<M>
 where
     M: KeyMaterial + Serialize,
@@ -53,9 +65,11 @@ where
     where
         S: serde::Serializer,
     {
-        let mut state = serializer.serialize_struct("Keyring", 2)?;
-        state.serialize_field("keys", &self.keys)?;
-        state.end()
+        KeyringData {
+            keys: self.keys.clone(),
+            version: 0,
+        }
+        .serialize(serializer)
     }
 }
 
@@ -67,93 +81,47 @@ where
     where
         D: serde::Deserializer<'de>,
     {
-        // let KeyringData {
-        //     mut keys,
-        //     mut primary_key_id,
-        // } = KeyringData::deserialize(deserializer)?;
+        let KeyringData::<Material> { mut keys, version } =
+            KeyringData::<Material>::deserialize(deserializer)?;
 
-        // let mut lookup: HashMap<u32, usize> = HashMap::new();
-        // // this is a safeguard that should never have to be used.
-        // let mut corrective_primary_key_id = None;
-        // let mut primary_key = None;
-        // if keys.len() == 0 {
-        //     return Err(serde::de::Error::custom("empty keyring"));
-        // }
-        // for key in keys.iter() {
-        //     if lookup.contains_key(&key.id) {
-        //         if key.material == lookup[&key.id].material {
-        //             lookup.remove(&key.id);
-        //         } else {
-        //             return Err(serde::de::Error::custom(format!(
-        //                 "duplicate key id: {}",
-        //                 key.id
-        //             )));
-        //         }
-        //     }
-        //     if key.id == primary_key_id {
-        //         primary_key = Some(key.id);
-        //     } else if key.status == KeyStatus::Primary {
-        //         corrective_primary_key_id = Some(key.id);
-        //     }
-        // }
-        // if let Some(possible_corrective_id) = Some(primary_key_id) {
-        //     if primary_key == None {
-        //         for key in keys.iter() {
-        //             if key.id == possible_corrective_id {
-        //                 primary_key = Some(key.id);
-        //                 break;
-        //             }
-        //         }
-        //     } else {
-        //         for mut key in keys.iter_mut() {
-        //             if key.id == possible_corrective_id {
-        //                 key.status = KeyStatus::Secondary;
-        //                 break;
-        //             }
-        //         }
-        //     }
-        // }
-        // if primary_key.is_none() {
-        //     if let Some(new_pk_id) = corrective_primary_key_id.take() {
-        //         primary_key_id = new_pk_id;
-        //         for mut key in keys.iter_mut() {
-        //             if key.id == new_pk_id {
-        //                 key.status = KeyStatus::Primary;
-        //                 break;
-        //             }
-        //         }
-        //     } else {
-        //         let last = keys.last_mut().unwrap();
-        //         last.status = KeyStatus::Primary;
-        //         primary_key_id = last.id;
-        //     }
-        // }
-
-        // if let Some(invalid_key_id) = corrective_primary_key_id {
-        //     for mut key in keys.iter_mut() {
-        //         if key.id == invalid_key_id {
-        //             key.status = KeyStatus::Secondary;
-        //             break;
-        //         }
-        //     }
-        // }
-
-        // let mut keyring = Vec::with_capacity(keys.len());
-        // let mut primary_key = None;
-        // for key in keys {
-        //     keyring.push(key.clone());
-        //     if primary_key_id == key.id {
-        //         primary_key = Some(key.clone());
-        //     }
-        //     lookup.insert(key.id, key.id);
-        // }
-        // Ok(Self {
-        //     keys: keyring,
-        //     primary_key: primary_key.unwrap(),
-        //     primary_key_id,
-        //     lookup,
-        // })
-        todo!()
+        if version != 0 {
+            return Err(serde::de::Error::custom(format!(
+                "unsupported keyring version: {version}"
+            )));
+        }
+        let mut lookup = HashMap::new();
+        let mut primary_key_idx = None;
+        for idx in 0..keys.len() {
+            let key = &keys[idx];
+            lookup.insert(key.id(), idx);
+            if key.status().is_primary() {
+                if let Some(former_primary) = primary_key_idx {
+                    let k: &mut Key<Material> = keys.get_mut(former_primary).unwrap();
+                    k.demote();
+                }
+                primary_key_idx = Some(idx);
+            }
+        }
+        let primary_key_idx = if let Some(primary_key_idx) = primary_key_idx {
+            primary_key_idx
+        } else {
+            // something went sideways. we should definitely have a primary key at this point.
+            // for now, this is going to select the last key. this is not ideal, but it's better
+            // than locking up a keyring.
+            //
+            // if the key went poof, some data will not be retainable or verifiable.
+            //
+            // theoretically, this should never happen.
+            //
+            // todo: revisit this. Should it panic? Should there be logging and alert?
+            // logging has been omitted due to concerns over security but it may need to be added.
+            keys.len() - 1
+        };
+        Ok(Self {
+            keys,
+            primary_key_idx,
+            lookup,
+        })
     }
 }
 
@@ -215,7 +183,7 @@ where
         key.ok_or(KeyNotFoundError(id)).map(|key| (idx, key))
     }
 
-    pub(crate) fn add(&mut self, origin: Origin, material: M, meta: Option<Value>) -> &Key<M> {
+    pub(crate) fn add(&mut self, material: M, origin: Origin, meta: Option<Value>) -> &Key<M> {
         let id = self.gen_unique_id();
         let key = Key::new(id, Status::Secondary, origin, material, meta);
         self.keys.push(key);
@@ -269,7 +237,7 @@ where
         let primary_key_idx = self.primary_key_idx;
         let (idx, key) = self.get_mut_with_idx(id)?;
         if idx == primary_key_idx {
-            return Err(DisableKeyError::IsPrimaryKey(key.info().into()));
+            return Err(DisableKeyError::IsPrimaryKey(key.info()));
         }
         key.disable()?;
         Ok(key)
@@ -321,25 +289,30 @@ where
         envelope: impl Kms,
     ) -> Result<Vec<u8>, SealError> {
         let mut serialized = serde_json::to_vec(self)?;
+        // Round 1: AES-256-GCM
 
         let key = Aes256Gcm::generate_key(&mut crate::Random);
         let mut cipher = Aes256Gcm::new(&key);
         let nonce = ChaCha20Poly1305::generate_nonce(&mut crate::Random);
         serialized.reserve(AES_256_GCM_TAG_SIZE);
-        cipher.encrypt_in_place(&nonce, associated_data, &mut serialized);
+        cipher.encrypt_in_place(&nonce, associated_data, &mut serialized)?;
+        serialized = [key.as_slice(), nonce.as_slice(), serialized.as_slice()].concat();
+
+        // Round 2: ChaCha20-Poly1305
 
         let key = ChaCha20Poly1305::generate_key(&mut crate::Random);
         let mut cipher = ChaCha20Poly1305::new(&key);
         let nonce = ChaCha20Poly1305::generate_nonce(&mut crate::Random);
         serialized.reserve(CHACHA20_POLY1305_TAG_SIZE);
-        cipher.encrypt_in_place(&nonce, associated_data, &mut serialized);
+        cipher.encrypt_in_place(&nonce, associated_data, &mut serialized)?;
 
         let cipher_and_nonce = [key.as_slice(), nonce.as_slice()].concat();
 
         let sealed_cipher_and_nonce = envelope
-            .encrypt(&key, &associated_data)
+            .encrypt(&cipher_and_nonce, associated_data)
             .await
             .map_err(|e| e.to_string())?;
+
         let sealed_len: u32 = sealed_cipher_and_nonce
             .len()
             .try_into()
@@ -349,21 +322,24 @@ where
             if sealed_cipher_and_nonce[0..key.len()] == key[..] {
                 return Err("kms failed to seal".into());
             }
+
             if sealed_cipher_and_nonce[sealed_cipher_and_nonce.len() - key.len()..] == key[..] {
                 return Err("kms failed to seal".into());
             }
         }
-        let mut result = sealed_len.to_be_bytes().to_vec();
-
-        result.extend_from_slice(&sealed_cipher_and_nonce);
-        result.extend_from_slice(&serialized);
+        let result = [
+            sealed_len.to_be_bytes().as_slice(),
+            sealed_cipher_and_nonce.as_slice(),
+            serialized.as_slice(),
+        ]
+        .concat();
         Ok(result)
     }
 }
 
-impl<'de, M> Keyring<M>
+impl<M> Keyring<M>
 where
-    M: KeyMaterial + Deserialize<'de>,
+    M: KeyMaterial + DeserializeOwned,
 {
     pub(crate) async fn open(
         sealed: &[u8],
@@ -382,7 +358,7 @@ where
 
         let sealed_cipher_and_nonce = &sealed[4..4 + sealed_cipher_and_nonce_len as usize];
         let mut key = envelope
-            .decrypt(sealed_cipher_and_nonce, &associated_data)
+            .decrypt(sealed_cipher_and_nonce, associated_data)
             .await
             .map_err(|e| e.to_string())?;
 
@@ -393,8 +369,8 @@ where
         let nonce = chacha20poly1305::Nonce::from_slice(&nonce);
         let mut buffer = sealed[4 + sealed_cipher_and_nonce_len as usize..].to_vec();
         let mut cipher = ChaCha20Poly1305::new_from_slice(&key)?;
-        cipher.decrypt_in_place(&nonce, associated_data, &mut buffer)?;
-        buffer.split_off(buffer.len() - CHACHA20_POLY1305_TAG_SIZE);
+        cipher.decrypt_in_place(nonce, associated_data, &mut buffer)?;
+        // _ = buffer.split_off(buffer.len() - CHACHA20_POLY1305_TAG_SIZE);
 
         let key = buffer[0..AES_256_GCM_KEY_SIZE].to_vec();
         let nonce =
@@ -402,8 +378,8 @@ where
         let mut buffer = buffer[AES_256_GCM_KEY_SIZE + AES_256_GCM_NONCE_SIZE..].to_vec();
         let mut cipher = Aes256Gcm::new_from_slice(&key)?;
         let nonce = aes_gcm::Nonce::from_slice(&nonce);
-        cipher.decrypt_in_place(&nonce, associated_data, &mut buffer)?;
-        _ = buffer.split_off(buffer.len() - AES_256_GCM_TAG_SIZE);
+        cipher.decrypt_in_place(nonce, associated_data, &mut buffer)?;
+        // _ = buffer.split_off(buffer.len() - AES_256_GCM_TAG_SIZE);
         let result: Keyring<M> = serde_json::from_slice(&buffer)?;
         Ok(result)
     }
@@ -420,11 +396,90 @@ pub(crate) fn gen_id() -> u32 {
     value
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct KeyringData<Material>
 where
     Material: KeyMaterial,
 {
+    #[serde(rename = "v")]
+    version: u32,
+    #[serde(rename = "k")]
     keys: Vec<Key<Material>>,
-    primary_key_id: u32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::key::test::Algorithm;
+    use crate::key::test::Material;
+
+    #[test]
+    fn test_serde() {
+        let material = Material::new(Algorithm::Waffles);
+        let keyring = Keyring::new(material, Origin::Navajo, Some("test".into()));
+        let ser = serde_json::to_string(&keyring).unwrap();
+        let de = serde_json::from_str::<Keyring<Material>>(&ser).unwrap();
+        assert_eq!(keyring, de);
+    }
+    #[cfg(feature = "std")]
+    #[tokio::test]
+    async fn test_seal_and_open() {
+        let material = Material::new(Algorithm::Waffles);
+        let mut keyring = Keyring::new(material, Origin::Navajo, Some("test".into()));
+        keyring.add(Material::new(Algorithm::Cereal), Origin::Navajo, None);
+        let ser = serde_json::to_vec(&keyring).unwrap();
+        let de = serde_json::from_slice::<Keyring<Material>>(&ser).unwrap();
+        assert_eq!(keyring, de);
+
+        let kms = crate::kms::InMemory::new();
+        let sealed = keyring.seal(&[], kms.clone()).await.unwrap();
+        assert_ne!(ser, sealed);
+        let opened = Keyring::open(&sealed, &[], kms).await.unwrap();
+        assert_eq!(keyring, opened);
+    }
+
+    #[test]
+    fn test_key_status() {
+        let material = Material::new(Algorithm::Pancakes);
+        let mut keyring = Keyring::new(material, Origin::Navajo, Some("test".into()));
+        let first_id = {
+            let first = keyring.primary_key();
+            let first_id = first.id();
+            assert_eq!(first.status(), Status::Primary);
+            assert_eq!(first.meta(), Some("test".into()).as_ref());
+            assert_eq!(first.origin(), Origin::Navajo);
+            assert_ne!(first.id(), 0);
+            assert_eq!(first.algorithm(), Algorithm::Pancakes);
+            first_id
+        };
+
+        let second_id = {
+            let second = keyring.add(Material::new(Algorithm::Waffles), Origin::Navajo, None);
+            assert_eq!(second.status(), Status::Secondary);
+            assert_eq!(second.meta(), None);
+            assert_eq!(second.origin(), Origin::Navajo);
+            assert_ne!(second.id(), 0);
+            second.id()
+        };
+        {
+            let second = keyring.get(second_id).unwrap();
+            assert_eq!(second.status(), Status::Secondary);
+            assert_eq!(second.origin(), Origin::Navajo);
+            assert_eq!(second.id(), second_id);
+            keyring.promote(second.id()).unwrap();
+        }
+        {
+            let primary = keyring.primary_key();
+            assert_eq!(primary.status(), Status::Primary);
+            assert_eq!(primary.id(), second_id);
+        }
+        {
+            let first = keyring.get(first_id).unwrap();
+            assert_eq!(first.status(), Status::Secondary);
+        }
+
+        assert!(keyring.remove(second_id).is_err());
+        assert!(keyring.disable(second_id).is_err());
+        assert!(keyring.remove(first_id).is_ok());
+    }
 }

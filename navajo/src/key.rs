@@ -48,7 +48,9 @@ where
     pub(crate) fn meta(&self) -> Option<&Value> {
         self.meta.as_ref().map(Arc::as_ref)
     }
-
+    pub(crate) fn can_delete(&self) -> bool {
+        !self.status.is_primary()
+    }
     pub(crate) fn disable(
         &mut self,
     ) -> Result<KeyInfo<M::Algorithm>, DisableKeyError<M::Algorithm>> {
@@ -120,5 +122,104 @@ where
 {
     fn from(k: &Key<M>) -> Self {
         k.info()
+    }
+}
+impl<M> From<Key<M>> for u32
+where
+    M: KeyMaterial,
+{
+    fn from(k: Key<M>) -> Self {
+        k.id
+    }
+}
+impl<M> From<&Key<M>> for u32
+where
+    M: KeyMaterial,
+{
+    fn from(k: &Key<M>) -> Self {
+        k.id
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod test {
+    #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+    pub(crate) enum Algorithm {
+        Pancakes,
+        Waffles,
+        FrenchToast,
+        Cereal,
+    }
+    #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Zeroize, ZeroizeOnDrop)]
+    pub(crate) struct Material {
+        #[zeroize(skip)]
+        algorithm: Algorithm,
+        bytes: [u8; 32],
+    }
+    impl Material {
+        pub(crate) fn new(algorithm: Algorithm) -> Self {
+            let mut bytes = [0u8; 32];
+            crate::rand::fill(&mut bytes);
+            Self { algorithm, bytes }
+        }
+    }
+    impl super::KeyMaterial for Material {
+        type Algorithm = Algorithm;
+        fn algorithm(&self) -> Self::Algorithm {
+            self.algorithm
+        }
+    }
+
+    use zeroize::Zeroize;
+
+    use super::*;
+    #[test]
+    fn test_serialize() {
+        let key = Key::new(
+            1,
+            Status::Primary,
+            Origin::Navajo,
+            Material::new(Algorithm::Pancakes),
+            None,
+        );
+        let ser = serde_json::to_string(&key).unwrap();
+        let de = serde_json::from_str(&ser).unwrap();
+        assert_eq!(key, de);
+    }
+    #[test]
+    fn test_status() {
+        let mut key = Key::new(
+            1,
+            Status::Primary,
+            Origin::Navajo,
+            Material::new(Algorithm::Pancakes),
+            None,
+        );
+
+        key.demote();
+        assert_eq!(key.status(), Status::Secondary);
+
+        key.promote_to_primary();
+        assert_eq!(key.status(), Status::Primary);
+        assert!(key.disable().is_err());
+        key.demote();
+        assert!(key.disable().is_ok());
+        key.promote_to_primary();
+        assert!(!key.can_delete());
+        key.demote();
+        assert!(key.can_delete());
+    }
+    #[test]
+    fn test_meta() {
+        let mut key = Key::new(
+            1,
+            Status::Primary,
+            Origin::Navajo,
+            Material::new(Algorithm::Pancakes),
+            Some("(╯°□°）╯︵ ┻━┻".into()),
+        );
+        assert_eq!(key.meta(), Some("(╯°□°）╯︵ ┻━┻".into()).as_ref());
+        key.update_meta(Some("┬─┬ノ( º _ ºノ)".into()));
+        assert_eq!(key.meta(), Some("┬─┬ノ( º _ ºノ)".into()).as_ref());
     }
 }

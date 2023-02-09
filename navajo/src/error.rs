@@ -20,7 +20,7 @@ impl fmt::Display for KeyNotFoundError {
     }
 }
 #[cfg(feature = "std")]
-impl core::error::Error for KeyNotFoundError {}
+impl std::error::Error for KeyNotFoundError {}
 
 #[derive(Clone, Debug)]
 pub struct UnspecifiedError;
@@ -388,7 +388,7 @@ impl<A> From<KeyNotFoundError> for RemoveKeyError<A> {
 }
 
 #[cfg(feature = "std")]
-impl<A> std::error::Error for RemoveKeyError<A> {}
+impl<A> std::error::Error for RemoveKeyError<A> where A: Debug {}
 
 #[derive(Debug, Clone)]
 pub enum DisableKeyError<A> {
@@ -416,4 +416,4 @@ impl<A> From<KeyNotFoundError> for DisableKeyError<A> {
 }
 
 #[cfg(feature = "std")]
-impl<A> std::error::Error for DisableKeyError<A> {}
+impl<A> std::error::Error for DisableKeyError<A> where A: Debug {}
