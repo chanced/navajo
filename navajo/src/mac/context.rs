@@ -1,19 +1,53 @@
-use super::{material::MacKey, Output};
+use crate::{key::Key, mac::output, Status};
+
+use super::{
+    entry::Entry,
+    material::{CryptoKey, Material},
+    output::Output,
+};
+
+pub(super) struct Context {
+    pub(super) key_id: u32,
+    pub(super) is_primary: bool,
+    pub(super) header: Vec<u8>,
+    pub(super) inner: ContextInner,
+}
+impl Context {
+    pub(super) fn new(key: &Key<Material>) -> Self {
+        Self {
+            key_id: key.id(),
+            is_primary: key.is_primary(),
+            header: key.header().to_vec(),
+            inner: ContextInner::new(key.crypto_key()),
+        }
+    }
+    pub(super) fn update(&mut self, data: &[u8]) {
+        self.inner.update(data)
+    }
+    pub(super) fn finalize(self) -> Entry {
+        Entry::new(
+            self.key_id,
+            self.is_primary,
+            self.header,
+            self.inner.finalize(),
+        )
+    }
+}
 
 #[allow(clippy::large_enum_variant)]
-pub(super) enum Context {
+pub(super) enum ContextInner {
     #[cfg(feature = "blake3")]
     Blake3(crate::mac::Blake3Context),
     #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
     Ring(crate::mac::RingContext),
     RustCrypto(Box<crate::mac::RustCryptoContext>),
 }
-impl Context {
-    pub(super) fn new(key: &MacKey) -> Context {
+impl ContextInner {
+    pub(super) fn new(key: &CryptoKey) -> ContextInner {
         match &key {
-            MacKey::Ring(key) => key.as_ref().into(),
-            MacKey::RustCrypto(key) => Context::RustCrypto(Box::new(key.as_ref().into())),
-            MacKey::Blake3(key) => key.as_ref().into(),
+            CryptoKey::Ring(key) => key.as_ref().into(),
+            CryptoKey::RustCrypto(key) => ContextInner::RustCrypto(Box::new(key.as_ref().into())),
+            CryptoKey::Blake3(key) => key.as_ref().into(),
         }
     }
     pub(super) fn update(&mut self, data: &[u8]) {
@@ -25,7 +59,7 @@ impl Context {
             Self::RustCrypto(ctx) => ctx.update(data),
         }
     }
-    pub(super) fn finalize(self) -> Output {
+    pub(super) fn finalize(self) -> output::Output {
         match self {
             #[cfg(feature = "blake3")]
             Self::Blake3(ctx) => ctx.finalize(),
@@ -37,13 +71,13 @@ impl Context {
 }
 
 #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
-impl From<&ring_compat::ring::hmac::Key> for Context {
+impl From<&ring_compat::ring::hmac::Key> for ContextInner {
     fn from(key: &ring_compat::ring::hmac::Key) -> Self {
         Self::Ring(key.into())
     }
 }
 
-impl From<&blake3::Hasher> for Context {
+impl From<&blake3::Hasher> for ContextInner {
     fn from(key: &blake3::Hasher) -> Self {
         Self::Blake3(key.into())
     }
@@ -51,7 +85,7 @@ impl From<&blake3::Hasher> for Context {
 
 pub(super) trait MacContext {
     fn update(&mut self, data: &[u8]);
-    fn finalize(self) -> Output;
+    fn finalize(self) -> output::Output;
 }
 #[cfg(feature = "blake3")]
 #[derive(Clone)]
@@ -66,8 +100,8 @@ impl MacContext for Blake3Context {
     fn update(&mut self, data: &[u8]) {
         self.0.update(data);
     }
-    fn finalize(self) -> Output {
-        Output::Blake3(self.0.finalize().into())
+    fn finalize(self) -> output::Output {
+        output::Output::Blake3(self.0.finalize().into())
     }
 }
 cfg_if::cfg_if! {
@@ -102,7 +136,7 @@ macro_rules! rust_crypto_context_inner {
                             use [< $typ:lower >]::Mac;
                             self.0.update(data);
                         }
-                        fn finalize(self) -> crate::mac::Output {
+                        fn finalize(self) -> Output {
                             use [< $typ:lower >]::Mac;
                             self.0.finalize().into()
                         }

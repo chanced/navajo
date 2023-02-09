@@ -267,6 +267,11 @@ impl fmt::Display for MacVerificationError {
     }
 }
 
+impl From<UnspecifiedError> for MacVerificationError {
+    fn from(_: UnspecifiedError) -> Self {
+        Self {}
+    }
+}
 #[cfg(feature = "std")]
 impl std::error::Error for MacVerificationError {}
 

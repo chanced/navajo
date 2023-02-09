@@ -1,25 +1,28 @@
 mod algorithm;
 mod context;
+mod entry;
 mod hasher;
 mod material;
+mod output;
 mod sink;
 mod stream;
 mod tag;
 mod verifier;
 
 pub use algorithm::Algorithm;
-use alloc::vec::Vec;
 pub use stream::{ComputeMacStream, MacStream, VerifyMacStream};
 pub use tag::Tag;
 
 pub use material::MacKeyInfo;
 
 use crate::error::{InvalidKeyLength, KeyNotFoundError, RemoveKeyError};
-use crate::{origin, KeyInfo, Keyring, Origin};
+use crate::{KeyInfo, Keyring, Origin};
+use alloc::vec::Vec;
 use context::*;
 use hasher::Hasher;
 use material::*;
-use tag::*;
+use output::Output;
+use output::{rust_crypto_internal_tag, rust_crypto_internal_tags};
 
 pub struct Mac {
     keyring: Keyring<Material>,
@@ -30,41 +33,26 @@ impl Mac {
     /// as the primary.
     pub fn new(algorithm: Algorithm, meta: Option<serde_json::value::Value>) -> Self {
         let bytes = algorithm.generate_key();
-        let inner = MacKey::new(algorithm, &bytes).unwrap(); // safe, the key is valid
-        let key = Material {
-            bytes,
-            prefix: None,
-            algorithm,
-            inner,
-        };
+        // safe, the key is generated
+        let material = Material::new(Origin::Generated, &bytes, None, algorithm).unwrap();
         Self {
-            keyring: Keyring::new(key, Origin::Navajo, meta),
+            keyring: Keyring::new(material, Origin::Generated, meta),
         }
     }
 
     /// Create a new MAC keyring by initializing it with the given key data as
     /// primary.
-    ///
-    /// If the key has a prefix, such as Tink's 5 bytes, it should be trimmed
-    /// from `key` and passed as `prefix`.
     pub fn new_with_external_key(
         key: &[u8],
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
         meta: Option<serde_json::Value>,
     ) -> Result<Self, InvalidKeyLength> {
-        let inner = MacKey::new(algorithm, key)?;
-        let prefix = prefix.map(|p| p.to_vec());
-
-        let key = Material {
-            prefix,
-            algorithm,
-            inner,
-            bytes: key.to_vec(),
-        };
-
+        let bytes = algorithm.generate_key();
+        // safe, the key is generated
+        let material = Material::new(Origin::External, &bytes, prefix, algorithm)?;
         Ok(Self {
-            keyring: Keyring::new(key, Origin::External, meta),
+            keyring: Keyring::new(material, Origin::Generated, meta),
         })
     }
 
@@ -74,7 +62,7 @@ impl Mac {
         meta: Option<serde_json::Value>,
     ) -> Result<MacKeyInfo, InvalidKeyLength> {
         let bytes = algorithm.generate_key();
-        self.create_key(algorithm, &bytes, None, Origin::Navajo, meta)
+        self.create_key(algorithm, &bytes, None, Origin::Generated, meta)
     }
     pub fn add_external_key(
         &mut self,
@@ -138,14 +126,7 @@ impl Mac {
         origin: Origin,
         meta: Option<serde_json::Value>,
     ) -> Result<MacKeyInfo, InvalidKeyLength> {
-        algorithm.validate_key_len(bytes.len())?;
-        let material = Material {
-            bytes: bytes.to_vec(),
-            prefix: prefix.map(|p| p.to_vec()),
-            algorithm,
-            inner: MacKey::new(algorithm, bytes)?,
-        };
-
+        let material = Material::new(origin, bytes, prefix, algorithm)?;
         Ok(MacKeyInfo::new(self.keyring.add(material, origin, meta)))
     }
 }

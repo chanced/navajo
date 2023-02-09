@@ -8,12 +8,11 @@ const BUFFER_SIZE: usize = 64;
 
 use crate::key::Key;
 
-use super::{context::Context, Material, Tag};
+use super::{Context, Material, Tag};
 
 /// Generates a [`Tag`] for the given data using a set of keys.
 pub(super) struct Hasher {
-    primary_key: Key<Material>,
-    contexts: Vec<(Key<Material>, Context)>,
+    contexts: Vec<Context>,
     #[cfg(not(feature = "std"))]
     buffer: VecDeque<u8>,
     #[cfg(feature = "std")]
@@ -21,27 +20,15 @@ pub(super) struct Hasher {
 }
 
 impl Hasher {
-    pub(super) fn new<'a>(keys: impl Iterator<Item = &'a Key<Material>>) -> Self {
-        let mut contexts = Vec::new();
-        let mut primary_key = None;
-        let mut primary_key_found = false;
+    pub(super) fn new(keys: &[Key<Material>]) -> Self {
+        let mut contexts = Vec::with_capacity(keys.len());
         for key in keys {
-            if key.status().is_primary() {
-                primary_key_found = true;
-                primary_key = Some(key.clone());
-            } else if !primary_key_found {
-                // this shouldn't matter but it's a safeguard to avoid panicing
-                primary_key = Some(key.clone());
-            }
-            contexts.push((key.clone(), Context::new(&key.material().inner)));
+            contexts.push(key.new_context());
         }
-
-        let primary_key = primary_key.expect("keys were empty in Hasher::new\nthis is a bug!\nplease report it to https://github.com/chanced/navajo/issues/new");
 
         #[cfg(feature = "std")]
         {
             Self {
-                primary_key,
                 contexts,
                 buffer: Vec::new(),
             }
@@ -62,7 +49,7 @@ impl Hasher {
             let mut buf = self.buffer.split_off(0);
             #[cfg(not(feature = "std"))]
             let buf = buf.make_contiguous();
-            self.contexts[0].1.update(&buf);
+            self.contexts[0].update(&buf);
         }
 
         // in the event there are mutliple keys, the data is buffered and
@@ -91,22 +78,17 @@ impl Hasher {
 
     fn update_chunk(&mut self, chunk: Vec<u8>) {
         if self.contexts.len() > 1 {
-            self.contexts.par_iter_mut().for_each(|(_, ctx)| {
+            self.contexts.par_iter_mut().for_each(|ctx| {
                 ctx.update(&chunk);
             });
         } else {
-            self.contexts.iter_mut().for_each(|(_, ctx)| {
+            self.contexts.iter_mut().for_each(|ctx| {
                 ctx.update(&chunk);
             });
         }
     }
     pub(super) fn finalize(self) -> Tag {
-        let mut outputs = Vec::with_capacity(self.contexts.len());
-        for (key, ctx) in self.contexts {
-            let output = ctx.finalize();
-            outputs.push((key, output));
-        }
-        Tag::new(&self.primary_key, outputs)
+        Tag::new(self.contexts.into_iter().map(|ctx| ctx.finalize()))
     }
 }
 
@@ -117,7 +99,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test() {
+    fn test_basic() {
         let key = hex::decode("52fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649")
             .unwrap();
         let expected =
@@ -125,30 +107,32 @@ mod tests {
                 .unwrap();
         let mut mac = crate::mac::Mac::new_with_external_key(&key, Sha256, None, None).unwrap();
 
-        let mut hasher = Hasher::new(mac.keyring().keys().iter());
+        let mut hasher = Hasher::new(mac.keyring().keys());
         hasher.update(b"message", 32);
         let tag = hasher.finalize();
         assert_eq!(tag.omit_header().as_ref(), &expected[..]);
+    }
+    #[test]
+    fn test_chunked() {
+        let key = hex::decode("52fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649")
+            .unwrap();
+        let mut mac = crate::mac::Mac::new_with_external_key(&key, Sha256, None, None).unwrap();
 
         let second_key =
-            hex::decode("3cfc1f74062c90c79638b99ecb9e046ab25533f689554dc4dbb650bd44039623")
+            hex::decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
                 .unwrap();
         let second_key = mac
             .add_external_key(&second_key, Sha256, None, None)
             .unwrap();
         mac.promote_key(&second_key).unwrap();
         let expected =
-            hex::decode("73db0fdcb1c66fcc06c40040011383a48723b41a936fb32f03b6c9f310c9c01c")
+            hex::decode("72fd211411c56848ccc90eafd19269a7fa1c3067d5bce20836575d786f828f4e")
                 .unwrap();
 
         let long_str = r#"[cia.gov](https://www.cia.gov/stories/story/navajo-code-talkers-and-the-unbreakable-code/)
 
         Navajo Code Talkers and the Unbreakable Code
         ============================================
-        
-        6–7 minutes
-        
-        * * *
         
         In the heat of battle, it is of the utmost importance that messages are delivered and received as quickly as possible. It is even more crucial that these messages are encoded so the enemy does not know about plans in advance.
         
@@ -235,10 +219,17 @@ mod tests {
         Decipher the code below to find out during what battle the Navajo Code Talkers to help gain a U.S. victory:
         
         Tkin-Gloe-lh-A-Kha Ah-Ya-Tsinne-Tkin-Tsin-Tliti-Tse-Nill"#;
-        let mut hasher = Hasher::new(mac.keyring().keys().iter());
+
+        let mut hasher = Hasher::new(mac.keyring().keys());
         hasher.update(long_str.as_bytes(), 4);
         let tag = hasher.finalize();
         assert_eq!(tag.omit_header().as_ref().len(), expected[..].len());
         assert_eq!(tag.omit_header().as_ref(), &expected[..]);
+        // assert_eq!(
+        //     tag.omit_header().as_ref(),
+        //     hex::decode("1b2dd9405426e0c7de12085c5ddd7fdee131064112cd6249ed4af2d2a3c69295")
+        //         .unwrap()
+        //         .as_slice()
+        // );
     }
 }

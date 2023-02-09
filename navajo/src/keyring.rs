@@ -408,7 +408,7 @@ mod tests {
     #[test]
     fn test_serde() {
         let material = Material::new(Algorithm::Waffles);
-        let keyring = Keyring::new(material, Origin::Navajo, Some("test".into()));
+        let keyring = Keyring::new(material, Origin::Generated, Some("test".into()));
         let ser = serde_json::to_string(&keyring).unwrap();
         let de = serde_json::from_str::<Keyring<Material>>(&ser).unwrap();
         assert_eq!(keyring, de);
@@ -417,8 +417,8 @@ mod tests {
     #[tokio::test]
     async fn test_seal_and_open() {
         let material = Material::new(Algorithm::Waffles);
-        let mut keyring = Keyring::new(material, Origin::Navajo, Some("test".into()));
-        keyring.add(Material::new(Algorithm::Cereal), Origin::Navajo, None);
+        let mut keyring = Keyring::new(material, Origin::Generated, Some("test".into()));
+        keyring.add(Material::new(Algorithm::Cereal), Origin::Generated, None);
         let ser = serde_json::to_vec(&keyring).unwrap();
         let de = serde_json::from_slice::<Keyring<Material>>(&ser).unwrap();
         assert_eq!(keyring, de);
@@ -433,30 +433,30 @@ mod tests {
     #[test]
     fn test_key_status() {
         let material = Material::new(Algorithm::Pancakes);
-        let mut keyring = Keyring::new(material, Origin::Navajo, Some("test".into()));
+        let mut keyring = Keyring::new(material, Origin::Generated, Some("test".into()));
         let first_id = {
             let first = keyring.primary_key();
             let first_id = first.id();
             assert_eq!(first.status(), Status::Primary);
             assert_eq!(first.meta(), Some("test".into()).as_ref());
-            assert_eq!(first.origin(), Origin::Navajo);
+            assert_eq!(first.origin(), Origin::Generated);
             assert_ne!(first.id(), 0);
             assert_eq!(first.algorithm(), Algorithm::Pancakes);
             first_id
         };
 
         let second_id = {
-            let second = keyring.add(Material::new(Algorithm::Waffles), Origin::Navajo, None);
+            let second = keyring.add(Material::new(Algorithm::Waffles), Origin::Generated, None);
             assert_eq!(second.status(), Status::Secondary);
             assert_eq!(second.meta(), None);
-            assert_eq!(second.origin(), Origin::Navajo);
+            assert_eq!(second.origin(), Origin::Generated);
             assert_ne!(second.id(), 0);
             second.id()
         };
         {
             let second = keyring.get(second_id).unwrap();
             assert_eq!(second.status(), Status::Secondary);
-            assert_eq!(second.origin(), Origin::Navajo);
+            assert_eq!(second.origin(), Origin::Generated);
             assert_eq!(second.id(), second_id);
             keyring.promote(second.id()).unwrap();
         }

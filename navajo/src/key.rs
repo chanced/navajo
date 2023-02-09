@@ -108,6 +108,15 @@ where
     pub(crate) fn origin(&self) -> Origin {
         self.origin
     }
+    pub(crate) fn is_primary(&self) -> bool {
+        self.status.is_primary()
+    }
+    pub(crate) fn is_secondary(&self) -> bool {
+        self.status.is_secondary()
+    }
+    pub(crate) fn is_disabled(&self) -> bool {
+        self.status.is_disabled()
+    }
 }
 impl<M> PartialEq for Key<M>
 where
@@ -179,7 +188,7 @@ pub(crate) mod test {
         let key = Key::new(
             1,
             Status::Primary,
-            Origin::Navajo,
+            Origin::Generated,
             Material::new(Algorithm::Pancakes),
             None,
         );
@@ -192,7 +201,7 @@ pub(crate) mod test {
         let mut key = Key::new(
             1,
             Status::Primary,
-            Origin::Navajo,
+            Origin::Generated,
             Material::new(Algorithm::Pancakes),
             None,
         );
@@ -215,7 +224,7 @@ pub(crate) mod test {
         let mut key = Key::new(
             1,
             Status::Primary,
-            Origin::Navajo,
+            Origin::Generated,
             Material::new(Algorithm::Pancakes),
             Some("(╯°□°）╯︵ ┻━┻".into()),
         );
