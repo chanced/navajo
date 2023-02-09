@@ -87,8 +87,9 @@ where
             meta: self.meta.clone(),
         }
     }
-    pub(crate) fn update_meta(&mut self, meta: Option<serde_json::Value>) {
+    pub(crate) fn update_meta(&mut self, meta: Option<serde_json::Value>) -> &Key<M> {
         self.meta = meta.map(Arc::new);
+        self
     }
 
     pub(crate) fn algorithm(&self) -> M::Algorithm

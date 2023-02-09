@@ -1,8 +1,5 @@
-use alloc::vec::{self, Vec};
-use random::RngCore;
+use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
-
-use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::error::InvalidKeyLength;
 
@@ -34,7 +31,7 @@ pub enum Algorithm {
     #[cfg(feature = "hmac_sha2")]
     Sha512,
     #[cfg(feature = "hmac_sha2")]
-    Sha2_512_224,
+    Sha512_224,
     #[cfg(feature = "hmac_sha2")]
     Sha512_256,
     #[cfg(feature = "hmac_sha3")]
@@ -70,7 +67,7 @@ impl Algorithm {
             Algorithm::Sha224 => 28,
             Algorithm::Sha384 => 48,
             Algorithm::Sha512 => 64,
-            Algorithm::Sha2_512_224 => 28,
+            Algorithm::Sha512_224 => 28,
             Algorithm::Sha512_256 => 32,
             Algorithm::Sha3_256 => 32,
             Algorithm::Sha3_224 => 28,
@@ -131,7 +128,7 @@ impl Algorithm {
             #[cfg(feature = "hmac_sha2")]
             Algorithm::Sha512 => SHA2_512_KEY_LEN,
             #[cfg(feature = "hmac_sha2")]
-            Algorithm::Sha2_512_224 => SHA2_512_224_KEY_LEN,
+            Algorithm::Sha512_224 => SHA2_512_224_KEY_LEN,
             #[cfg(feature = "hmac_sha2")]
             Algorithm::Sha512_256 => SHA2_512_256_KEY_LEN,
             #[cfg(feature = "hmac_sha3")]

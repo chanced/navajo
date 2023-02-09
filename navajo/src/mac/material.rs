@@ -26,13 +26,23 @@ impl MacKeyInfo {
         }
     }
 }
+impl From<MacKeyInfo> for u32 {
+    fn from(value: MacKeyInfo) -> Self {
+        value.id
+    }
+}
+impl From<&MacKeyInfo> for u32 {
+    fn from(value: &MacKeyInfo) -> Self {
+        value.id
+    }
+}
 impl From<&Key<super::Material>> for MacKeyInfo {
     fn from(key: &Key<super::Material>) -> Self {
         Self::new(key)
     }
 }
 
-#[derive(Clone, Zeroize, ZeroizeOnDrop)]
+#[derive(Clone, Zeroize, ZeroizeOnDrop, Debug)]
 pub(super) struct Material {
     #[zeroize(skip)]
     pub(super) algorithm: Algorithm,
@@ -49,15 +59,6 @@ impl PartialEq for Material {
 impl Eq for Material {}
 
 impl Material {
-    // pub(super) fn new(
-    //     id: u64,
-    //     algorithm: Algorithm,
-    //     bytes: Vec<u8>,
-    //     prefix: Option<Option<Vec<u8>>>,
-    //     status: KeyStatus,
-    // ) -> Self {
-    //     todo!()
-    // }
     pub(super) fn prefix(&self) -> Option<&[u8]> {
         self.prefix.as_deref()
     }
@@ -69,7 +70,7 @@ impl crate::KeyMaterial for Material {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) enum MacKey {
     Ring(Box<ring_compat::ring::hmac::Key>),
     RustCrypto(Box<crate::mac::RustCryptoKey>),
@@ -163,6 +164,11 @@ macro_rules! rust_crypto_keys {
                     #[cfg(feature = "cmac_aes")]
                     $aes([< Cmac $aes Key >]),
                 )*
+            }
+            impl core::fmt::Debug for RustCryptoKey {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> std::fmt::Result {
+                    f.debug_struct("RustCryptoKey").finish()
+                }
             }
             impl From<RustCryptoKey> for MacKey {
                 fn from(key: RustCryptoKey) -> Self {

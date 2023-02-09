@@ -36,18 +36,7 @@ use alloc::{sync::Arc, vec::Vec};
 /// which includes the output (e.g. [`as_bytes`](Self::as_bytes),
 /// [`as_ref`](Self::as_ref)) as well as for verification purposes.
 ///
-/// ## Examples
-/// ```rust
-/// use navajo::{Mac, Algorithm};
-/// let mac = Mac::new(Algorithm::HmacSha256);
-/// let tag = mac.compute(b"foo").unwrap();
-/// let valid = mac.compute(b"foo").unwrap();
-/// assert!(tag.verify(&valid).is_ok());
-/// let invalid = mac.compute(b"bar").unwrap();
-/// assert!(tag.verify(&invalid).is_err());
-/// ```
-///
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Tag {
     entries: Vec<Arc<Entry>>,
     primary: Arc<Entry>,
@@ -62,21 +51,9 @@ impl Tag {
     /// keyring at the point this [`Tag`] was created or last updated.
     ///
     /// ## Example
-    /// ```rust
-    /// use navajo::{Mac, Algorithm};
-    ///
-    /// let mac = Mac::new(Algorithm::HmacSha256);
-    /// let tag = mac.compute(b"foo").unwrap();
-    /// let valid = mac.compute(b"foo").unwrap();
-    /// assert!(tag.verify(&valid).is_ok());
-    ///
-    /// let other_mac = Mac::new(Algorithm::HmacSha256);
-    /// let invalid = other_mac.compute(b"foo").unwrap();
-    /// assert!(tag.verify(&invalid).is_err());
-    ///
-    pub fn verify(&self, tag: &[u8]) -> Result<(), MacVerificationError> {
+    fn verify_slice(&self, tag: &[u8]) -> Result<(), MacVerificationError> {
         for entry in &self.entries {
-            if entry.verify(tag).is_ok() {
+            if entry.verify_slice(tag).is_ok() {
                 return Ok(());
             }
         }
@@ -188,8 +165,13 @@ impl Tag {
         self.entries.iter().map(|e| &e.key)
     }
 }
+impl AsRef<[u8]> for Tag {
+    fn as_ref(&self) -> &[u8] {
+        self.primary.output.as_ref()
+    }
+}
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Entry {
     key: Key<Material>,
     truncate_to: Option<usize>,
@@ -217,7 +199,10 @@ impl Entry {
             output: self.output.clone(),
         })
     }
-    pub fn verify(&self, tag: &[u8]) -> Result<(), MacVerificationError> {
+    fn verify_tag(&self, tag: &Tag) -> Result<(), MacVerificationError> {
+        todo!()
+    }
+    fn verify_slice(&self, tag: &[u8]) -> Result<(), MacVerificationError> {
         let output = self
             .truncate_to
             .map(|len| &self.output.as_ref()[..len])
@@ -253,7 +238,7 @@ pub(super) trait DigestOutput: AsRef<[u8]> + Clone {
     fn truncatable(&self) -> bool;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) enum Output {
     #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
     Ring(RingOutput),
@@ -285,7 +270,7 @@ impl AsRef<[u8]> for Output {
 
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "ring", feature="hmac_sha2"))] {
-        #[derive(Clone)]
+        #[derive(Clone, Debug)]
         pub(super) struct RingOutput(ring_compat::ring::hmac::Tag);
         impl AsRef<[u8]> for RingOutput {
             fn as_ref(&self) -> &[u8] {
@@ -306,7 +291,7 @@ cfg_if::cfg_if! {
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "blake3")] {
-        #[derive(Clone)]
+        #[derive(Clone, Debug)]
         pub(super) struct Blake3Output (blake3::Hash);
         impl DigestOutput for Blake3Output {
             fn truncatable(&self) -> bool { true } //github.com/BLAKE3-team/BLAKE3/issues/123
@@ -334,7 +319,7 @@ macro_rules! rust_crypto_internal_tag {
         paste::paste! {
             cfg_if::cfg_if! {
                 if #[cfg(all($feat, $(not($cfg))?))] {
-                    #[derive(Clone)]
+                    #[derive(Clone, Debug)]
                     pub(super) struct [< $typ $alg InternalTag >] (digest::Output<[< $typ:lower >]::$typ<$crt::$alg>>);
                     impl AsRef<[u8]> for [< $typ $alg InternalTag >] {
                         fn as_ref(&self) -> &[u8] {
@@ -371,7 +356,7 @@ macro_rules! rust_crypto_internal_tags {
         cmac: { aes: [$($aes:ident),*]$(,)? }
 	}) => {
         paste::paste! {
-            #[derive(Clone)]
+            #[derive(Clone, Debug)]
             pub(super) enum RustCryptoOutput {
                 $(
                     #[cfg(all(feature="hmac_sha2", not(feature = "ring")))]

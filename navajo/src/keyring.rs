@@ -21,7 +21,6 @@ use chacha20poly1305::{
 };
 use hashbrown::HashMap;
 use serde::de::DeserializeOwned;
-use serde::ser::SerializeStruct;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -193,17 +192,10 @@ where
 
     pub(crate) fn update_meta(
         &mut self,
-        id: impl AsRef<u32>,
+        id: impl Into<u32>,
         meta: Option<Value>,
     ) -> Result<&Key<M>, KeyNotFoundError> {
-        let id = id.as_ref();
-        if let Some(key_id) = self.lookup.get(id) {
-            let key = &mut self.keys[*key_id];
-            key.update_meta(meta);
-            Ok(key)
-        } else {
-            Err(KeyNotFoundError(*id))
-        }
+        self.get_mut(id).map(|key| key.update_meta(meta))
     }
 
     pub(crate) fn primary_key(&self) -> &Key<M> {

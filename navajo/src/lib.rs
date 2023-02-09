@@ -31,9 +31,6 @@ pub mod aes;
 mod kms;
 pub use kms::{Kms, KmsSync};
 
-mod primitive;
-// pub use primitive::{seal, seal_sync, unseal, unseal_sync, Primitive};
-
 mod origin;
 pub use origin::Origin;
 

@@ -14,7 +14,7 @@ pub use tag::Tag;
 
 pub use material::MacKeyInfo;
 
-use crate::error::{InvalidKeyLength, KeyNotFoundError};
+use crate::error::{InvalidKeyLength, KeyNotFoundError, RemoveKeyError};
 use crate::{origin, KeyInfo, Keyring, Origin};
 use context::*;
 use hasher::Hasher;
@@ -47,7 +47,7 @@ impl Mac {
     ///
     /// If the key has a prefix, such as Tink's 5 bytes, it should be trimmed
     /// from `key` and passed as `prefix`.
-    pub fn new_with_external_key<'de>(
+    pub fn new_with_external_key(
         key: &[u8],
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
@@ -68,17 +68,22 @@ impl Mac {
         })
     }
 
-    pub fn add_generated_key(&mut self, algorithm: Algorithm) -> Result<(), InvalidKeyLength> {
+    pub fn add_generated_key(
+        &mut self,
+        algorithm: Algorithm,
+        meta: Option<serde_json::Value>,
+    ) -> Result<MacKeyInfo, InvalidKeyLength> {
         let bytes = algorithm.generate_key();
-        self.create_key(algorithm, &bytes, None)
+        self.create_key(algorithm, &bytes, None, Origin::Navajo, meta)
     }
     pub fn add_external_key(
         &mut self,
         key: &[u8],
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
-    ) -> Result<(), InvalidKeyLength> {
-        self.create_key(algorithm, key, prefix)
+        meta: Option<serde_json::Value>,
+    ) -> Result<MacKeyInfo, InvalidKeyLength> {
+        self.create_key(algorithm, key, prefix, Origin::External, meta)
     }
     /// Returns [`KeyInfo`] for the primary key.
     pub fn primary_key(&self) -> KeyInfo<Algorithm> {
@@ -107,6 +112,20 @@ impl Mac {
         self.keyring.enable(key_id).map(MacKeyInfo::new)
     }
 
+    pub fn remove_key(
+        &mut self,
+        key_id: impl Into<u32>,
+    ) -> Result<MacKeyInfo, RemoveKeyError<Algorithm>> {
+        self.keyring.remove(key_id).map(|k| MacKeyInfo::new(&k))
+    }
+
+    pub fn update_key_meta(
+        &mut self,
+        key_id: impl Into<u32>,
+        meta: Option<serde_json::Value>,
+    ) -> Result<MacKeyInfo, KeyNotFoundError> {
+        self.keyring.update_meta(key_id, meta).map(MacKeyInfo::new)
+    }
     fn keyring(&self) -> &Keyring<Material> {
         &self.keyring
     }
@@ -116,9 +135,18 @@ impl Mac {
         algorithm: Algorithm,
         bytes: &[u8],
         prefix: Option<&[u8]>,
-    ) -> Result<(), InvalidKeyLength> {
+        origin: Origin,
+        meta: Option<serde_json::Value>,
+    ) -> Result<MacKeyInfo, InvalidKeyLength> {
         algorithm.validate_key_len(bytes.len())?;
-        Ok(())
+        let material = Material {
+            bytes: bytes.to_vec(),
+            prefix: prefix.map(|p| p.to_vec()),
+            algorithm,
+            inner: MacKey::new(algorithm, bytes)?,
+        };
+
+        Ok(MacKeyInfo::new(self.keyring.add(material, origin, meta)))
     }
 }
 
