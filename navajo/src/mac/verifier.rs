@@ -1,31 +1,30 @@
-use crate::error::MacVerificationError;
+use crate::{error::MacVerificationError, key::Key};
 
-use super::{hasher::Hasher, Tag};
+use super::{hasher::Hasher, material::Material, Tag};
 
-pub(super) struct Verifier<T>
-where
-    T: AsRef<Tag> + Send + Sync,
-{
-    tag: T,
+pub(super) struct Verifier {
+    tag: Tag,
     hasher: Hasher,
 }
-impl<T> Verifier<T>
-where
-    T: AsRef<Tag> + Send + Sync,
-{
-    // pub(super) fn new(tag: T) -> Self {
-    //     let t = tag.as_ref();
-    //     let hasher = Hasher::new(t.keys());
-    //     Self { tag, hasher }
-    // }
-    // pub(super) fn update(&mut self, data: &[u8], buf_size: usize) {
-    //     self.hasher.update(data, buf_size)
-    // }
+impl Verifier {
+    pub(super) fn new(keys: &[Key<Material>], tag: &Tag) -> Self {
+        let t = tag.as_ref();
+        let hasher = Hasher::new(keys);
+        Self {
+            tag: tag.clone(),
+            hasher,
+        }
+    }
+    pub(super) fn update(&mut self, data: &[u8], buf_size: usize) {
+        self.hasher.update(data, buf_size)
+    }
 
-    // pub(super) fn verify(&self) -> Result<(), MacVerificationError> {
-    //     // let mut computed_tag = self.hasher.finalize();
-    //     let tag = self.tag.as_ref();
-    //     // if tag.is
-    //     todo!()
-    // }
+    pub(super) fn finalize(self) -> Result<Tag, MacVerificationError> {
+        let computed = self.hasher.finalize();
+        if self.tag == computed {
+            Ok(computed)
+        } else {
+            Err(MacVerificationError)
+        }
+    }
 }

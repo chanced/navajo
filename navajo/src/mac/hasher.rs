@@ -1,8 +1,7 @@
-use alloc::{collections::VecDeque, vec::Vec};
+use alloc::vec::Vec;
 use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
 
 #[cfg(feature = "std")]
-use std::io::Read;
 
 const BUFFER_SIZE: usize = 64;
 
@@ -22,6 +21,7 @@ pub(super) struct Hasher {
 impl Hasher {
     pub(super) fn new(keys: &[Key<Material>]) -> Self {
         let mut contexts = Vec::with_capacity(keys.len());
+
         for key in keys {
             contexts.push(key.new_context());
         }

@@ -4,7 +4,6 @@ mod entry;
 mod hasher;
 mod material;
 mod output;
-mod sink;
 mod stream;
 mod tag;
 mod verifier;
@@ -48,9 +47,8 @@ impl Mac {
         prefix: Option<&[u8]>,
         meta: Option<serde_json::Value>,
     ) -> Result<Self, InvalidKeyLength> {
-        let bytes = algorithm.generate_key();
         // safe, the key is generated
-        let material = Material::new(Origin::External, &bytes, prefix, algorithm)?;
+        let material = Material::new(Origin::External, key, prefix, algorithm)?;
         Ok(Self {
             keyring: Keyring::new(material, Origin::Generated, meta),
         })

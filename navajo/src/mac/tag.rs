@@ -6,6 +6,7 @@ use crate::{
     Key,
 };
 use alloc::{sync::Arc, vec::Vec};
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 /// [`Mac`] `Tag`s are used to verify the integrity of data.
 ///
@@ -174,10 +175,9 @@ impl Tag {
     }
 
     fn eq_slice(&self, other: &[u8]) -> Result<(), MacVerificationError> {
-        if other.len() < 8 {
-            return Err(MacVerificationError);
-        }
-        if verify_slices_are_equal(self.as_bytes(), other).is_ok() {
+        if other.len() == self.primary_tag.len()
+            && verify_slices_are_equal(self.primary_tag.as_ref(), other).is_ok()
+        {
             return Ok(());
         }
         for entry in self.entries.iter() {
@@ -185,19 +185,128 @@ impl Tag {
                 return Ok(());
             }
         }
-
-        todo!()
+        Err(MacVerificationError)
     }
-}
-
-impl PartialEq for Tag {
-    fn eq(&self, other: &Self) -> bool {
-        self.as_bytes() == other.as_bytes()
+    fn eq_tag(&self, other: &Tag) -> Result<(), MacVerificationError> {
+        if self.entries.len() > 1 {
+            if other.entries.len() > 1 {
+                self.entries
+                    .par_iter()
+                    .find_any(|entry| {
+                        other
+                            .entries
+                            .par_iter()
+                            .find_any(|other_entry| {
+                                entry
+                                    .verify(other_entry.output_bytes(), self.truncate_to)
+                                    .is_ok()
+                            })
+                            .is_some()
+                    })
+                    .map(|_| ())
+                    .ok_or(MacVerificationError)
+            } else {
+                self.entries
+                    .par_iter()
+                    .find_any(|entry| {
+                        entry
+                            .verify(other.primary_tag.as_ref(), self.truncate_to)
+                            .is_ok()
+                    })
+                    .map(|_| ())
+                    .ok_or(MacVerificationError)
+            }
+        } else if other.entries.len() > 1 {
+            other.eq_tag(self)
+        } else {
+            other.eq_slice(self.primary_tag.as_ref())
+        }
     }
 }
 
 impl AsRef<[u8]> for Tag {
     fn as_ref(&self) -> &[u8] {
         self.as_bytes()
+    }
+}
+
+impl PartialEq<[u8]> for Tag {
+    fn eq(&self, other: &[u8]) -> bool {
+        self.eq_slice(other).is_ok()
+    }
+}
+impl PartialEq<Vec<u8>> for Tag {
+    fn eq(&self, other: &Vec<u8>) -> bool {
+        self.eq_slice(other.as_slice()).is_ok()
+    }
+}
+
+impl PartialEq<Tag> for Tag {
+    fn eq(&self, other: &Self) -> bool {
+        self.eq_tag(other).is_ok()
+    }
+}
+impl PartialEq<&Tag> for Tag {
+    fn eq(&self, other: &&Self) -> bool {
+        self.eq_tag(other).is_ok()
+    }
+}
+impl PartialEq<Tag> for &Tag {
+    fn eq(&self, other: &Tag) -> bool {
+        other.eq_tag(self).is_ok()
+    }
+}
+
+impl PartialEq<Tag> for [u8] {
+    fn eq(&self, other: &Tag) -> bool {
+        other.eq_slice(self).is_ok()
+    }
+}
+impl Eq for Tag {}
+
+#[cfg(test)]
+mod tests {
+    use crate::mac::output::Output;
+
+    use super::*;
+
+    #[test]
+    fn test_verify() {
+        let mut hash_arr = [0; 32];
+        let id = crate::keyring::gen_id();
+        let id_bytes = id.to_be_bytes();
+        crate::rand::fill(&mut hash_arr);
+        let hash = blake3::Hash::from(hash_arr);
+        let output = Output::Blake3(crate::mac::output::Blake3Output::from(hash));
+        let entry = Entry::new(id, true, id_bytes.to_vec(), output.clone());
+        let tag = Tag::new(std::iter::once(entry));
+        let other = tag.clone();
+        assert_eq!(tag, other);
+
+        let output_1 = output;
+        let entry_1 = Entry::new(id, false, id_bytes.to_vec(), output_1);
+
+        let id_2 = crate::keyring::gen_id();
+        let id_bytes_2 = id_2.to_be_bytes();
+        let mut hash_arr_2 = [0; 32];
+        crate::rand::fill(&mut hash_arr_2);
+        let hash_2 = blake3::Hash::from(hash_arr_2);
+        let output_2 = Output::Blake3(crate::mac::output::Blake3Output::from(hash_2));
+        let entry_2 = Entry::new(id, true, id_bytes_2.to_vec(), output_2.clone());
+        let tag_2 = Tag::new([entry_1.clone(), entry_2].iter().cloned());
+
+        assert_eq!(tag, tag_2);
+
+        let entry_2 = Entry::new(id, false, id_bytes_2.to_vec(), output_2);
+        let id_3 = crate::keyring::gen_id();
+        let id_bytes_3 = id_3.to_be_bytes();
+        let mut hash_arr_3 = [0; 32];
+        crate::rand::fill(&mut hash_arr_3);
+        let hash_3 = blake3::Hash::from(hash_arr_3);
+        let output_3 = Output::Blake3(crate::mac::output::Blake3Output::from(hash_3));
+        let entry_3 = Entry::new(id, true, id_bytes_3.to_vec(), output_3);
+        let tag_3 = Tag::new([entry_1, entry_2, entry_3].iter().cloned());
+
+        assert_eq!(tag_2, tag_3);
     }
 }
