@@ -1,167 +1,187 @@
-use core::{
-    marker::PhantomData,
-    task::Poll::{self, *},
-};
+use core::ops::Deref;
 
-use futures::{Future, Stream, TryStream};
-use pin_project::pin_project;
+use alloc::{collections::VecDeque, vec::Vec};
+use futures::Stream;
+use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
 
-use crate::error::{MacVerificationError, VerifyTryStreamError};
+#[cfg(feature = "std")]
 
-use super::{verify::Verify, Compute, Mac, Tag};
+const BUFFER_SIZE: usize = 64; // Todo: profile this
 
-const BLOCK_SIZE: usize = 256; // todo: profile this
+use super::{ComputeStream, ComputeTryStream, Context, Mac, Material, Tag};
 
-pub trait StreamMac: Stream {
-    fn compute_mac(self, mac: &Mac) -> ComputeStream<Self, Self::Item>
+/// Generates a [`Tag`] for bytes using all keys in [`Mac`].
+pub struct Compute {
+    contexts: Vec<Context>,
+    #[cfg(not(feature = "std"))]
+    buffer: VecDeque<u8>,
+    #[cfg(feature = "std")]
+    buffer: Vec<u8>,
+}
+
+impl Compute {
+    pub fn new<M>(mac: M) -> Self
     where
-        Self: Sized,
-        Self::Item: AsRef<[u8]>,
+        M: AsRef<super::Mac>,
     {
-        ComputeStream::new(self, mac.into())
+        let keys = mac.as_ref().keyring().keys();
+        let mut contexts = Vec::with_capacity(keys.len());
+
+        for key in keys {
+            contexts.push(key.new_context());
+        }
+
+        #[cfg(feature = "std")]
+        {
+            Self {
+                contexts,
+                buffer: Vec::new(),
+            }
+        }
+        #[cfg(not(feature = "std"))]
+        Self {
+            primary_key,
+            contexts,
+            buffer: VecDeque::new(),
+        }
     }
 
-    fn verify_mac<T>(self, tag: T, mac: &Mac) -> VerifyStream<Self, Self::Item, T>
+    pub fn update(&mut self, data: &[u8]) {
+        self.buffer.extend(data.iter());
+
+        // there's no reason to keep a buffer if there's only one key
+        if self.contexts.len() == 1 {
+            let buf = self.buffer.split_off(0);
+            #[cfg(not(feature = "std"))]
+            let buf = buf.make_contiguous();
+            self.contexts[0].update(&buf);
+        }
+
+        // in the event there are mutliple keys, the data is buffered and
+        // chunked. This is because updates are possibly run in parallel,
+        // resulting in the potential memory usage of n * d where n is the
+        // number of keys and d is size of the data.
+        while self.buffer.len() >= BUFFER_SIZE {
+            let chunk: Vec<u8>;
+            let idx = if self.buffer.len() > BUFFER_SIZE {
+                BUFFER_SIZE
+            } else {
+                self.buffer.len()
+            };
+            #[cfg(feature = "std")]
+            {
+                let buf = self.buffer.split_off(idx);
+                chunk = std::mem::replace(&mut self.buffer, buf);
+            }
+            #[cfg(not(feature = "std"))]
+            {
+                chunk = self.buffer.drain(..idx).collect::<Vec<_>>();
+            }
+            self.update_chunk(chunk);
+        }
+    }
+    pub fn finalize(mut self) -> Tag {
+        let chunk: Vec<u8>;
+        #[cfg(feature = "std")]
+        {
+            chunk = self.buffer.split_off(0);
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            chunk = self.buffer.split_off(0).into()
+        }
+        self.update_chunk(chunk);
+        Tag::new(self.contexts.into_iter().map(|ctx| ctx.finalize()))
+    }
+
+    pub fn stream<S, D>(self, stream: S) -> ComputeStream<S, S::Item>
     where
-        Self: Sized,
-        Self::Item: AsRef<[u8]>,
-        T: AsRef<Tag> + Send + Sync,
+        D: AsRef<[u8]>,
+        S: Stream<Item = D>,
     {
-        let verify = Verify::new(tag, mac);
-        VerifyStream::new(self, verify)
+        ComputeStream::new(stream, self)
     }
-}
-impl<T> StreamMac for T
-where
-    T: Stream,
-    T::Item: AsRef<[u8]>,
-{
-}
 
-#[pin_project]
-pub struct ComputeStream<S, D>
-where
-    S: Stream<Item = D>,
-    D: AsRef<[u8]>,
-{
-    #[pin]
-    stream: S,
-    compute: Option<Compute>,
-    _phantom: PhantomData<D>,
-}
+    pub fn try_stream<S, D, E>(self, stream: S) -> ComputeTryStream<S, S::Ok, S::Error>
+    where
+        D: AsRef<[u8]>,
+        E: Send + Sync,
+        S: futures::TryStream<Ok = D, Error = E>,
+    {
+        ComputeTryStream::new(stream, self)
+    }
 
-impl<S, D> ComputeStream<S, D>
-where
-    S: Stream<Item = D>,
-    D: AsRef<[u8]>,
-{
-    pub fn new(stream: S, compute: Compute) -> Self {
-        let compute = Some(compute);
-        Self {
-            stream,
-            compute,
-            _phantom: PhantomData,
+    fn update_chunk(&mut self, chunk: Vec<u8>) {
+        if self.contexts.len() > 1 {
+            self.contexts.par_iter_mut().for_each(|ctx| {
+                ctx.update(&chunk);
+            });
+        } else {
+            self.contexts.iter_mut().for_each(|ctx| {
+                ctx.update(&chunk);
+            });
         }
     }
 }
 
-impl<S, D> Future for ComputeStream<S, D>
+impl<T> From<&T> for Compute
 where
-    S: Stream<Item = D>,
-    D: AsRef<[u8]>,
+    T: AsRef<Mac>,
 {
-    type Output = Tag;
-
-    fn poll(
-        self: core::pin::Pin<&mut Self>,
-        cx: &mut core::task::Context<'_>,
-    ) -> Poll<Self::Output> {
-        let mut this = self.project();
-
-        let mut compute = this.compute.take().unwrap();
-        loop {
-            match this.stream.as_mut().poll_next(cx) {
-                Ready(response) => match response {
-                    Some(data) => compute.update(data.as_ref()),
-                    None => return Poll::Ready(compute.finalize()),
-                },
-                Pending => {
-                    this.compute.replace(compute);
-                    return Pending;
-                }
-            };
-        }
+    fn from(mac: &T) -> Self {
+        Self::new(mac)
     }
 }
 
-#[pin_project]
-pub struct VerifyStream<S, D, T>
-where
-    S: Stream<Item = D>,
-    D: AsRef<[u8]>,
-    T: AsRef<Tag> + Send + Sync,
-{
-    #[pin]
-    stream: S,
-    verifier: Option<Verify<T>>,
-    _phantom: PhantomData<D>,
-}
-impl<S, D, T> VerifyStream<S, D, T>
-where
-    S: Stream<Item = D>,
-    D: AsRef<[u8]>,
-    T: AsRef<Tag> + Send + Sync,
-{
-    pub fn new(stream: S, verify: Verify<T>) -> Self {
-        let verifier = Some(verify);
-        Self {
-            stream,
-            verifier,
-            _phantom: PhantomData,
-        }
+#[cfg(feature = "std")]
+impl std::io::Write for Compute {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.update(buf);
+        Ok(buf.len())
     }
-}
 
-impl<S, D, T> Future for VerifyStream<S, D, T>
-where
-    S: Stream<Item = D>,
-    D: AsRef<[u8]>,
-    T: AsRef<Tag> + Send + Sync,
-{
-    type Output = Result<Tag, MacVerificationError>;
-    fn poll(
-        self: core::pin::Pin<&mut Self>,
-        cx: &mut core::task::Context<'_>,
-    ) -> Poll<Self::Output> {
-        let mut this = self.project();
-        let mut verifier = this.verifier.take().unwrap();
-        loop {
-            match this.stream.as_mut().poll_next(cx) {
-                Ready(response) => match response {
-                    Some(data) => verifier.update(data.as_ref()),
-                    None => return Poll::Ready(verifier.finalize()),
-                },
-                Pending => {
-                    this.verifier.replace(verifier);
-                    return Pending;
-                }
-            };
-        }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::mac::Algorithm;
+    use crate::mac::Algorithm::Sha256;
 
     use super::*;
-    use futures::future;
 
-    use futures::{stream, StreamExt};
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    #[test]
+    fn test_basic() {
+        let key = hex::decode("52fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649")
+            .unwrap();
+        let expected =
+            hex::decode("20fd9496199a45e414bdd82ce531ec681200ce459ab4a85239cc6076dc5de225")
+                .unwrap();
+        let mut mac = crate::mac::Mac::new_with_external_key(&key, Sha256, None, None).unwrap();
 
-    #[tokio::test]
-    async fn test_mac_stream() {
+        let mut hasher = Compute::new(&mac);
+        hasher.update(b"message");
+        let tag = hasher.finalize();
+        assert_eq!(tag.omit_header().as_ref(), &expected[..]);
+    }
+    #[test]
+    fn test_chunked() {
+        let key = hex::decode("52fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649")
+            .unwrap();
+        let mut mac = crate::mac::Mac::new_with_external_key(&key, Sha256, None, None).unwrap();
+
+        let second_key =
+            hex::decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
+                .unwrap();
+        let second_key = mac
+            .add_external_key(&second_key, Sha256, None, None)
+            .unwrap();
+        mac.promote_key(&second_key).unwrap();
+        let expected =
+            hex::decode("72fd211411c56848ccc90eafd19269a7fa1c3067d5bce20836575d786f828f4e")
+                .unwrap();
+
         let long_str = r#"[cia.gov](https://www.cia.gov/stories/story/navajo-code-talkers-and-the-unbreakable-code/)
 
         Navajo Code Talkers and the Unbreakable Code
@@ -253,25 +273,16 @@ mod tests {
         
         Tkin-Gloe-lh-A-Kha Ah-Ya-Tsinne-Tkin-Tsin-Tliti-Tse-Nill"#;
 
-        let hex_data = long_str.as_bytes().chunks(16).map(|c| c.to_vec());
-
-        let key = hex::decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
-            .unwrap();
-        let mac =
-            crate::mac::Mac::new_with_external_key(&key, Algorithm::Sha256, None, None).unwrap();
-
-        let id = mac.primary_key().id;
-
-        let stream_data = stream::iter(hex_data);
-        let computed = stream_data.compute_mac(&mac).await;
-        let expected =
-            hex::decode("72fd211411c56848ccc90eafd19269a7fa1c3067d5bce20836575d786f828f4e")
-                .unwrap();
-        println!(
-            "expected: {}72fd211411c56848ccc90eafd19269a7fa1c3067d5bce20836575d786f828f4e",
-            hex::encode(id.to_be_bytes())
-        );
-        println!("computed: {}", hex::encode(computed.primary_tag.as_ref()));
-        assert_eq!(&computed, &expected);
+        let mut hasher = Compute::new(&mac);
+        hasher.update(long_str.as_bytes());
+        let tag = hasher.finalize();
+        assert_eq!(tag.omit_header().as_ref().len(), expected[..].len());
+        assert_eq!(tag.omit_header().as_ref(), &expected[..]);
+        // assert_eq!(
+        //     tag.omit_header().as_ref(),
+        //     hex::decode("1b2dd9405426e0c7de12085c5ddd7fdee131064112cd6249ed4af2d2a3c69295")
+        //         .unwrap()
+        //         .as_slice()
+        // );
     }
 }

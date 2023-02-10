@@ -7,12 +7,15 @@ mod material;
 mod output;
 mod stream;
 mod tag;
+mod try_stream;
 mod verify;
 
 pub use algorithm::Algorithm;
 pub use compute::Compute;
 pub use key_info::MacKeyInfo;
-pub use stream::{ComputeStream, MacStream, VerifyStream};
+pub use stream::{ComputeStream, StreamMac, VerifyStream};
+pub use try_stream::{ComputeTryStream, TryStreamMac, VerifyTryStream};
+
 pub use tag::Tag;
 pub use verify::Verify;
 
@@ -39,6 +42,17 @@ impl Mac {
         Self {
             keyring: Keyring::new(material, Origin::Generated, meta),
         }
+    }
+
+    pub fn compute(&self) -> Compute {
+        Compute::new(self)
+    }
+
+    pub fn verify<T>(&self, tag: T) -> Verify<T>
+    where
+        T: AsRef<Tag> + Send + Sync,
+    {
+        Verify::new(tag, self)
     }
 
     /// Create a new MAC keyring by initializing it with the given key data as

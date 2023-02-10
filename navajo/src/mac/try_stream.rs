@@ -3,56 +3,58 @@ use core::{
     task::Poll::{self, *},
 };
 
-use futures::{Future, Stream, TryStream};
+use futures::{Future, TryStream};
 use pin_project::pin_project;
 
-use crate::error::{MacVerificationError, VerifyTryStreamError};
+use crate::error::VerifyTryStreamError;
 
 use super::{verify::Verify, Compute, Mac, Tag};
 
 const BLOCK_SIZE: usize = 256; // todo: profile this
 
-pub trait StreamMac: Stream {
-    fn compute_mac(self, mac: &Mac) -> ComputeStream<Self, Self::Item>
+pub trait TryStreamMac: TryStream {
+    fn compute_mac(self, mac: &Mac) -> ComputeTryStream<Self, Self::Ok, Self::Error>
     where
         Self: Sized,
-        Self::Item: AsRef<[u8]>,
+        Self::Ok: AsRef<[u8]>,
     {
-        ComputeStream::new(self, mac.into())
+        ComputeTryStream::new(self, mac.into())
     }
 
-    fn verify_mac<T>(self, tag: T, mac: &Mac) -> VerifyStream<Self, Self::Item, T>
+    fn verify_mac<T>(self, tag: T, mac: &Mac) -> VerifyTryStream<Self, Self::Ok, Self::Error, T>
     where
         Self: Sized,
-        Self::Item: AsRef<[u8]>,
+        Self::Ok: AsRef<[u8]>,
+        Self::Error: Send + Sync,
         T: AsRef<Tag> + Send + Sync,
     {
         let verify = Verify::new(tag, mac);
-        VerifyStream::new(self, verify)
+        VerifyTryStream::new(self, verify)
     }
 }
-impl<T> StreamMac for T
+
+impl<T> TryStreamMac for T
 where
-    T: Stream,
-    T::Item: AsRef<[u8]>,
+    T: TryStream,
+    T::Ok: AsRef<[u8]>,
 {
 }
 
 #[pin_project]
-pub struct ComputeStream<S, D>
+pub struct ComputeTryStream<S, D, E>
 where
-    S: Stream<Item = D>,
+    S: TryStream<Ok = D, Error = E>,
     D: AsRef<[u8]>,
 {
     #[pin]
     stream: S,
     compute: Option<Compute>,
-    _phantom: PhantomData<D>,
+    _phantom: PhantomData<(D, E)>,
 }
 
-impl<S, D> ComputeStream<S, D>
+impl<S, D, E> ComputeTryStream<S, D, E>
 where
-    S: Stream<Item = D>,
+    S: TryStream<Ok = D, Error = E>,
     D: AsRef<[u8]>,
 {
     pub fn new(stream: S, compute: Compute) -> Self {
@@ -65,13 +67,12 @@ where
     }
 }
 
-impl<S, D> Future for ComputeStream<S, D>
+impl<S, D, E> Future for ComputeTryStream<S, D, E>
 where
-    S: Stream<Item = D>,
+    S: TryStream<Ok = D, Error = E>,
     D: AsRef<[u8]>,
 {
-    type Output = Tag;
-
+    type Output = Result<Tag, E>;
     fn poll(
         self: core::pin::Pin<&mut Self>,
         cx: &mut core::task::Context<'_>,
@@ -80,10 +81,15 @@ where
 
         let mut compute = this.compute.take().unwrap();
         loop {
-            match this.stream.as_mut().poll_next(cx) {
+            match this.stream.as_mut().try_poll_next(cx) {
                 Ready(response) => match response {
-                    Some(data) => compute.update(data.as_ref()),
-                    None => return Poll::Ready(compute.finalize()),
+                    Some(res) => match res {
+                        Ok(data) => compute.update(data.as_ref()),
+                        Err(e) => {
+                            return Poll::Ready(Err(e));
+                        }
+                    },
+                    None => return Poll::Ready(Ok(compute.finalize())),
                 },
                 Pending => {
                     this.compute.replace(compute);
@@ -95,21 +101,23 @@ where
 }
 
 #[pin_project]
-pub struct VerifyStream<S, D, T>
+pub struct VerifyTryStream<S, D, E, T>
 where
-    S: Stream<Item = D>,
+    S: TryStream<Ok = D, Error = E>,
     D: AsRef<[u8]>,
     T: AsRef<Tag> + Send + Sync,
+    E: Send + Sync,
 {
     #[pin]
     stream: S,
     verifier: Option<Verify<T>>,
-    _phantom: PhantomData<D>,
+    _phantom: PhantomData<(T, E, D)>,
 }
-impl<S, D, T> VerifyStream<S, D, T>
+impl<S, D, E, T> VerifyTryStream<S, D, E, T>
 where
-    S: Stream<Item = D>,
+    S: TryStream<Ok = D, Error = E>,
     D: AsRef<[u8]>,
+    E: Send + Sync,
     T: AsRef<Tag> + Send + Sync,
 {
     pub fn new(stream: S, verify: Verify<T>) -> Self {
@@ -122,13 +130,14 @@ where
     }
 }
 
-impl<S, D, T> Future for VerifyStream<S, D, T>
+impl<S, D, E, T> Future for VerifyTryStream<S, D, E, T>
 where
-    S: Stream<Item = D>,
+    S: TryStream<Ok = D, Error = E>,
     D: AsRef<[u8]>,
     T: AsRef<Tag> + Send + Sync,
+    E: Send + Sync,
 {
-    type Output = Result<Tag, MacVerificationError>;
+    type Output = Result<Tag, VerifyTryStreamError<E>>;
     fn poll(
         self: core::pin::Pin<&mut Self>,
         cx: &mut core::task::Context<'_>,
@@ -136,10 +145,15 @@ where
         let mut this = self.project();
         let mut verifier = this.verifier.take().unwrap();
         loop {
-            match this.stream.as_mut().poll_next(cx) {
+            match this.stream.as_mut().try_poll_next(cx) {
                 Ready(response) => match response {
-                    Some(data) => verifier.update(data.as_ref()),
-                    None => return Poll::Ready(verifier.finalize()),
+                    Some(res) => match res {
+                        Ok(data) => verifier.update(data.as_ref()),
+                        Err(e) => {
+                            return Poll::Ready(Err(VerifyTryStreamError::Upstream(e)));
+                        }
+                    },
+                    None => return Poll::Ready(verifier.finalize().map_err(Into::into)),
                 },
                 Pending => {
                     this.verifier.replace(verifier);
@@ -155,7 +169,7 @@ mod tests {
     use crate::mac::Algorithm;
 
     use super::*;
-    use futures::future;
+    use futures::{future, TryStream, TryStreamExt};
 
     use futures::{stream, StreamExt};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -262,8 +276,11 @@ mod tests {
 
         let id = mac.primary_key().id;
 
-        let stream_data = stream::iter(hex_data);
-        let computed = stream_data.compute_mac(&mac).await;
+        fn to_try_stream(d: Vec<u8>) -> Result<Vec<u8>, String> {
+            Ok(d)
+        }
+        let stream_data = stream::iter(hex_data).map(to_try_stream);
+        let computed = stream_data.compute_mac(&mac).await.unwrap();
         let expected =
             hex::decode("72fd211411c56848ccc90eafd19269a7fa1c3067d5bce20836575d786f828f4e")
                 .unwrap();

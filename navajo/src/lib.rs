@@ -27,8 +27,6 @@ pub use mac::Mac;
 
 pub mod constant_time;
 
-pub mod aes;
-
 mod kms;
 pub use kms::{Kms, KmsSync};
 

@@ -423,11 +423,11 @@ impl<A> From<KeyNotFoundError> for DisableKeyError<A> {
 #[cfg(feature = "std")]
 impl<A> std::error::Error for DisableKeyError<A> where A: Debug {}
 
-pub enum VerifyMacStreamError<E> {
+pub enum VerifyTryStreamError<E> {
     Upstream(E),
     FailedVerification,
 }
-impl<E> From<MacVerificationError> for VerifyMacStreamError<E> {
+impl<E> From<MacVerificationError> for VerifyTryStreamError<E> {
     fn from(_: MacVerificationError) -> Self {
         Self::FailedVerification
     }
