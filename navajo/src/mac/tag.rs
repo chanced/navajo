@@ -172,7 +172,9 @@ impl Tag {
             omit_header: false,
         }
     }
-
+    pub(super) fn tag_count(&self) -> usize {
+        self.entries.len()
+    }
     fn eq_slice(&self, other: &[u8]) -> Result<(), MacVerificationError> {
         if other.len() == self.primary_tag.len()
             && verify_slices_are_equal(self.primary_tag.as_ref(), other).is_ok()

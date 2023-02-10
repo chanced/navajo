@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{key::KeyMaterial, mac::MacKeyInfo, Origin, Status};
+use crate::{mac::MacKeyInfo, KeyMaterial, Origin, Status};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Metadata for a particular key.
