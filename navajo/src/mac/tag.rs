@@ -1,9 +1,8 @@
-use super::{entry::Entry, material::Material};
+use super::entry::Entry;
 
 use crate::{
     constant_time::verify_slices_are_equal,
     error::{MacVerificationError, TruncationError},
-    Key,
 };
 use alloc::{sync::Arc, vec::Vec};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};

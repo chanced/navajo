@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::{error::InvalidKeyLength, Key, Origin, Status};

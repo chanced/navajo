@@ -47,10 +47,11 @@ impl RngCore for Random {
     }
 
     fn fill_bytes(&mut self, dest: &mut [u8]) {
+        OsRng.fill_bytes(dest);
         SystemRandom::new()
-            .fill(dest)
-            .ok()
-            .map_or(OsRng.fill_bytes(dest), |_| ())
+        .fill(dest)
+        .ok()
+        .map_or((), |_| ())
     }
 
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), random::Error> {

@@ -51,7 +51,7 @@ impl TryFrom<i8> for Status {
             0 => Ok(Self::Primary),
             1 => Ok(Self::Secondary),
             -1 => Ok(Self::Disabled),
-            _ => Err(format!("invalid key status: {}", i)),
+            _ => Err(format!("invalid key status: {i}")),
         }
     }
 }

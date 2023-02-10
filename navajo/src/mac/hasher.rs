@@ -46,7 +46,7 @@ impl Hasher {
 
         // there's no reason to keep a buffer if there's only one key
         if self.contexts.len() == 1 {
-            let mut buf = self.buffer.split_off(0);
+            let buf = self.buffer.split_off(0);
             #[cfg(not(feature = "std"))]
             let buf = buf.make_contiguous();
             self.contexts[0].update(&buf);

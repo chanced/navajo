@@ -1,4 +1,4 @@
-use crate::{key::Key, mac::output, Status};
+use crate::{key::Key, mac::output};
 
 use super::{
     entry::Entry,

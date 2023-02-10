@@ -1,4 +1,4 @@
-use core::fmt::{self, Debug, Display};
+use core::fmt::{self, Debug};
 
 use alloc::{
     borrow::Cow,
@@ -87,7 +87,7 @@ where
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DecryptStreamError::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
-            DecryptStreamError::KeyNotFound(k) => write!(f, "unknown key: {}", k),
+            DecryptStreamError::KeyNotFound(k) => write!(f, "unknown key: {k}"),
             DecryptStreamError::Malformed(e) => write!(f, "malformed ciphertext: {e}"),
             DecryptStreamError::Upstream(e) => fmt::Display::fmt(e, f),
         }
@@ -184,7 +184,7 @@ impl fmt::Display for DecryptError {
 #[cfg(feature = "std")]
 impl std::error::Error for DecryptError {}
 impl From<UnspecifiedError> for DecryptError {
-    fn from(e: UnspecifiedError) -> Self {
+    fn from(_e: UnspecifiedError) -> Self {
         Self::Unspecified
     }
 }
@@ -377,7 +377,7 @@ impl<A> fmt::Display for RemoveKeyError<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::IsPrimaryKey(_) => write!(f, "cannot remove primary key"),
-            Self::KeyNotFound(e) => write!(f, "{}", e),
+            Self::KeyNotFound(e) => write!(f, "{e}"),
         }
     }
 }
@@ -405,7 +405,7 @@ impl<A> fmt::Display for DisableKeyError<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::IsPrimaryKey(_) => write!(f, "cannot Disable primary key"),
-            Self::KeyNotFound(e) => write!(f, "{}", e),
+            Self::KeyNotFound(e) => write!(f, "{e}"),
         }
     }
 }

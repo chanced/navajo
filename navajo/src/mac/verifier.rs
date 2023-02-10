@@ -8,7 +8,7 @@ pub(super) struct Verifier {
 }
 impl Verifier {
     pub(super) fn new(keys: &[Key<Material>], tag: &Tag) -> Self {
-        let t = tag.as_ref();
+        let _t = tag.as_ref();
         let hasher = Hasher::new(keys);
         Self {
             tag: tag.clone(),

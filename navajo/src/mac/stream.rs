@@ -21,7 +21,7 @@ pub trait MacStream: TryStream {
         }
     }
 
-    fn verify_mac<M>(self, stream: Self, tag: M) -> VerifyMacStream<Self, Self::Ok, Self::Error>
+    fn verify_mac<M>(self, stream: Self, _tag: M) -> VerifyMacStream<Self, Self::Ok, Self::Error>
     where
         Self: Sized,
         Self::Ok: AsRef<[u8]>,
