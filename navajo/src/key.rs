@@ -101,7 +101,10 @@ where
     pub fn status(&self) -> Status {
         self.status
     }
-    pub(crate) fn material(&self) -> &M {
+    pub(crate) fn material(&self) -> Arc<M> {
+        self.material.clone()
+    }
+    pub(crate) fn material_ref(&self) -> &M {
         &self.material
     }
 

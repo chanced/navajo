@@ -8,61 +8,69 @@ use pin_project::pin_project;
 
 use crate::error::VerifyMacStreamError;
 
-use super::{verifier::Verifier, Hasher, Mac, Tag};
+use super::{verify::Verify, Compute, Mac, Tag};
 
 const BLOCK_SIZE: usize = 256; // todo: profile this
 
 pub trait MacStream: TryStream {
-    fn compute_mac<M>(self, mac: M) -> ComputeMacStream<Self, Self::Ok, Self::Error>
+    fn compute_mac(self, mac: &Mac) -> ComputeStream<Self, Self::Ok, Self::Error>
     where
-        M: AsRef<Mac>,
         Self: Sized,
         Self::Ok: AsRef<[u8]>,
-        Self::Error: Send + Sync,
     {
-        let mac = mac.as_ref();
-        ComputeMacStream {
-            stream: self,
-            hasher: Some(Hasher::new(mac.keyring.keys())),
-            _phantom: PhantomData,
-        }
+        ComputeStream::new(self, mac.into())
     }
 
-    fn verify_mac<T, M>(self, tag: T, mac: M) -> VerifyMacStream<Self, Self::Ok, Self::Error, T>
+    fn verify_mac<T>(self, tag: T, mac: &Mac) -> VerifyStream<Self, Self::Ok, Self::Error, T>
     where
         Self: Sized,
         Self::Ok: AsRef<[u8]>,
         Self::Error: Send + Sync,
         T: AsRef<Tag> + Send + Sync,
-        M: AsRef<Mac> + Send + Sync,
     {
-        let verifier = Some(Verifier::new(mac.as_ref().keyring.keys(), tag));
-        VerifyMacStream {
-            stream: self,
-            verifier,
+        let verify = Verify::new(tag, mac);
+        VerifyStream::new(self, verify)
+    }
+}
+
+impl<T> MacStream for T
+where
+    T: TryStream,
+    T::Ok: AsRef<[u8]>,
+{
+}
+
+#[pin_project]
+pub struct ComputeStream<S, D, E>
+where
+    S: TryStream<Ok = D, Error = E>,
+    D: AsRef<[u8]>,
+{
+    #[pin]
+    stream: S,
+    compute: Option<Compute>,
+    _phantom: PhantomData<(D, E)>,
+}
+
+impl<S, D, E> ComputeStream<S, D, E>
+where
+    S: TryStream<Ok = D, Error = E>,
+    D: AsRef<[u8]>,
+{
+    pub fn new(stream: S, compute: Compute) -> Self {
+        let compute = Some(compute);
+        Self {
+            stream,
+            compute,
             _phantom: PhantomData,
         }
     }
 }
 
-#[pin_project]
-pub struct ComputeMacStream<S, D, E>
+impl<S, D, E> Future for ComputeStream<S, D, E>
 where
     S: TryStream<Ok = D, Error = E>,
     D: AsRef<[u8]>,
-    E: Send + Sync,
-{
-    #[pin]
-    stream: S,
-    hasher: Option<Hasher>,
-    _phantom: PhantomData<(D, E)>,
-}
-
-impl<S, D, E> Future for ComputeMacStream<S, D, E>
-where
-    S: TryStream<Ok = D, Error = E>,
-    D: AsRef<[u8]>,
-    E: Send + Sync,
 {
     type Output = Result<Tag, E>;
     fn poll(
@@ -71,20 +79,20 @@ where
     ) -> Poll<Self::Output> {
         let mut this = self.project();
 
-        let mut hasher = this.hasher.take().unwrap();
+        let mut compute = this.compute.take().unwrap();
         loop {
             match this.stream.as_mut().try_poll_next(cx) {
                 Ready(response) => match response {
                     Some(res) => match res {
-                        Ok(data) => hasher.update(data.as_ref(), BLOCK_SIZE),
+                        Ok(data) => compute.update(data.as_ref(), BLOCK_SIZE),
                         Err(e) => {
                             return Poll::Ready(Err(e));
                         }
                     },
-                    None => return Poll::Ready(Ok(hasher.finalize())),
+                    None => return Poll::Ready(Ok(compute.finalize())),
                 },
                 Pending => {
-                    this.hasher.replace(hasher);
+                    this.compute.replace(compute);
                     return Pending;
                 }
             };
@@ -93,7 +101,7 @@ where
 }
 
 #[pin_project]
-pub struct VerifyMacStream<S, D, E, T>
+pub struct VerifyStream<S, D, E, T>
 where
     S: TryStream<Ok = D, Error = E>,
     D: AsRef<[u8]>,
@@ -102,11 +110,27 @@ where
 {
     #[pin]
     stream: S,
-    verifier: Option<Verifier<T>>,
+    verifier: Option<Verify<T>>,
     _phantom: PhantomData<(T, E, D)>,
 }
+impl<S, D, E, T> VerifyStream<S, D, E, T>
+where
+    S: TryStream<Ok = D, Error = E>,
+    D: AsRef<[u8]>,
+    T: AsRef<Tag> + Send + Sync,
+    E: Send + Sync,
+{
+    pub fn new(stream: S, verify: Verify<T>) -> Self {
+        let verifier = Some(verify);
+        Self {
+            stream,
+            verifier,
+            _phantom: PhantomData,
+        }
+    }
+}
 
-impl<S, D, E, T> Future for VerifyMacStream<S, D, E, T>
+impl<S, D, E, T> Future for VerifyStream<S, D, E, T>
 where
     S: TryStream<Ok = D, Error = E>,
     D: AsRef<[u8]>,
@@ -114,7 +138,6 @@ where
     E: Send + Sync,
 {
     type Output = Result<Tag, VerifyMacStreamError<E>>;
-
     fn poll(
         self: core::pin::Pin<&mut Self>,
         cx: &mut core::task::Context<'_>,
@@ -146,7 +169,7 @@ mod tests {
     use crate::mac::Algorithm;
 
     use super::*;
-    use futures::{TryStream, TryStreamExt};
+    use futures::{future, TryStream, TryStreamExt};
 
     use futures::{stream, StreamExt};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -244,17 +267,19 @@ mod tests {
         
         Tkin-Gloe-lh-A-Kha Ah-Ya-Tsinne-Tkin-Tsin-Tliti-Tse-Nill"#;
 
-        let hex_data: Vec<Vec<u8>> = hex::decode(long_str)
-            .unwrap()
-            .chunks(16)
-            .map(|c| c.to_vec())
-            .collect();
+        let hex_data = long_str.as_bytes().chunks(16).map(|c| c.to_vec());
 
+        let mac = Mac::new(Algorithm::Sha256, None);
+        let id = mac.primary_key().id;
+
+        println!("ID: {}", id);
         fn to_try_stream(d: Vec<u8>) -> Result<Vec<u8>, String> {
             Ok(d)
         }
-        let mac = Mac::new(Algorithm::Sha256, None);
         let stream_data = stream::iter(hex_data).map(to_try_stream);
-        stream_data.compute_mac(&mac).await.unwrap();
+        let computed = stream_data.compute_mac(&mac).await.unwrap();
+        println!("TAG: {}", hex::encode(computed.primary_tag.as_ref()));
+        println!("HEADER: {}", hex::encode(computed.primary_tag.as_ref()));
+        println!("Computed: {}", hex::encode(computed.as_bytes()));
     }
 }

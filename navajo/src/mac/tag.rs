@@ -1,51 +1,64 @@
 use super::entry::Entry;
-
 use crate::{
     constant_time::verify_slices_are_equal,
     error::{MacVerificationError, TruncationError},
+    Mac,
 };
 use alloc::{sync::Arc, vec::Vec};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
-/// [`Mac`] `Tag`s are used to verify the integrity of data.
+/// A data structure containing a MAC tag for each key in a [`Mac`](super::Mac)
+/// at the point of computation. Capable of comparing itself to other [`Tag`]s
+/// or `&[u8]`.
 ///
-/// The `Tag` will contain the the MAC data for each key within the keyring at
-/// the point of computation. If new keys are added to the keyring or keys need
-/// to be removed, tags can be updated by calling [`update`](Self::update),
-/// [`read_update`](Self::read_update), or
-/// [`stream_update`](Self::stream_update). This means that even if a key were
-/// to be removed from the keyring, the `Tag` will still contain the computed
-/// MAC for that key and will continue to be utilized to verify the integrity of
-/// data and, in the case of the primary key, be the source of output.
+/// ## Output
+/// When calling [`Self::as_bytes`] or [`Self::as_ref`], the primary key's
+/// output will returned. The default behavior is to return the full MAC with
+/// the header prefixed. If navajo generated the key, the MAC will be in the
+/// format:
 ///
-///
-/// When calling `as_bytes` or `as_ref`, the primary key's output will returned.
-/// The default behavior is to return the full MAC with the header prefixed. If
-/// navajo generated the key, the MAC will be in the format:
-/// ```text
-/// || Version (1 byte) || Key ID (4 bytes) || MAC (variable length based on algorithm) ||
+/// ```plaintext
+/// || Key ID (4 bytes) || MAC (variable length based on algorithm) ||
 /// ```
-/// To import a [`Tag`] from another source, such as Tink, the header can be set
-/// during construction by passing the prefix as the `prefix` argument to the
-/// [`new_with_external_key`](Mac::new_with_external_key) method. If the prefix
-/// is not set, the output will be the raw MAC bytes for external keys.
 ///
-/// To truncate the `Tag` to a specific length, a call to
-/// [`truncate`](Self::truncate) will clone the tag and assign the truncation
-/// size in the returned `Tag`. All uses of resulting `Tag` will be truncated,
-/// which includes the output (e.g. [`as_bytes`](Self::as_bytes),
+/// ### Omitting the header
+/// A call to [`Self::omit_header`] will return a [`clone`](Self::clone) of the
+/// `Tag` with a flag set indicating that the header should be omitted when
+/// represented as bytes. Any calls to [`Self::as_bytes`] or [`Self::as_ref`]
+/// will return the MAC bytes without the header.
+///
+/// ### Truncation
+/// To truncate the `Tag` to a specific length, a call to [`Self::truncate_to`]
+/// will [`clone`](Self::clone) the `Tag` and assign the truncation size in the
+/// returned `Tag`. All uses of resulting `Tag` will be truncated, which
+/// includes the output (e.g. [`as_bytes`](Self::as_bytes),
 /// [`as_ref`](Self::as_ref)) as well as for verification purposes.
+///
+/// ## Importing MAC tags
+/// To compute a `Tag` to match a different library, use a [`Mac`] with the
+/// provided key(s). To do so, create a new instance with
+/// [`Mac::new_with_external_tag`] or add to an existing keyring with
+/// [`Mac::add_external_key`]. For libraries such as
+/// [Tink](https://developers.google.com/tink) that use headers, make sure to
+/// include their prefix during construction by passing the `prefix` argument.
+///
+/// The output of external tags will be:
+/// ```plaintext
+/// || Prefix || MAC (variable length based on algorithm) ||
+/// ```
+/// The same rules apply for truncation and omitting the header (which would be
+/// the Prefix for external tags).
 ///
 #[derive(Clone, Debug)]
 pub struct Tag {
     entries: Arc<Vec<Entry>>,
     primary_idx: usize,
-    primary_tag: Arc<Vec<u8>>,
+    pub(super) primary_tag: Arc<Vec<u8>>,
     primary_tag_header_len: usize,
     truncate_to: Option<usize>,
     /// If true, the header will be omitted from the output of `as_bytes` and
     /// `as_ref`.
-    pub omit_header: bool,
+    omit_header: bool,
 }
 
 impl Tag {
@@ -68,7 +81,9 @@ impl Tag {
             primary_tag: self.primary_tag.clone(),
         }
     }
-
+    pub fn update(&mut self, mac: &Mac) {
+        todo!()
+    }
     /// Returns this a clone of this `Tag` with a flag set indicating that the
     /// header should be omitted when represented as bytes. Any calls to `as_bytes`
     /// or `as_ref` will return the MAC bytes without the header.
@@ -111,13 +126,6 @@ impl Tag {
     /// - If an algorithm in the keyset does not permit truncation.
     ///
     /// ## Example
-    /// ```rust
-    /// use navajo::{Mac, Algorithm};
-    /// let mac = Mac::new(Algorithm::HmacSha256);
-    /// let tag = mac.compute(b"foo").unwrap();
-    /// let truncated = tag.truncate(16).unwrap();
-    /// asssert_eq!(truncated.as_bytes().len(), 16);
-    /// ```
     pub fn truncate(&self, len: usize) -> Result<Self, TruncationError> {
         if len == 0 {
             return Ok(self.remove_truncation());

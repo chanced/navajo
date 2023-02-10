@@ -23,6 +23,7 @@ mod timestamp;
 pub mod hkdf;
 
 pub mod mac;
+pub use mac::Mac;
 
 pub mod constant_time;
 

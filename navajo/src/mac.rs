@@ -1,24 +1,25 @@
 mod algorithm;
+mod compute;
 mod context;
 mod entry;
-mod hasher;
+mod key_info;
 mod material;
 mod output;
 mod stream;
 mod tag;
-mod verifier;
+mod verify;
 
 pub use algorithm::Algorithm;
-pub use stream::{ComputeMacStream, MacStream, VerifyMacStream};
+pub use compute::Compute;
+pub use key_info::MacKeyInfo;
+pub use stream::{ComputeStream, MacStream, VerifyStream};
 pub use tag::Tag;
-
-pub use material::MacKeyInfo;
+pub use verify::Verify;
 
 use crate::error::{InvalidKeyLength, KeyNotFoundError, RemoveKeyError};
 use crate::{KeyInfo, Keyring, Origin};
 use alloc::vec::Vec;
 use context::*;
-use hasher::Hasher;
 use material::*;
 use output::Output;
 use output::{rust_crypto_internal_tag, rust_crypto_internal_tags};
@@ -33,7 +34,8 @@ impl Mac {
     pub fn new(algorithm: Algorithm, meta: Option<serde_json::value::Value>) -> Self {
         let bytes = algorithm.generate_key();
         // safe, the key is generated
-        let material = Material::new(Origin::Generated, &bytes, None, algorithm).unwrap();
+        let material = Material::new(&bytes, None, algorithm).unwrap();
+
         Self {
             keyring: Keyring::new(material, Origin::Generated, meta),
         }
@@ -48,7 +50,7 @@ impl Mac {
         meta: Option<serde_json::Value>,
     ) -> Result<Self, InvalidKeyLength> {
         // safe, the key is generated
-        let material = Material::new(Origin::External, key, prefix, algorithm)?;
+        let material = Material::new(key, prefix, algorithm)?;
         Ok(Self {
             keyring: Keyring::new(material, Origin::Generated, meta),
         })
@@ -124,8 +126,14 @@ impl Mac {
         origin: Origin,
         meta: Option<serde_json::Value>,
     ) -> Result<MacKeyInfo, InvalidKeyLength> {
-        let material = Material::new(origin, bytes, prefix, algorithm)?;
+        let material = Material::new(bytes, prefix, algorithm)?;
         Ok(MacKeyInfo::new(self.keyring.add(material, origin, meta)))
+    }
+}
+
+impl AsRef<Mac> for Mac {
+    fn as_ref(&self) -> &Self {
+        self
     }
 }
 

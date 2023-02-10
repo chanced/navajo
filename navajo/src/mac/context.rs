@@ -9,16 +9,16 @@ use super::{
 pub(super) struct Context {
     pub(super) key_id: u32,
     pub(super) is_primary: bool,
-    pub(super) header: Vec<u8>,
     pub(super) inner: ContextInner,
+    pub(super) header: Vec<u8>,
 }
 impl Context {
     pub(super) fn new(key: &Key<Material>) -> Self {
         Self {
             key_id: key.id(),
             is_primary: key.is_primary(),
-            header: key.header().to_vec(),
             inner: ContextInner::new(key.crypto_key()),
+            header: key.header(),
         }
     }
     pub(super) fn update(&mut self, data: &[u8]) {
@@ -254,6 +254,6 @@ macro_rules! rust_crypto_contexts {
         }
 	}
 }
-use alloc::boxed::Box;
+use alloc::{boxed::Box, sync::Arc};
 pub(super) use rust_crypto_context_inner;
 pub(super) use rust_crypto_contexts;
