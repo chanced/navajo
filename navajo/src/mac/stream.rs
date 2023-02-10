@@ -13,7 +13,7 @@ use super::{verifier::Verifier, Hasher, Mac, Tag};
 const BLOCK_SIZE: usize = 256; // todo: profile this
 
 pub trait MacStream: TryStream {
-    fn compute_mac<M>(self, stream: Self, mac: M) -> ComputeMacStream<Self, Self::Ok, Self::Error>
+    fn compute_mac<M>(self, mac: M) -> ComputeMacStream<Self, Self::Ok, Self::Error>
     where
         M: AsRef<Mac>,
         Self: Sized,
@@ -22,18 +22,13 @@ pub trait MacStream: TryStream {
     {
         let mac = mac.as_ref();
         ComputeMacStream {
-            stream,
+            stream: self,
             hasher: Some(Hasher::new(mac.keyring.keys())),
             _phantom: PhantomData,
         }
     }
 
-    fn verify_mac<T, M>(
-        self,
-        stream: Self,
-        tag: T,
-        mac: M,
-    ) -> VerifyMacStream<Self, Self::Ok, Self::Error, T>
+    fn verify_mac<T, M>(self, tag: T, mac: M) -> VerifyMacStream<Self, Self::Ok, Self::Error, T>
     where
         Self: Sized,
         Self::Ok: AsRef<[u8]>,
@@ -43,7 +38,7 @@ pub trait MacStream: TryStream {
     {
         let verifier = Some(Verifier::new(mac.as_ref().keyring.keys(), tag));
         VerifyMacStream {
-            stream,
+            stream: self,
             verifier,
             _phantom: PhantomData,
         }
@@ -253,11 +248,10 @@ mod tests {
             .map(|c| c.to_vec())
             .collect();
 
-        fn to_try_stream(d: Vec<u8>) -> Result<Vec<u8>, ()> {
+        fn to_try_stream(d: Vec<u8>) -> Result<Vec<u8>, String> {
             Ok(d)
         }
 
         let stream_data = stream::iter(hex_data).map(to_try_stream);
-        stream_data.compute_mac()
     }
 }
