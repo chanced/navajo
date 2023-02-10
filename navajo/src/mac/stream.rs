@@ -143,8 +143,10 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::mac::Algorithm;
+
     use super::*;
-    use futures::TryStream;
+    use futures::{TryStream, TryStreamExt};
 
     use futures::{stream, StreamExt};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -251,7 +253,8 @@ mod tests {
         fn to_try_stream(d: Vec<u8>) -> Result<Vec<u8>, String> {
             Ok(d)
         }
-
+        let mac = Mac::new(Algorithm::Sha256, None);
         let stream_data = stream::iter(hex_data).map(to_try_stream);
+        stream_data.compute_mac(&mac).await.unwrap();
     }
 }
