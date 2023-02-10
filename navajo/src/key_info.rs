@@ -22,6 +22,19 @@ where
         self.id == other.id && self.algorithm == other.algorithm
     }
 }
+
+impl From<MacKeyInfo> for KeyInfo<crate::mac::Algorithm> {
+    fn from(info: MacKeyInfo) -> Self {
+        Self {
+            id: info.id,
+            algorithm: info.algorithm,
+            origin: info.origin,
+            status: info.status,
+            meta: info.meta,
+        }
+    }
+}
+
 impl<A> Eq for KeyInfo<A> where A: Eq {}
 impl<A> From<KeyInfo<A>> for u32 {
     fn from(ki: KeyInfo<A>) -> Self {
@@ -31,16 +44,5 @@ impl<A> From<KeyInfo<A>> for u32 {
 impl<A> From<&KeyInfo<A>> for u32 {
     fn from(ki: &KeyInfo<A>) -> Self {
         ki.id
-    }
-}
-impl From<MacKeyInfo> for KeyInfo<crate::mac::Algorithm> {
-    fn from(info: MacKeyInfo) -> Self {
-        Self {
-            id: info.id,
-            algorithm: info.algorithm,
-            origin: info.origin,
-            status: info.status,
-            meta: info.meta.map(Arc::new),
-        }
     }
 }

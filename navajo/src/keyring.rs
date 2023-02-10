@@ -438,7 +438,7 @@ mod tests {
             let first = keyring.primary_key();
             let first_id = first.id();
             assert_eq!(first.status(), Status::Primary);
-            assert_eq!(first.meta(), Some("test".into()).as_ref());
+            assert_eq!(first.meta_as_ref(), Some("test".into()).as_ref());
             assert_eq!(first.origin(), Origin::Generated);
             assert_ne!(first.id(), 0);
             assert_eq!(first.algorithm(), Algorithm::Pancakes);

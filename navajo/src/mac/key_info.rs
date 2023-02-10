@@ -1,3 +1,5 @@
+use alloc::sync::Arc;
+
 use crate::{key::Key, Status};
 
 use super::Algorithm;
@@ -7,7 +9,7 @@ pub struct MacKeyInfo {
     pub origin: crate::Origin,
     pub algorithm: Algorithm,
     pub status: Status,
-    pub meta: Option<serde_json::Value>,
+    pub meta: Option<Arc<serde_json::Value>>,
     /// The prefix provided during creation of an external key, if any.
     pub external_prefix: Option<Vec<u8>>,
     /// The header is prepended to all [`Tag`]s generated with this key unless
@@ -27,7 +29,7 @@ impl MacKeyInfo {
             status: key.status(),
             external_prefix: key.material().prefix().map(|p| p.to_vec()),
             header: key.header().to_vec(),
-            meta: key.meta().cloned(),
+            meta: key.meta().clone(),
         }
     }
 }

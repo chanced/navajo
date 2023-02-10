@@ -45,9 +45,13 @@ where
     pub(crate) fn id(&self) -> u32 {
         self.id
     }
-    pub(crate) fn meta(&self) -> Option<&Value> {
+    pub(crate) fn meta(&self) -> Option<Arc<Value>> {
+        self.meta.clone()
+    }
+    pub(crate) fn meta_as_ref(&self) -> Option<&Value> {
         self.meta.as_ref().map(Arc::as_ref)
     }
+
     pub(crate) fn can_delete(&self) -> bool {
         !self.status.is_primary()
     }
@@ -231,8 +235,8 @@ pub(crate) mod test {
             Material::new(Algorithm::Pancakes),
             Some("(╯°□°）╯︵ ┻━┻".into()),
         );
-        assert_eq!(key.meta(), Some("(╯°□°）╯︵ ┻━┻".into()).as_ref());
+        assert_eq!(key.meta_as_ref(), Some("(╯°□°）╯︵ ┻━┻".into()).as_ref());
         key.update_meta(Some("┬─┬ノ( º _ ºノ)".into()));
-        assert_eq!(key.meta(), Some("┬─┬ノ( º _ ºノ)".into()).as_ref());
+        assert_eq!(key.meta_as_ref(), Some("┬─┬ノ( º _ ºノ)".into()).as_ref());
     }
 }
