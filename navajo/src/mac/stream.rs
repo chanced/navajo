@@ -3,10 +3,10 @@ use core::{
     task::Poll::{self, *},
 };
 
-use futures::{Future, Stream, TryStream};
+use futures::{Future, Stream};
 use pin_project::pin_project;
 
-use crate::error::{MacVerificationError, VerifyTryStreamError};
+use crate::error::{MacVerificationError};
 
 use super::{verify::Verify, Compute, Mac, Tag};
 
@@ -155,10 +155,10 @@ mod tests {
     use crate::mac::Algorithm;
 
     use super::*;
-    use futures::future;
+    
 
     use futures::{stream, StreamExt};
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    
 
     #[tokio::test]
     async fn test_mac_stream() {

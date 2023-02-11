@@ -1,5 +1,5 @@
 use crate::{key::Key, mac::output};
-use alloc::{boxed::Box, sync::Arc};
+use alloc::{boxed::Box};
 
 use super::{
     entry::Entry,

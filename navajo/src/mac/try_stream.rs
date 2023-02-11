@@ -169,10 +169,10 @@ mod tests {
     use crate::mac::Algorithm;
 
     use super::*;
-    use futures::{future, TryStream, TryStreamExt};
+    
 
     use futures::{stream, StreamExt};
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    
 
     #[tokio::test]
     async fn test_mac_stream() {

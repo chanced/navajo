@@ -1,7 +1,7 @@
-use ring::error::Unspecified;
-use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::error::UnspecifiedError;
+
+
+
 
 use super::Algorithm;
 
@@ -72,8 +72,8 @@ impl Cipher {
 #[cfg(feature = "ring")]
 fn ring_key(algorithm: &'static ring::aead::Algorithm, key: &[u8]) -> ring::aead::LessSafeKey {
     let unbounded = ring::aead::UnboundKey::new(algorithm, key).unwrap(); // safe, keys are only generated and are always the correct size
-    let less_safe = ring::aead::LessSafeKey::new(unbounded);
-    less_safe
+    
+    ring::aead::LessSafeKey::new(unbounded)
 }
 
 pub(super) struct RingCipher(ring::aead::LessSafeKey);

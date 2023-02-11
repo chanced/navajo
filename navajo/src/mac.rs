@@ -20,7 +20,7 @@ pub use tag::Tag;
 pub use verify::Verify;
 
 use crate::error::{InvalidKeyLength, KeyNotFoundError, RemoveKeyError};
-use crate::{KeyInfo, Keyring, Origin};
+use crate::{Keyring, Origin};
 use alloc::vec::Vec;
 use context::*;
 use material::*;

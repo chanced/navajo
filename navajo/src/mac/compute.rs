@@ -1,6 +1,6 @@
-use core::ops::Deref;
 
-use alloc::{collections::VecDeque, vec::Vec};
+
+use alloc::{vec::Vec};
 use futures::Stream;
 use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
 
@@ -8,7 +8,7 @@ use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
 
 const BUFFER_SIZE: usize = 64; // Todo: profile this
 
-use super::{ComputeStream, ComputeTryStream, Context, Mac, Material, Tag};
+use super::{ComputeStream, ComputeTryStream, Context, Mac, Tag};
 
 /// Generates a [`Tag`] for bytes using all keys in [`Mac`].
 pub struct Compute {
@@ -158,7 +158,7 @@ mod tests {
         let expected =
             hex::decode("20fd9496199a45e414bdd82ce531ec681200ce459ab4a85239cc6076dc5de225")
                 .unwrap();
-        let mut mac = crate::mac::Mac::new_with_external_key(&key, Sha256, None, None).unwrap();
+        let mac = crate::mac::Mac::new_with_external_key(&key, Sha256, None, None).unwrap();
 
         let mut hasher = Compute::new(&mac);
         hasher.update(b"message");

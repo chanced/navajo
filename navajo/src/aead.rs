@@ -22,7 +22,7 @@ pub use method::Method;
 pub use segment::Segment;
 pub use size::Size;
 // use cipher::{ciphers, ring_ciphers, Cipher};
-use cipher::Cipher;
+
 use material::Material;
 
 pub struct Aead {
@@ -432,9 +432,9 @@ impl Aead {
 #[cfg(test)]
 mod tests {
 
-    use std::io::Cursor;
+    
 
-    use super::*;
+    
     // // use crate::rand::*;
     // #[test]
     // fn test_encrypt_produces_correct_header() -> Result<(), Box<dyn std::error::Error>> {

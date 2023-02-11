@@ -1,4 +1,4 @@
-use core::fmt::{self, write};
+use core::fmt::{self};
 
 use serde::{Deserialize, Serialize};
 

@@ -90,7 +90,7 @@ impl Entry {
 
 #[cfg(test)]
 mod tests {
-    use crate::mac::output::Blake3Output;
+    
 
     use super::Output;
     use super::*;

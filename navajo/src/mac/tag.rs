@@ -81,7 +81,7 @@ impl Tag {
             primary_tag: self.primary_tag.clone(),
         }
     }
-    pub fn update(&mut self, mac: &Mac) {
+    pub fn update(&mut self, _mac: &Mac) {
         todo!()
     }
     /// Returns this a clone of this `Tag` with a flag set indicating that the
