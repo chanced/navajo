@@ -1,6 +1,6 @@
 use core::mem;
 
-use alloc::{collections::VecDeque, vec::Vec};
+use alloc::{vec::Vec};
 use futures::Stream;
 use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
 
@@ -46,20 +46,20 @@ impl Compute {
         // resulting in the potential memory usage of n * d where n is the
         // number of keys and d is size of the data.
         while self.buffer.len() >= BUFFER_SIZE {
-            let chunk: Vec<u8>;
+            
             let idx = if self.buffer.len() > BUFFER_SIZE {
                 BUFFER_SIZE
             } else {
                 self.buffer.len()
             };
             let buf = self.buffer.split_off(idx);
-            chunk = mem::replace(&mut self.buffer, buf);
+            let chunk: Vec<u8> = mem::replace(&mut self.buffer, buf);
             self.update_chunk(chunk);
         }
     }
     pub fn finalize(mut self) -> Tag {
-        let chunk: Vec<u8>;
-        chunk = mem::take(&mut self.buffer);
+        
+        let chunk: Vec<u8> = mem::take(&mut self.buffer);
         self.update_chunk(chunk);
         Tag::new(self.contexts.into_iter().map(|ctx| ctx.finalize()))
     }

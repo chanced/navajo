@@ -1,5 +1,5 @@
 use alloc::vec;
-use alloc::vec::Vec;
+
 use zeroize::ZeroizeOnDrop;
 
 use super::cipher::Cipher;

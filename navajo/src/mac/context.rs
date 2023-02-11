@@ -1,5 +1,5 @@
 use crate::{key::Key, mac::output};
-use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 
 use super::{
     entry::Entry,
