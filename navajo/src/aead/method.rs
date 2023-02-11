@@ -13,7 +13,7 @@ pub enum Method {
     /// Header wireformat is:
     ///
     /// ```plaintext
-    /// || Method (1) || KeyID (4) || Nonce (Algorithm Nonce) ||
+    /// || Method (1) || Key Id (4) || Nonce (Algorithm Nonce) ||
     /// ```
     Online,
     /// streamed with a constant segment size using the STREAM method as described by
@@ -21,8 +21,8 @@ pub enum Method {
     ///
     /// Header wireformat is:
     /// ```plaintext
-    /// || Method (1) || KeyID (4) || Salt (Algorithm Key) || Nonce Prefix (Algorithm Nonce Prefix) ||
-    StreamHmacSha256(Segment),
+    /// || Method (1) || Key Id (4) || Salt (Algorithm Key Size) || Nonce Prefix (Algorithm Nonce Prefix Size) ||
+    StreamingHmacSha256(Segment),
 }
 impl Method {
     pub fn is_online(self) -> bool {
@@ -30,7 +30,7 @@ impl Method {
     }
 
     pub fn is_stream(self) -> bool {
-        matches!(self, Method::StreamHmacSha256(_))
+        matches!(self, Method::StreamingHmacSha256(_))
     }
 
     pub fn header_len(&self, algorithm: Algorithm) -> usize {
@@ -38,7 +38,7 @@ impl Method {
             // method + key id + nonce
             Method::Online => Method::len() + KEY_ID_LEN + algorithm.nonce_len(),
             // method + key id + salt + nonce prefix
-            Method::StreamHmacSha256(_) => {
+            Method::StreamingHmacSha256(_) => {
                 Method::len() + KEY_ID_LEN + algorithm.key_len() + algorithm.nonce_prefix_len()
             }
         }
@@ -52,7 +52,7 @@ impl From<Method> for u8 {
     fn from(method: Method) -> Self {
         match method {
             Method::Online => 0,
-            Method::StreamHmacSha256(segment) => match segment {
+            Method::StreamingHmacSha256(segment) => match segment {
                 Segment::FourKB => 1,
                 Segment::SixtyFourKB => 2,
                 Segment::OneMB => 3,
@@ -81,9 +81,9 @@ impl TryFrom<u8> for Method {
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Method::Online),
-            1 => Ok(Method::StreamHmacSha256(Segment::FourKB)),
-            2 => Ok(Method::StreamHmacSha256(Segment::SixtyFourKB)),
-            3 => Ok(Method::StreamHmacSha256(Segment::OneMB)),
+            1 => Ok(Method::StreamingHmacSha256(Segment::FourKB)),
+            2 => Ok(Method::StreamingHmacSha256(Segment::SixtyFourKB)),
+            3 => Ok(Method::StreamingHmacSha256(Segment::OneMB)),
             _ => Err("missing or unknown encryption method".into()),
         }
     }

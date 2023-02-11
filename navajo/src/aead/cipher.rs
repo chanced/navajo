@@ -1,8 +1,3 @@
-
-
-
-
-
 use super::Algorithm;
 
 #[allow(clippy::large_enum_variant)]
@@ -72,7 +67,7 @@ impl Cipher {
 #[cfg(feature = "ring")]
 fn ring_key(algorithm: &'static ring::aead::Algorithm, key: &[u8]) -> ring::aead::LessSafeKey {
     let unbounded = ring::aead::UnboundKey::new(algorithm, key).unwrap(); // safe, keys are only generated and are always the correct size
-    
+
     ring::aead::LessSafeKey::new(unbounded)
 }
 

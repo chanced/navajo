@@ -43,7 +43,7 @@ impl Aead {
     pub fn primary_key(&self) -> AeadKeyInfo {
         self.keyring.primary_key().into()
     }
-    /// Returns a [`Vec`] containing a [`KeyInfo`](crate::key::KeyInfo) for each key in this keyring.
+    /// Returns a [`Vec`] containing [`AeadKeyInfo`] for each key in this keyring.
     pub fn keys(&self) -> Vec<AeadKeyInfo> {
         self.keyring.keys().iter().map(AeadKeyInfo::new).collect()
     }
@@ -432,9 +432,6 @@ impl Aead {
 #[cfg(test)]
 mod tests {
 
-    
-
-    
     // // use crate::rand::*;
     // #[test]
     // fn test_encrypt_produces_correct_header() -> Result<(), Box<dyn std::error::Error>> {
