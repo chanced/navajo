@@ -1,6 +1,4 @@
-#[cfg(not(feature = "std"))]
-use alloc::collections::VecDeque;
-use alloc::vec::Vec;
+use alloc::{collections::VecDeque, vec::Vec};
 use ring::error::Unspecified;
 
 use crate::Aead;
@@ -10,12 +8,12 @@ use super::{cipher::Cipher, Algorithm, Segment};
 pub struct Encryptor {
     key_id: u32,
     algorithm: Algorithm,
-    cipher: Cipher,
+    cipher: Option<Cipher>,
     segment_size: Option<Segment>,
     #[cfg(feature = "std")]
     buffer: Vec<u8>,
     #[cfg(not(feature = "std"))]
-    buffer: VecDeque,
+    buffer: VecDeque<u8>,
     ciphertext: Vec<u8>,
 }
 
@@ -23,11 +21,10 @@ impl Encryptor {
     pub fn new(aead: &Aead, segment_size: Option<Segment>) -> Self {
         let key = aead.keyring.primary_key();
         let algorithm = key.algorithm();
-        let cipher = Cipher::new(algorithm, key.bytes());
         Self {
             key_id: key.id(),
             algorithm,
-            cipher,
+            cipher: None,
             #[cfg(feature = "std")]
             buffer: Vec::new(),
             #[cfg(not(feature = "std"))]
@@ -37,9 +34,20 @@ impl Encryptor {
         }
     }
 
+    pub fn push(&mut self, data: &[u8]) {
+        let mut v: VecDeque<u8> = VecDeque::default();
+        v.extend(data.iter());
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "std")] {{
+                    self.buffer.extend_from_slice(data);
+            }}
+            else {{
+                self.buffer.extend(data);
+            }}
+        }
+    }
+
     pub fn update(&mut self) -> Result<(), Unspecified> {
-        // let s: ring::aead::SealingKey ;
-        // s.seal_in_place_append_tag(aad, in_out)
         todo!()
     }
 }

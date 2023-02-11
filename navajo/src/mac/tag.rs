@@ -197,6 +197,9 @@ impl Tag {
         Err(MacVerificationError)
     }
     fn eq_tag(&self, other: &Tag) -> Result<(), MacVerificationError> {
+        // TODO: optimize this. Compare heeaders first. Only compare the tag bytes if they match.
+        // If none match, compare the tag against those without headers.
+
         if self.entries.len() > 1 {
             if other.entries.len() > 1 {
                 self.entries
@@ -288,7 +291,7 @@ mod tests {
         let hash = blake3::Hash::from(hash_arr);
         let output = Output::Blake3(crate::mac::output::Blake3Output::from(hash));
         let entry = Entry::new(id, true, id_bytes.to_vec(), output.clone());
-        let tag = Tag::new(std::iter::once(entry));
+        let tag = Tag::new(core::iter::once(entry));
         let other = tag.clone();
         assert_eq!(tag, other);
 

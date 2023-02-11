@@ -35,7 +35,7 @@ features = ["alloc", "zeroize_derive", "serde"]
 [dependencies.hex]
 version = "0.4"
 default-features = false
-features = ["serde"]
+features = ["serde", "alloc"]
 
 # paste
 [dependencies.paste]
@@ -188,7 +188,7 @@ version = "0.3"
 
 [features]
 default = [
-	"std",
+	# "std",
 	"ring",
 	"aead",
 	"signature",

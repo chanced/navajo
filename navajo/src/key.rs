@@ -20,7 +20,7 @@ where
     id: u32,
     status: Status,
     origin: Origin,
-    material: Arc<M>,
+    material: M,
     meta: Option<Arc<Value>>,
 }
 impl<M> Key<M>
@@ -38,7 +38,7 @@ where
             id,
             status,
             origin,
-            material: Arc::new(material),
+            material,
             meta: meta.map(Arc::new),
         }
     }
@@ -105,8 +105,8 @@ where
     pub fn status(&self) -> Status {
         self.status
     }
-    pub(crate) fn material(&self) -> Arc<M> {
-        self.material.clone()
+    pub(crate) fn material(&self) -> &M {
+        &self.material
     }
     pub(crate) fn material_ref(&self) -> &M {
         &self.material
@@ -167,7 +167,7 @@ pub(crate) mod test {
         FrenchToast,
         Cereal,
     }
-    #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Zeroize, ZeroizeOnDrop)]
+    #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, ZeroizeOnDrop)]
     pub(crate) struct Material {
         #[zeroize(skip)]
         algorithm: Algorithm,
@@ -186,8 +186,6 @@ pub(crate) mod test {
             self.algorithm
         }
     }
-
-    use zeroize::Zeroize;
 
     use super::*;
     #[test]

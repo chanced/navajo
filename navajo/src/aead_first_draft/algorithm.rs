@@ -1,4 +1,4 @@
-// use ring::aead::{LessSafeKey, UnboundKey};
+use ring::aead::{LessSafeKey, UnboundKey};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Copy, Debug)]
@@ -51,15 +51,15 @@ impl Algorithm {
         self.ring().key_len()
     }
 
-    // fn ring(&self) -> &'static ring::aead::Algorithm {
-    //     match self {
-    //         Algorithm::ChaCha20Poly1305 => &ring::aead::CHACHA20_POLY1305,
-    //         Algorithm::Aes128Gcm => &ring::aead::AES_128_GCM,
-    //         Algorithm::Aes256Gcm => &ring::aead::AES_256_GCM,
-    //     }
-    // }
+    fn ring(&self) -> &'static ring::aead::Algorithm {
+        match self {
+            Algorithm::ChaCha20Poly1305 => &ring::aead::CHACHA20_POLY1305,
+            Algorithm::Aes128Gcm => &ring::aead::AES_128_GCM,
+            Algorithm::Aes256Gcm => &ring::aead::AES_256_GCM,
+        }
+    }
 
-    // pub(super) fn load_key(&self, key: &[u8]) -> Result<LessSafeKey, ring::error::Unspecified> {
-    //     UnboundKey::new(self.ring(), key).map(LessSafeKey::new)
-    // }
+    pub(super) fn load_key(&self, key: &[u8]) -> Result<LessSafeKey, ring::error::Unspecified> {
+        UnboundKey::new(self.ring(), key).map(LessSafeKey::new)
+    }
 }

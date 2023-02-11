@@ -10,6 +10,7 @@ mod method;
 mod segment;
 mod size;
 
+use alloc::vec::Vec;
 pub use key_info::AeadKeyInfo;
 
 use crate::{

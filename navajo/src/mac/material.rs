@@ -1,9 +1,7 @@
-
-
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::{error::InvalidKeyLength, Key};
+use crate::{bytes::SensitiveBytes, error::InvalidKeyLength, Key};
 
 use super::Algorithm;
 
@@ -11,10 +9,8 @@ use super::Algorithm;
 pub(super) struct Material {
     #[zeroize(skip)]
     pub(super) algorithm: Algorithm,
-    #[zeroize(skip)]
-    inner: CryptoKey,
-    pub(super) bytes: Vec<u8>,
-    pub(super) prefix: Option<Vec<u8>>,
+    pub(super) bytes: SensitiveBytes,
+    pub(super) prefix: Option<SensitiveBytes>,
 }
 impl PartialEq for Material {
     fn eq(&self, other: &Self) -> bool {
@@ -33,18 +29,19 @@ impl Material {
         prefix: Option<&[u8]>,
         algorithm: Algorithm,
     ) -> Result<Self, InvalidKeyLength> {
-        let key = CryptoKey::new(algorithm, bytes)?;
+        algorithm.validate_key_len(bytes.len())?;
+        let bytes = SensitiveBytes(Arc::from(bytes));
         Ok(Self {
             algorithm,
-            inner: key,
-            bytes: bytes.to_vec(),
-            prefix: prefix.map(|p| p.to_vec()),
+            bytes,
+            prefix: prefix.map(Into::into),
         })
     }
 }
 impl Key<Material> {
-    pub(super) fn crypto_key(&self) -> &CryptoKey {
-        &self.material_ref().inner
+    pub(super) fn crypto_key(&self) -> CryptoKey {
+        // safety: key length is validated on Material creation
+        CryptoKey::new(self.algorithm(), self.material().bytes.as_ref()).unwrap()
     }
 
     pub(super) fn new_context(&self) -> super::Context {
@@ -54,7 +51,12 @@ impl Key<Material> {
     pub(super) fn header(&self) -> Vec<u8> {
         match self.origin() {
             crate::Origin::Generated => self.id().to_be_bytes().to_vec(),
-            crate::Origin::External => self.material().prefix.clone().unwrap_or(Vec::new()),
+            crate::Origin::External => self
+                .material()
+                .prefix
+                .clone()
+                .map(|b| b.to_vec())
+                .unwrap_or(Vec::default()),
         }
     }
 }
@@ -74,16 +76,28 @@ pub(super) enum CryptoKey {
     Blake3(Box<blake3::Hasher>),
 }
 #[cfg(feature = "blake3")]
-impl From<blake3::Hasher> for CryptoKey {
-    fn from(key: blake3::Hasher) -> Self {
-        Self::Blake3(Box::new(key))
+impl From<Box<blake3::Hasher>> for CryptoKey {
+    fn from(key: Box<blake3::Hasher>) -> Self {
+        Self::Blake3(key)
     }
 }
+#[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+impl From<Box<ring::hmac::Key>> for CryptoKey {
+    fn from(key: Box<ring::hmac::Key>) -> Self {
+        Self::Ring(key)
+    }
+}
+impl From<Box<crate::mac::RustCryptoKey>> for CryptoKey {
+    fn from(key: Box<crate::mac::RustCryptoKey>) -> Self {
+        Self::RustCrypto(key)
+    }
+}
+
 impl CryptoKey {
     pub(super) fn new(algorithm: Algorithm, bytes: &[u8]) -> Result<Self, InvalidKeyLength> {
         algorithm.validate_key_len(bytes.len())?;
         match algorithm {
-            #[cfg(all(feature = "ring"))]
+            #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
             Algorithm::Sha256 => Ok(Self::Ring(Box::new(ring::hmac::Key::new(
                 ring::hmac::HMAC_SHA256,
                 bytes,
@@ -163,7 +177,7 @@ macro_rules! rust_crypto_keys {
                 )*
             }
             impl core::fmt::Debug for RustCryptoKey {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> std::fmt::Result {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                     f.debug_struct("RustCryptoKey").finish()
                 }
             }

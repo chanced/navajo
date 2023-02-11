@@ -1,4 +1,5 @@
 use super::size::{AES_128_GCM, AES_256_GCM, CHACHA20_POLY1305, XCHACHA20_POLY1305};
+use alloc::string::String;
 use serde::{Deserialize, Serialize};
 
 use super::Size;

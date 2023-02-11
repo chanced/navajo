@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use super::Method;
 #[derive(Clone)]
 pub(super) struct PartialHeader {

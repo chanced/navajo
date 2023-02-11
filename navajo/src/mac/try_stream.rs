@@ -169,11 +169,10 @@ mod tests {
     use crate::mac::Algorithm;
 
     use super::*;
-    
 
     use futures::{stream, StreamExt};
-    
 
+    #[cfg(feature = "std")]
     #[tokio::test]
     async fn test_mac_stream() {
         let long_str = r#"[cia.gov](https://www.cia.gov/stories/story/navajo-code-talkers-and-the-unbreakable-code/)

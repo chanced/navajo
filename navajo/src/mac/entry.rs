@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use crate::{constant_time::verify_slices_are_equal, error::MacVerificationError};
 
 use super::output::{DigestOutput, Output};
@@ -90,7 +92,6 @@ impl Entry {
 
 #[cfg(test)]
 mod tests {
-    
 
     use super::Output;
     use super::*;

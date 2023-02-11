@@ -1,9 +1,7 @@
 use core::fmt;
 
 const FOUR_KB: u32 = 4096;
-
 const SIXTY_FOUR_KB: u32 = 65536;
-
 const ONE_MB: u32 = 1048576;
 
 /// Defines the size of the block segments used during STREAM encryption /
@@ -11,7 +9,6 @@ const ONE_MB: u32 = 1048576;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Segment {
     FourKB,
-    SixtyFourKB,
     OneMB,
 }
 impl Segment {

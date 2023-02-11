@@ -192,5 +192,6 @@ macro_rules! rust_crypto_internal_tags {
     }
 }
 
+use alloc::vec::Vec;
 pub(super) use rust_crypto_internal_tag;
 pub(super) use rust_crypto_internal_tags;

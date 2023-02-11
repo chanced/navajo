@@ -1,10 +1,8 @@
 use core::mem;
 
-use alloc::vec::Vec;
+use alloc::{collections::VecDeque, vec::Vec};
 use futures::Stream;
 use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
-
-#[cfg(feature = "std")]
 
 const BUFFER_SIZE: usize = 64; // Todo: profile this
 
@@ -13,9 +11,6 @@ use super::{ComputeStream, ComputeTryStream, Context, Mac, Tag};
 /// Generates a [`Tag`] for bytes using all keys in [`Mac`].
 pub struct Compute {
     contexts: Vec<Context>,
-    #[cfg(not(feature = "std"))]
-    buffer: VecDeque<u8>,
-    #[cfg(feature = "std")]
     buffer: Vec<u8>,
 }
 
@@ -31,18 +26,9 @@ impl Compute {
             contexts.push(key.new_context());
         }
 
-        #[cfg(feature = "std")]
-        {
-            Self {
-                contexts,
-                buffer: Vec::new(),
-            }
-        }
-        #[cfg(not(feature = "std"))]
         Self {
-            primary_key,
             contexts,
-            buffer: VecDeque::new(),
+            buffer: Vec::new(),
         }
     }
 
@@ -52,8 +38,6 @@ impl Compute {
         // there's no reason to keep a buffer if there's only one key
         if self.contexts.len() == 1 {
             let buf = self.buffer.split_off(0);
-            #[cfg(not(feature = "std"))]
-            let buf = buf.make_contiguous();
             self.contexts[0].update(&buf);
         }
 
@@ -68,28 +52,14 @@ impl Compute {
             } else {
                 self.buffer.len()
             };
-            #[cfg(feature = "std")]
-            {
-                let buf = self.buffer.split_off(idx);
-                chunk = std::mem::replace(&mut self.buffer, buf);
-            }
-            #[cfg(not(feature = "std"))]
-            {
-                chunk = self.buffer.drain(..idx).collect::<Vec<_>>();
-            }
+            let buf = self.buffer.split_off(idx);
+            chunk = mem::replace(&mut self.buffer, buf);
             self.update_chunk(chunk);
         }
     }
     pub fn finalize(mut self) -> Tag {
         let chunk: Vec<u8>;
-        #[cfg(feature = "std")]
-        {
-            chunk = mem::take(&mut self.buffer);
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            chunk = self.buffer.split_off(0).into();
-        }
+        chunk = mem::take(&mut self.buffer);
         self.update_chunk(chunk);
         Tag::new(self.contexts.into_iter().map(|ctx| ctx.finalize()))
     }

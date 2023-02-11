@@ -1,12 +1,17 @@
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use alloc::vec;
+use alloc::vec::Vec;
+use zeroize::ZeroizeOnDrop;
 
 use super::cipher::Cipher;
 use super::Algorithm;
-use crate::key::{Key, KeyMaterial};
+use crate::{
+    bytes::SensitiveBytes,
+    key::{Key, KeyMaterial},
+};
 
-#[derive(Clone, Zeroize, ZeroizeOnDrop, Eq)]
+#[derive(Clone, ZeroizeOnDrop, Eq)]
 pub(super) struct Material {
-    bytes: Vec<u8>,
+    bytes: SensitiveBytes,
     #[zeroize(skip)]
     algorithm: Algorithm,
 }
@@ -23,16 +28,16 @@ impl KeyMaterial for Material {
 }
 impl Material {
     pub(super) fn new(algorithm: Algorithm) -> Self {
-        let bytes = vec![0u8; algorithm.key_len()];
+        let bytes = vec![0u8; algorithm.key_len()].into();
         Self { bytes, algorithm }
     }
-    pub(super) fn cipher(&self) -> Cipher {
+    pub(super) fn create_cipher(&self) -> Cipher {
         Cipher::new(self.algorithm, &self.bytes)
     }
 }
 
 impl Key<Material> {
     pub(super) fn bytes(&self) -> &[u8] {
-        &self.material().bytes
+        &self.material_ref().bytes
     }
 }
