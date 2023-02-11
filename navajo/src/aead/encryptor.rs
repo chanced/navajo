@@ -37,11 +37,9 @@ impl Encryptor {
         }
     }
 
-	pub fn update(&mut self) -> Result<(), Unspecified> {
-		let s: ring::aead::SealingKey = ;
-	}
-
+    pub fn update(&mut self) -> Result<(), Unspecified> {
+        // let s: ring::aead::SealingKey ;
+        // s.seal_in_place_append_tag(aad, in_out)
+        todo!()
+    }
 }
-
-
-

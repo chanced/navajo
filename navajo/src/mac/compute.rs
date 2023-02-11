@@ -1,6 +1,6 @@
+use core::mem;
 
-
-use alloc::{vec::Vec};
+use alloc::vec::Vec;
 use futures::Stream;
 use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
 
@@ -84,11 +84,11 @@ impl Compute {
         let chunk: Vec<u8>;
         #[cfg(feature = "std")]
         {
-            chunk = self.buffer.split_off(0);
+            chunk = mem::take(&mut self.buffer);
         }
         #[cfg(not(feature = "std"))]
         {
-            chunk = self.buffer.split_off(0).into()
+            chunk = self.buffer.split_off(0).into();
         }
         self.update_chunk(chunk);
         Tag::new(self.contexts.into_iter().map(|ctx| ctx.finalize()))
