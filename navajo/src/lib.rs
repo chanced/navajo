@@ -9,7 +9,7 @@ mod key;
 pub(crate) use key::{Key, KeyMaterial};
 
 pub mod aead;
-// pub use aead::Aead;
+pub use aead::Aead;
 
 pub mod error;
 

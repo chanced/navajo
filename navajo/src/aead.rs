@@ -1,3 +1,87 @@
+mod algorithm;
+mod cipher;
+mod ciphertext_info;
+mod decryptor;
+mod encryptor;
+mod header;
+mod key_info;
+mod material;
+mod method;
+mod segment;
+mod size;
+
+pub use key_info::AeadKeyInfo;
+
+use crate::{
+    error::{KeyNotFoundError, RemoveKeyError},
+    keyring::Keyring,
+};
+pub use algorithm::Algorithm;
+pub use ciphertext_info::CiphertextInfo;
+pub use method::Method;
+pub use segment::Segment;
+pub use size::Size;
+// use cipher::{ciphers, ring_ciphers, Cipher};
+use cipher::Cipher;
+use material::Material;
+
+pub struct Aead {
+    keyring: Keyring<Material>,
+}
+impl Aead {
+    pub fn new(algorithm: Algorithm, meta: Option<serde_json::Value>) -> Aead {
+        Self {
+            keyring: Keyring::new(Material::new(algorithm), crate::Origin::Generated, meta),
+        }
+    }
+    pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<serde_json::Value>) -> &mut Self {
+        self.keyring
+            .add(Material::new(algorithm), crate::Origin::Generated, meta);
+        self
+    }
+    /// Returns [`AeadKeyInfo`] for the primary key.
+    pub fn primary_key(&self) -> AeadKeyInfo {
+        self.keyring.primary_key().into()
+    }
+    /// Returns a [`Vec`] containing a [`KeyInfo`](crate::key::KeyInfo) for each key in this keyring.
+    pub fn keys(&self) -> Vec<AeadKeyInfo> {
+        self.keyring.keys().iter().map(AeadKeyInfo::new).collect()
+    }
+
+    pub fn promote_key(
+        &mut self,
+        key_id: impl Into<u32>,
+    ) -> Result<AeadKeyInfo, crate::error::KeyNotFoundError> {
+        self.keyring.promote(key_id).map(AeadKeyInfo::new)
+    }
+
+    pub fn disable_key(
+        &mut self,
+        key_id: impl Into<u32>,
+    ) -> Result<AeadKeyInfo, crate::error::DisableKeyError<Algorithm>> {
+        self.keyring.disable(key_id).map(AeadKeyInfo::new)
+    }
+
+    pub fn enable_key(&mut self, key_id: impl Into<u32>) -> Result<AeadKeyInfo, KeyNotFoundError> {
+        self.keyring.enable(key_id).map(AeadKeyInfo::new)
+    }
+
+    pub fn remove_key(
+        &mut self,
+        key_id: impl Into<u32>,
+    ) -> Result<AeadKeyInfo, RemoveKeyError<Algorithm>> {
+        self.keyring.remove(key_id).map(|k| AeadKeyInfo::new(&k))
+    }
+
+    pub fn update_key_meta(
+        &mut self,
+        key_id: impl Into<u32>,
+        meta: Option<serde_json::Value>,
+    ) -> Result<AeadKeyInfo, KeyNotFoundError> {
+        self.keyring.update_meta(key_id, meta).map(AeadKeyInfo::new)
+    }
+}
+
 // mod algorithm;
 // mod ciphertext_info;
 // mod header;
@@ -111,41 +195,6 @@
 //     {
 //         let res = self.primary()?.encrypt(cleartext, additional_data)?;
 //         Ok(res)
-//     }
-
-//     fn parse_header(&self, ciphertext: &[u8]) -> Result<Header, DecryptError> {
-//         if ciphertext.len() < 5 {
-//             return Err(DecryptError::Malformed("ciphertext too short".into()));
-//         }
-//         let method = Method::try_from(ciphertext[0])?;
-
-//         let kid = u32::from_be_bytes(ciphertext[1..6].try_into().unwrap()); // safe; checked above
-//         let key = self.key(kid)?;
-//         match method {
-//             Method::Online => todo!(),
-//             Method::StreamHmacSha256(_) => todo!(),
-//         }
-//         Ok((method, kid))
-//     }
-
-//     pub fn decrypt<C, A>(&self, ciphertext: C, additional_data: A) -> Result<Vec<u8>, DecryptError>
-//     where
-//         C: AsRef<[u8]>,
-//         A: AsRef<[u8]>,
-//     {
-//         let mut buf = Vec::from(ciphertext.as_ref());
-//         if buf.len() < 5 {
-//             return Err(DecryptError::Malformed("ciphertext too short".into()));
-//         }
-//         let method = Method::try_from(0)?;
-//         let key_id = mem::replace(&mut buf, tmp);
-//         let kid = u32::from_be_bytes(key_id[..].try_into().unwrap()); // safe, len checked above.
-//         let key = self.key(kid).ok_or(DecryptError::KeyNotFound(kid))?;
-
-//         match method {
-//             Method::Online => key.decrypt(buf, additional_data.as_ref()),
-//             Method::StreamHmacSha256(seg) => todo!(),
-//         }
 //     }
 
 //     pub fn primary_key(&self) -> Result<KeyInfo<Algorithm>, KeyNotFoundError> {
@@ -345,96 +394,130 @@
 //     }
 // }
 
-// #[cfg(test)]
-// mod tests {
+// fn parse_header(&self, ciphertext: &[u8]) -> Result<Header, DecryptError> {
+// 	if ciphertext.len() < 5 {
+// 		return Err(DecryptError::Malformed("ciphertext too short".into()));
+// 	}
+// 	let method = Method::try_from(ciphertext[0])?;
 
-//     use std::io::Cursor;
-
-//     use super::*;
-//     use byteorder::*;
-//     // use crate::rand::*;
-//     #[test]
-//     fn test_encrypt_produces_correct_header() -> Result<(), Box<dyn std::error::Error>> {
-//         let ks = Aead::new(Algorithm::Aes256Gcm)?;
-//         let k = ks.primary_key()?;
-//         let cleartext = b"hello world";
-//         let additional_data = b"additional data";
-//         let res = ks.encrypt(cleartext[..].into(), additional_data)?;
-//         let mut buf = Vec::with_capacity(res.len());
-//         buf.extend_from_slice(&res);
-
-//         assert_eq!(
-//             buf.len(),
-//             1 + 4 + k.algorithm.nonce_len() + cleartext.len() + k.algorithm.tag_len()
-//         );
-//         let mut cursor = Cursor::new(buf);
-//         assert_eq!(cursor.read_u8().unwrap(), Method::Online);
-//         assert_eq!(
-//             cursor.read_u32::<BigEndian>().unwrap(),
-//             ks.primary_key().unwrap().id
-//         );
-//         assert_eq!(
-//             cursor.get_ref().len() - cursor.position() as usize,
-//             k.algorithm.nonce_len() + cleartext.len() + k.algorithm.tag_len()
-//         );
-//         Ok(())
-//     }
-//     #[test]
-//     fn test_encrypt_selects_primary_key() -> Result<(), Box<dyn std::error::Error>> {
-//         let ks = Aead::new(Algorithm::Aes256Gcm)?;
-//         let k = ks.primary_key()?;
-//         let cleartext = b"hello world";
-//         let additional_data = b"additional data";
-//         let res = ks.encrypt(cleartext[..].into(), additional_data)?;
-//         let mut buf = Vec::with_capacity(res.len());
-//         buf.extend_from_slice(&res);
-//         let mut cursor = Cursor::new(buf);
-//         assert_eq!(cursor.read_u8().unwrap(), Method::Online);
-//         assert_eq!(
-//             cursor.read_u32::<BigEndian>().unwrap(),
-//             ks.primary_key().unwrap().id
-//         );
-//         assert_eq!(
-//             cursor.get_ref().len() - cursor.position() as usize,
-//             k.algorithm.nonce_len() + cleartext.len() + k.algorithm.tag_len()
-//         );
-//         Ok(())
-//     }
-//     #[test]
-//     fn test_round_trip() -> Result<(), Box<dyn std::error::Error>> {
-//         let ks = Aead::new(Algorithm::Aes256Gcm)?;
-//         let k = ks.primary_key()?;
-//         println!("{:?}", k);
-//         let cleartext = b"hello world!";
-//         let additional_data = b"additional data";
-//         let res = ks.encrypt(cleartext[..].into(), additional_data)?;
-//         let mut buf = Vec::with_capacity(res.len());
-//         buf.extend_from_slice(&res);
-//         let ciphertext = buf.clone();
-//         assert_eq!(
-//             buf.len(),
-//             1 + 4 + k.algorithm.nonce_len() + cleartext.len() + k.algorithm.tag_len()
-//         );
-//         let mut buf_data = buf.clone();
-//         let mut cursor = Cursor::new(buf);
-//         assert_eq!(cursor.read_u8().unwrap(), Method::Online);
-//         assert_eq!(
-//             cursor.read_u32::<BigEndian>().unwrap(),
-//             ks.primary_key().unwrap().id
-//         );
-//         assert_eq!(
-//             cursor.get_ref().len() - cursor.position() as usize,
-//             k.algorithm.nonce_len() + cleartext.len() + k.algorithm.tag_len()
-//         );
-//         cursor.set_position(cursor.position() + k.algorithm.nonce_len() as u64);
-//         let mut encrypted = buf_data.split_off(cleartext.len());
-
-//         println!("cleartext:{}", &String::from_utf8_lossy(&cleartext[..]));
-//         println!("encrypted:{}", &String::from_utf8_lossy(&encrypted));
-//         assert_ne!(encrypted, cleartext[..]);
-//         let decrypted = ks.decrypt(ciphertext, additional_data).unwrap();
-//         println!("{}", &String::from_utf8_lossy(&decrypted));
-//         assert_eq!(&decrypted, &cleartext[..]);
-//         Ok(())
-//     }
+// 	let kid = u32::from_be_bytes(ciphertext[1..6].try_into().unwrap()); // safe; checked above
+// 	let key = self.key(kid)?;
+// 	match method {
+// 		Method::Online => todo!(),
+// 		Method::StreamHmacSha256(_) => todo!(),
+// 	}
+// 	Ok((method, kid))
 // }
+
+// pub fn decrypt<C, A>(&self, ciphertext: C, additional_data: A) -> Result<Vec<u8>, DecryptError>
+// where
+// 	C: AsRef<[u8]>,
+// 	A: AsRef<[u8]>,
+// {
+// 	let mut buf = Vec::from(ciphertext.as_ref());
+// 	if buf.len() < 5 {
+// 		return Err(DecryptError::Malformed("ciphertext too short".into()));
+// 	}
+// 	let method = Method::try_from(0)?;
+// 	let key_id = mem::replace(&mut buf, tmp);
+// 	let kid = u32::from_be_bytes(key_id[..].try_into().unwrap()); // safe, len checked above.
+// 	let key = self.key(kid).ok_or(DecryptError::KeyNotFound(kid))?;
+
+// 	match method {
+// 		Method::Online => key.decrypt(buf, additional_data.as_ref()),
+// 		Method::StreamHmacSha256(seg) => todo!(),
+// 	}
+// }
+
+#[cfg(test)]
+mod tests {
+
+    use std::io::Cursor;
+
+    use super::*;
+    // // use crate::rand::*;
+    // #[test]
+    // fn test_encrypt_produces_correct_header() -> Result<(), Box<dyn std::error::Error>> {
+    //     let ks = Aead::new(Algorithm::Aes256Gcm)?;
+    //     let k = ks.primary_key()?;
+    //     let cleartext = b"hello world";
+    //     let additional_data = b"additional data";
+    //     let res = ks.encrypt(cleartext[..].into(), additional_data)?;
+    //     let mut buf = Vec::with_capacity(res.len());
+    //     buf.extend_from_slice(&res);
+
+    //     assert_eq!(
+    //         buf.len(),
+    //         1 + 4 + k.algorithm.nonce_len() + cleartext.len() + k.algorithm.tag_len()
+    //     );
+    //     let mut cursor = Cursor::new(buf);
+    //     assert_eq!(cursor.read_u8().unwrap(), Method::Online);
+    //     assert_eq!(
+    //         cursor.read_u32::<BigEndian>().unwrap(),
+    //         ks.primary_key().unwrap().id
+    //     );
+    //     assert_eq!(
+    //         cursor.get_ref().len() - cursor.position() as usize,
+    //         k.algorithm.nonce_len() + cleartext.len() + k.algorithm.tag_len()
+    //     );
+    //     Ok(())
+    // }
+    // #[test]
+    // fn test_encrypt_selects_primary_key() -> Result<(), Box<dyn std::error::Error>> {
+    //     let ks = Aead::new(Algorithm::Aes256Gcm)?;
+    //     let k = ks.primary_key()?;
+    //     let cleartext = b"hello world";
+    //     let additional_data = b"additional data";
+    //     let res = ks.encrypt(cleartext[..].into(), additional_data)?;
+    //     let mut buf = Vec::with_capacity(res.len());
+    //     buf.extend_from_slice(&res);
+    //     let mut cursor = Cursor::new(buf);
+    //     assert_eq!(cursor.read_u8().unwrap(), Method::Online);
+    //     assert_eq!(
+    //         cursor.read_u32::<BigEndian>().unwrap(),
+    //         ks.primary_key().unwrap().id
+    //     );
+    //     assert_eq!(
+    //         cursor.get_ref().len() - cursor.position() as usize,
+    //         k.algorithm.nonce_len() + cleartext.len() + k.algorithm.tag_len()
+    //     );
+    //     Ok(())
+    // }
+    // #[test]
+    // fn test_round_trip() -> Result<(), Box<dyn std::error::Error>> {
+    //     let ks = Aead::new(Algorithm::Aes256Gcm)?;
+    //     let k = ks.primary_key()?;
+    //     println!("{:?}", k);
+    //     let cleartext = b"hello world!";
+    //     let additional_data = b"additional data";
+    //     let res = ks.encrypt(cleartext[..].into(), additional_data)?;
+    //     let mut buf = Vec::with_capacity(res.len());
+    //     buf.extend_from_slice(&res);
+    //     let ciphertext = buf.clone();
+    //     assert_eq!(
+    //         buf.len(),
+    //         1 + 4 + k.algorithm.nonce_len() + cleartext.len() + k.algorithm.tag_len()
+    //     );
+    //     let mut buf_data = buf.clone();
+    //     let mut cursor = Cursor::new(buf);
+    //     assert_eq!(cursor.read_u8().unwrap(), Method::Online);
+    //     assert_eq!(
+    //         cursor.read_u32::<BigEndian>().unwrap(),
+    //         ks.primary_key().unwrap().id
+    //     );
+    //     assert_eq!(
+    //         cursor.get_ref().len() - cursor.position() as usize,
+    //         k.algorithm.nonce_len() + cleartext.len() + k.algorithm.tag_len()
+    //     );
+    //     cursor.set_position(cursor.position() + k.algorithm.nonce_len() as u64);
+    //     let mut encrypted = buf_data.split_off(cleartext.len());
+
+    //     println!("cleartext:{}", &String::from_utf8_lossy(&cleartext[..]));
+    //     println!("encrypted:{}", &String::from_utf8_lossy(&encrypted));
+    //     assert_ne!(encrypted, cleartext[..]);
+    //     let decrypted = ks.decrypt(ciphertext, additional_data).unwrap();
+    //     println!("{}", &String::from_utf8_lossy(&decrypted));
+    //     assert_eq!(&decrypted, &cleartext[..]);
+    //     Ok(())
+    // }
+}

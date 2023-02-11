@@ -68,7 +68,7 @@ impl crate::KeyMaterial for Material {
 
 #[derive(Clone, Debug)]
 pub(super) enum CryptoKey {
-    Ring(Box<ring_compat::ring::hmac::Key>),
+    Ring(Box<ring::hmac::Key>),
     RustCrypto(Box<crate::mac::RustCryptoKey>),
     #[cfg(feature = "blake3")]
     Blake3(Box<blake3::Hasher>),
@@ -84,18 +84,18 @@ impl CryptoKey {
         algorithm.validate_key_len(bytes.len())?;
         match algorithm {
             #[cfg(all(feature = "ring"))]
-            Algorithm::Sha256 => Ok(Self::Ring(Box::new(ring_compat::ring::hmac::Key::new(
-                ring_compat::ring::hmac::HMAC_SHA256,
+            Algorithm::Sha256 => Ok(Self::Ring(Box::new(ring::hmac::Key::new(
+                ring::hmac::HMAC_SHA256,
                 bytes,
             )))),
             #[cfg(all(feature = "ring"))]
-            Algorithm::Sha384 => Ok(Self::Ring(Box::new(ring_compat::ring::hmac::Key::new(
-                ring_compat::ring::hmac::HMAC_SHA384,
+            Algorithm::Sha384 => Ok(Self::Ring(Box::new(ring::hmac::Key::new(
+                ring::hmac::HMAC_SHA384,
                 bytes,
             )))),
             #[cfg(all(feature = "ring"))]
-            Algorithm::Sha512 => Ok(Self::Ring(Box::new(ring_compat::ring::hmac::Key::new(
-                ring_compat::ring::hmac::HMAC_SHA512,
+            Algorithm::Sha512 => Ok(Self::Ring(Box::new(ring::hmac::Key::new(
+                ring::hmac::HMAC_SHA512,
                 bytes,
             )))),
             #[cfg(feature = "blake3")]

@@ -1,6 +1,8 @@
+use std::mem;
+
 use serde::{Deserialize, Serialize};
 
-use crate::{error::MalformedError, keyring::KEY_ID_LEN};
+use crate::{DecryptError, MalformedError, KEY_ID_LEN};
 
 use super::{Algorithm, Segment};
 
@@ -33,7 +35,7 @@ impl Method {
         matches!(self, Method::StreamHmacSha256(_))
     }
 
-    pub fn header_len(&self, algorithm: Algorithm) -> usize {
+    pub(super) fn header_len(&self, algorithm: Algorithm) -> usize {
         match self {
             // method + key id + nonce
             Method::Online => Method::len() + KEY_ID_LEN + algorithm.nonce_len(),
@@ -54,8 +56,7 @@ impl From<Method> for u8 {
             Method::Online => 0,
             Method::StreamHmacSha256(segment) => match segment {
                 Segment::FourKB => 1,
-                Segment::SixtyFourKB => 2,
-                Segment::OneMB => 3,
+                Segment::OneMB => 2,
             },
         }
     }
@@ -82,9 +83,16 @@ impl TryFrom<u8> for Method {
         match value {
             0 => Ok(Method::Online),
             1 => Ok(Method::StreamHmacSha256(Segment::FourKB)),
-            2 => Ok(Method::StreamHmacSha256(Segment::SixtyFourKB)),
-            3 => Ok(Method::StreamHmacSha256(Segment::OneMB)),
+            2 => Ok(Method::StreamHmacSha256(Segment::OneMB)),
             _ => Err("missing or unknown encryption method".into()),
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse() {}
 }

@@ -1,5 +1,5 @@
 #[cfg(feature = "ring")]
-use ring_compat::ring::rand::{SecureRandom as _, SystemRandom};
+use ring::rand::{SecureRandom as _, SystemRandom};
 
 use random::{rngs::OsRng, CryptoRng, RngCore};
 
@@ -48,10 +48,7 @@ impl RngCore for Random {
 
     fn fill_bytes(&mut self, dest: &mut [u8]) {
         OsRng.fill_bytes(dest);
-        SystemRandom::new()
-        .fill(dest)
-        .ok()
-        .map_or((), |_| ())
+        SystemRandom::new().fill(dest).ok().map_or((), |_| ())
     }
 
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), random::Error> {

@@ -50,9 +50,9 @@ version = "0.13"
 package = "rand"
 version = "0.8"
 
-# ring-compat
-[dependencies.ring-compat]
-version = "0.6"
+# ring
+[dependencies.ring]
+version = "0.16"
 optional = true
 
 #typenum
@@ -163,10 +163,6 @@ version = "0.10"
 [dependencies.dbl]
 version = "0.3"
 
-# cipher
-[dependencies.cipher]
-version = "0.4"
-features = ["zeroize"]
 
 # opaque_debug
 [dependencies.opaque-debug]
@@ -205,12 +201,11 @@ default = [
 hmac_sha2 = ["hmac", "sha2"]
 hmac_sha3 = ["hmac", "sha3"]
 cmac_aes = ["cmac", "aes"]
-ring = ["ring-compat"]
 signature = ["ed25519", "p256", "p384"]
 mac = ["rayon"]
 aead = []
 std = [
-	"ring-compat?/std",
+	"ring?/std",
 	"hex/std",
 	"serde/std",
 	"serde_json/std",
@@ -222,7 +217,6 @@ std = [
 	"pkcs8?/std",
 	"cmac/std",
 	"digest/std",
-	"cipher/std",
 	"sha2/std",
 	"sha3/std",
 ]

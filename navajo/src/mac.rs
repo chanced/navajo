@@ -87,9 +87,9 @@ impl Mac {
     ) -> Result<MacKeyInfo, InvalidKeyLength> {
         self.create_key(algorithm, key, prefix, Origin::External, meta)
     }
-    /// Returns [`KeyInfo`] for the primary key.
-    pub fn primary_key(&self) -> KeyInfo<Algorithm> {
-        self.keyring.primary_key().info()
+    /// Returns [`MacKeyInfo`] for the primary key.
+    pub fn primary_key(&self) -> MacKeyInfo {
+        self.keyring.primary_key().into()
     }
     /// Returns a [`Vec`] containing a [`KeyInfo`](crate::key::KeyInfo) for each key in this keyring.
     pub fn keys(&self) -> Vec<MacKeyInfo> {
@@ -128,6 +128,7 @@ impl Mac {
     ) -> Result<MacKeyInfo, KeyNotFoundError> {
         self.keyring.update_meta(key_id, meta).map(MacKeyInfo::new)
     }
+
     fn keyring(&self) -> &Keyring<Material> {
         &self.keyring
     }

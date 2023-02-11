@@ -2,8 +2,8 @@ use core::{fmt::Display, pin::Pin};
 
 use aes_gcm::{aead::Aead, AeadCore};
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
-use chacha20poly1305::{aead::Payload, ChaCha20Poly1305};
-use cipher::KeyInit;
+use chacha20poly1305::{aead::Payload, ChaCha20Poly1305, KeyInit};
+
 use futures::Future;
 #[allow(clippy::type_complexity)]
 pub trait Kms {

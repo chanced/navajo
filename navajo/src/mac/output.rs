@@ -46,7 +46,7 @@ impl AsRef<[u8]> for Output {
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "ring", feature="hmac_sha2"))] {
         #[derive(Clone, Debug)]
-        pub(super) struct RingOutput(ring_compat::ring::hmac::Tag);
+        pub(super) struct RingOutput(ring::hmac::Tag);
         impl AsRef<[u8]> for RingOutput {
             fn as_ref(&self) -> &[u8] {
                 self.0.as_ref()
@@ -55,8 +55,8 @@ cfg_if::cfg_if! {
         impl DigestOutput for RingOutput {
             fn truncatable(&self) -> bool { true }
         }
-        impl From<ring_compat::ring::hmac::Tag> for Output {
-            fn from(output: ring_compat::ring::hmac::Tag) -> Self {
+        impl From<ring::hmac::Tag> for Output {
+            fn from(output: ring::hmac::Tag) -> Self {
                 Self::Ring(RingOutput(output))
             }
         }

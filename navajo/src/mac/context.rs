@@ -1,4 +1,5 @@
 use crate::{key::Key, mac::output};
+use alloc::{boxed::Box, sync::Arc};
 
 use super::{
     entry::Entry,
@@ -71,8 +72,8 @@ impl ContextInner {
 }
 
 #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
-impl From<&ring_compat::ring::hmac::Key> for ContextInner {
-    fn from(key: &ring_compat::ring::hmac::Key) -> Self {
+impl From<&ring::hmac::Key> for ContextInner {
+    fn from(key: &ring::hmac::Key) -> Self {
         Self::Ring(key.into())
     }
 }
@@ -106,7 +107,7 @@ impl MacContext for Blake3Context {
 }
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "ring", feature="hmac_sha2"))]{
-        pub(super) struct RingContext(ring_compat::ring::hmac::Context);
+        pub(super) struct RingContext(ring::hmac::Context);
 
         impl MacContext for RingContext {
             fn update(&mut self, data: &[u8]) {
@@ -116,9 +117,9 @@ cfg_if::cfg_if! {
                 self.0.sign().into()
             }
         }
-        impl From<&ring_compat::ring::hmac::Key> for RingContext {
-            fn from(key: &ring_compat::ring::hmac::Key) -> Self {
-                Self(ring_compat::ring::hmac::Context::with_key(key))
+        impl From<&ring::hmac::Key> for RingContext {
+            fn from(key: &ring::hmac::Key) -> Self {
+                Self(ring::hmac::Context::with_key(key))
             }
         }
     }
@@ -158,7 +159,6 @@ macro_rules! rust_crypto_context_inner {
 }
 macro_rules! rust_crypto_contexts {
     ({
-
         hmac: { ring: [$($ring:ident),*], sha2: [$($sha2:ident),*], sha3: [$($sha3:ident),*]$(,)? },
         cmac: { aes: [$($aes:ident),*]$(,)? }
 	}) => {
@@ -254,6 +254,5 @@ macro_rules! rust_crypto_contexts {
         }
 	}
 }
-use alloc::{boxed::Box, sync::Arc};
 pub(super) use rust_crypto_context_inner;
 pub(super) use rust_crypto_contexts;

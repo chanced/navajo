@@ -7,7 +7,7 @@ use alloc::{
 pub use random::Error as RandError;
 
 #[cfg(feature = "ring")]
-use ring_compat::ring;
+use ring;
 
 use crate::KeyInfo;
 
@@ -25,8 +25,8 @@ impl std::error::Error for KeyNotFoundError {}
 #[derive(Clone, Debug)]
 pub struct UnspecifiedError;
 #[cfg(feature = "ring")]
-impl From<ring_compat::ring::error::Unspecified> for UnspecifiedError {
-    fn from(_: ring_compat::ring::error::Unspecified) -> Self {
+impl From<ring::error::Unspecified> for UnspecifiedError {
+    fn from(_: ring::error::Unspecified) -> Self {
         Self
     }
 }

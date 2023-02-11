@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{mac::MacKeyInfo, KeyMaterial, Origin, Status};
+use crate::{aead::AeadKeyInfo, mac::MacKeyInfo, KeyMaterial, Origin, Status};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Metadata for a particular key.
@@ -44,5 +44,16 @@ impl<A> From<KeyInfo<A>> for u32 {
 impl<A> From<&KeyInfo<A>> for u32 {
     fn from(ki: &KeyInfo<A>) -> Self {
         ki.id
+    }
+}
+impl From<AeadKeyInfo> for KeyInfo<crate::aead::Algorithm> {
+    fn from(info: AeadKeyInfo) -> Self {
+        Self {
+            id: info.id,
+            algorithm: info.algorithm,
+            origin: info.origin,
+            status: info.status,
+            meta: info.meta,
+        }
     }
 }
