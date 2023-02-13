@@ -84,30 +84,7 @@ impl Tag {
     pub fn update(&mut self, _mac: &Mac) {
         todo!()
     }
-    /// Returns this a clone of this `Tag` with a flag set indicating that the
-    /// header should be omitted when represented as bytes. Any calls to `as_bytes`
-    /// or `as_ref` will return the MAC bytes without the header.
-    pub fn omit_header(&self) -> Self {
-        Self {
-            omit_header: true,
-            entries: self.entries.clone(),
-            truncate_to: self.truncate_to,
-            primary_idx: self.primary_idx,
-            primary_tag: self.primary_tag.clone(),
-            primary_tag_header_len: self.primary_tag_header_len,
-        }
-    }
 
-    pub fn include_header(&self) -> Self {
-        Self {
-            omit_header: false,
-            entries: self.entries.clone(),
-            truncate_to: self.truncate_to,
-            primary_idx: self.primary_idx,
-            primary_tag: self.primary_tag.clone(),
-            primary_tag_header_len: self.primary_tag_header_len,
-        }
-    }
     /// Returns this `Tag` cloned with truncation to `len` bytes if possible.
     ///
     /// Note that the truncation will be applied to entire output. The header of
@@ -145,6 +122,37 @@ impl Tag {
             primary_tag_header_len: self.primary_tag_header_len,
         })
     }
+
+    /// Returns this a clone of this `Tag` with a flag set indicating that the
+    /// header should be omitted when represented as bytes. Any calls to `as_bytes`
+    /// or `as_ref` will return the MAC bytes without the header.
+    pub fn omit_header(&self) -> Result<Self, TruncationError> {
+        if let Some(truncation) = self.truncate_to {
+            if truncation < 8 {
+                return Err(TruncationError::TooShort);
+            }
+        }
+        Ok(Self {
+            omit_header: true,
+            entries: self.entries.clone(),
+            truncate_to: self.truncate_to,
+            primary_idx: self.primary_idx,
+            primary_tag: self.primary_tag.clone(),
+            primary_tag_header_len: self.primary_tag_header_len,
+        })
+    }
+
+    pub fn include_header(&self) -> Self {
+        Self {
+            omit_header: false,
+            entries: self.entries.clone(),
+            truncate_to: self.truncate_to,
+            primary_idx: self.primary_idx,
+            primary_tag: self.primary_tag.clone(),
+            primary_tag_header_len: self.primary_tag_header_len,
+        }
+    }
+
     pub fn as_bytes(&self) -> &[u8] {
         let slice = if self.omit_header {
             &self.primary_tag[self.primary_tag_header_len..]

@@ -1,5 +1,8 @@
 use generic_array::GenericArray;
-use typenum::{U12, U24, U8};
+use ring::error::Unspecified;
+use typenum::{U12, U24};
+
+use crate::error::UnspecifiedError;
 
 pub(crate) enum Nonce {
     Twelve([u8; 12]),
@@ -37,10 +40,15 @@ impl AsRef<[u8]> for Nonce {
     }
 }
 
-impl From<&[u8]> for Nonce {
-    fn from(nonce: &[u8]) -> Self {
-        // Self(nonce.to_vec())
-        todo!()
+impl TryFrom<&[u8]> for Nonce {
+    type Error = UnspecifiedError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        match value.len() {
+            12 => Ok(Self::Twelve(value.try_into().unwrap())),
+            24 => Ok(Self::TwentyFour(Box::new(value.try_into().unwrap()))),
+            _ => Err(UnspecifiedError),
+        }
     }
 }
 impl From<Nonce> for GenericArray<u8, U12> {

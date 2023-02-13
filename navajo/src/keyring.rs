@@ -333,11 +333,14 @@ impl<M> Keyring<M>
 where
     M: KeyMaterial + DeserializeOwned,
 {
-    pub(crate) async fn open(
+    pub(crate) async fn open<K>(
         sealed: &[u8],
         associated_data: &[u8],
-        envelope: impl Kms,
-    ) -> Result<Self, OpenError> {
+        kms: K,
+    ) -> Result<Self, OpenError>
+    where
+        K: Kms,
+    {
         if sealed.len() < 4 {
             return Err("sealed data too short".into());
         }
@@ -349,7 +352,7 @@ where
         }
 
         let sealed_cipher_and_nonce = &sealed[4..4 + sealed_cipher_and_nonce_len as usize];
-        let mut key = envelope
+        let mut key = kms
             .decrypt(sealed_cipher_and_nonce, associated_data)
             .await
             .map_err(|e| e.to_string())?;

@@ -1,6 +1,6 @@
 use core::mem;
 
-use alloc::{vec::Vec};
+use alloc::vec::Vec;
 use futures::Stream;
 use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
 
@@ -46,7 +46,6 @@ impl Compute {
         // resulting in the potential memory usage of n * d where n is the
         // number of keys and d is size of the data.
         while self.buffer.len() >= BUFFER_SIZE {
-            
             let idx = if self.buffer.len() > BUFFER_SIZE {
                 BUFFER_SIZE
             } else {
@@ -58,7 +57,6 @@ impl Compute {
         }
     }
     pub fn finalize(mut self) -> Tag {
-        
         let chunk: Vec<u8> = mem::take(&mut self.buffer);
         self.update_chunk(chunk);
         Tag::new(self.contexts.into_iter().map(|ctx| ctx.finalize()))
@@ -133,7 +131,7 @@ mod tests {
         let mut hasher = Compute::new(&mac);
         hasher.update(b"message");
         let tag = hasher.finalize();
-        assert_eq!(tag.omit_header().as_ref(), &expected[..]);
+        assert_eq!(tag.omit_header().unwrap().as_ref(), &expected[..]);
     }
     #[test]
     fn test_chunked() {
@@ -246,8 +244,8 @@ mod tests {
         let mut hasher = Compute::new(&mac);
         hasher.update(long_str.as_bytes());
         let tag = hasher.finalize();
-        assert_eq!(tag.omit_header().as_ref().len(), expected[..].len());
-        assert_eq!(tag.omit_header().as_ref(), &expected[..]);
+        assert_eq!(tag.omit_header().unwrap().as_ref().len(), expected[..].len());
+        assert_eq!(tag.omit_header().unwrap().as_ref(), &expected[..]);
         // assert_eq!(
         //     tag.omit_header().as_ref(),
         //     hex::decode("1b2dd9405426e0c7de12085c5ddd7fdee131064112cd6249ed4af2d2a3c69295")

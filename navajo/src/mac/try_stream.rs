@@ -262,7 +262,7 @@ mod tests {
         
         Decipher the code below to find out during what battle the Navajo Code Talkers to help gain a U.S. victory:
         
-        Tkin-Gloe-lh-A-Kha Ah-Ya-Tsinne-Tkin-Tsin-Tliti-Tse-Nill"#;
+    Tkin-Gloe-lh-A-Kha Ah-Ya-Tsinne-Tkin-Tsin-Tliti-Tse-Nill"#;
 
         let hex_data = long_str.as_bytes().chunks(16).map(|c| c.to_vec());
 

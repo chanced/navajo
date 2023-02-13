@@ -251,7 +251,7 @@ impl From<u8> for InvalidAlgorithm {
         Self(v)
     }
 }
-
+#[derive(Debug)]
 pub enum TruncationError {
     NotTruncatable,
     TooLong,

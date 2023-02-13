@@ -10,8 +10,11 @@ mod tag;
 mod try_stream;
 mod verify;
 
+use std::io::Read;
+
 pub use algorithm::Algorithm;
 pub use compute::Compute;
+use futures::{Stream, TryStream};
 pub use key_info::MacKeyInfo;
 pub use stream::{ComputeStream, StreamMac, VerifyStream};
 pub use try_stream::{ComputeTryStream, TryStreamMac, VerifyTryStream};
@@ -19,8 +22,8 @@ pub use try_stream::{ComputeTryStream, TryStreamMac, VerifyTryStream};
 pub use tag::Tag;
 pub use verify::Verify;
 
-use crate::error::{InvalidKeyLength, KeyNotFoundError, RemoveKeyError};
-use crate::{Keyring, Origin};
+use crate::error::{InvalidKeyLength, KeyNotFoundError, OpenError, RemoveKeyError, SealError};
+use crate::{Keyring, Kms, Origin};
 use alloc::vec::Vec;
 use context::*;
 use material::*;
@@ -32,6 +35,66 @@ pub struct Mac {
 }
 
 impl Mac {
+    /// Opens a [`Mac`] keyring from the given `data` and validates the
+    /// authenticity with `associated_data` by means of the [`Kms`].
+    ///
+    /// # Errors
+    /// Errors if the keyring could not be opened by the or the authenticity
+    /// could not be verified by the [`Kms`].
+    ///
+    /// # Example
+    /// ```rust
+    /// use navajo::mac::{ Mac, Algorithm };
+    /// use navajo::kms::InMemory;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mac = Mac::new(Algorithm::Sha256, None);
+    ///     let primary_key = mac.primary_key();
+    ///     // in a real application, you would use a real key management solution.
+    ///     // InMemory is only suitable for testing.
+    ///     let kms = InMemory::default();
+    ///     let data = Mac::seal(&mac, &[], &kms).await.unwrap();
+    ///     let mac = Mac::open(&data, &[], &kms).await.unwrap();
+    ///     assert_eq!(mac.primary_key(), primary_key);
+    /// }
+    /// ```
+    pub async fn open<K>(data: &[u8], associated_data: &[u8], kms: K) -> Result<Self, OpenError>
+    where
+        K: Kms,
+    {
+        let keyring = Keyring::<Material>::open(data, associated_data, kms).await?;
+        Ok(Self { keyring })
+    }
+    /// Seals a [`Mac`] keyring and tags it with `associated_data` for future
+    /// authenticationby means of the [`Kms`].
+    ///
+    /// # Errors
+    /// Errors if the keyring could not be sealed by the [`Kms`].
+    ///
+    /// # Example
+    /// ```rust
+    /// use navajo::mac::{ Mac, Algorithm };
+    /// use navajo::kms::InMemory;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mac = Mac::new(Algorithm::Sha256, None);
+    ///     let primary_key = mac.primary_key();
+    ///     // in a real application, you would use a real key management solution.
+    ///     // InMemory is only suitable for testing.
+    ///     let kms = InMemory::default();
+    ///     let data = Mac::seal(&mac, &[], &kms).await.unwrap();
+    ///     let mac = Mac::open(&data, &[], &kms).await.unwrap();
+    ///     assert_eq!(mac.primary_key(), primary_key);
+    /// }
+    /// ```
+    pub async fn seal<K>(mac: &Self, associated_data: &[u8], kms: K) -> Result<Vec<u8>, SealError>
+    where
+        K: Kms,
+    {
+        Keyring::seal(mac.keyring(), associated_data, kms).await
+    }
     /// Create a new MAC keyring by generating a key for the given [`Algorithm`]
     /// as the primary.
     pub fn new(algorithm: Algorithm, meta: Option<serde_json::value::Value>) -> Self {
@@ -43,27 +106,22 @@ impl Mac {
             keyring: Keyring::new(material, Origin::Generated, meta),
         }
     }
-    /// Returns a [`Compute`] which can then be used as a [`std::io::Write`] or convert into a [`ComputeStream`].
-    pub fn compute(&self) -> Compute {
-        Compute::new(self)
-    }
-
-    /// Computes a MAC for the given data using the primary key.
-    pub fn compute_slice(&self, data: &[u8]) -> Tag {
-        let mut compute = Compute::new(self);
-        compute.update(data);
-        compute.finalize()
-    }
-
-    pub fn verify<T>(&self, tag: T) -> Verify<T>
-    where
-        T: AsRef<Tag> + Send + Sync,
-    {
-        Verify::new(tag, self)
-    }
 
     /// Create a new MAC keyring by initializing it with the given key data as
     /// primary.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use navajo::mac::{Mac, Algorithm};
+    /// use hex::{decode, encode};
+    /// let external_key = decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
+    ///     .unwrap();    
+    /// let mac = Mac::new_with_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
+    /// let tag = mac.compute(b"hello world").omit_header().unwrap();
+    ///
+    /// assert_eq!(encode(tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a")
+    /// ```
     pub fn new_with_external_key(
         key: &[u8],
         algorithm: Algorithm,
@@ -75,6 +133,96 @@ impl Mac {
         Ok(Self {
             keyring: Keyring::new(material, Origin::Generated, meta),
         })
+    }
+
+    // /// Returns a [`Compute`] which can then be used as a [`std::io::Write`] or convert into a [`ComputeStream`].
+    // pub fn compute(&self) -> Compute {
+    //     Compute::new(self)
+    // }
+
+    /// Computes a MAC for the given data using the primary key.
+    pub fn compute(&self, data: &[u8]) -> Tag {
+        let mut compute = Compute::new(self);
+        compute.update(data);
+        compute.finalize()
+    }
+
+    /// Computes a [`Tag`] from a [`Stream`] of [`AsRef<[u8]>`](core::convert::AsRef<[u8]>).
+    ///
+    /// # Examples
+    /// ```rust
+    /// use navajo::mac::{Mac, Algorithm};
+    /// use futures::{ StreamExt, stream };
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mac = Mac::new(Algorithm::Sha256, None);
+    ///     let data = vec![b"hello", b"world"];
+    ///     let stream = stream::iter(data);
+    ///     let tag = mac.compute_stream(stream).await;
+    ///     println!("tag: {}", hex::encode(&tag))
+    /// }
+    /// ```
+    pub fn compute_stream<S, D>(&self, stream: S) -> ComputeStream<S, D>
+    where
+        S: Stream<Item = D>,
+        D: AsRef<[u8]>,
+    {
+        let compute = Compute::new(self);
+        ComputeStream::new(stream, compute)
+    }
+    /// Computes a [`Tag`] from a [`TryStream`] of [`AsRef<[u8]>`](core::convert::AsRef<[u8]>).
+    ///
+    /// # Examples
+    /// ```rust
+    /// use navajo::mac::{Mac, Algorithm};
+    /// use futures::{ TryStream, StreamExt, stream };
+    /// fn to_try_stream<T>(d: T) -> Result<T, ()> { Ok(d) }
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let mac = Mac::new(Algorithm::Sha256, None);
+    ///     let data = vec![b"hello", b"world"];
+    ///     let try_stream = stream::iter(data).map(to_try_stream);
+    ///     let tag = mac.compute_try_stream(try_stream).await.unwrap();
+    ///     println!("tag: {}", hex::encode(&tag));
+    /// }
+    /// ```
+    pub fn compute_try_stream<S, D>(&self, try_stream: S) -> ComputeTryStream<S, D, S::Error>
+    where
+        S: TryStream<Ok = D>,
+        D: AsRef<[u8]>,
+    {
+        let compute = Compute::new(self);
+        ComputeTryStream::new(try_stream, compute)
+    }
+
+    /// Compute [`Tag`] from an [`std::io::Read`].
+    /// # Examples
+    /// ```rust
+    /// use navajo::mac::{Mac, Algorithm};
+    /// use std::io::Cursor;
+    ///
+    /// let mac = Mac::new(Algorithm::Sha256, None);
+    /// let data = b"hello world";
+    /// let tag = mac.compute_reader(&mut Cursor::new(data)).unwrap();
+    /// println!("tag: {}", hex::encode(&tag));
+    /// ```
+    #[cfg(feature = "std")]
+    pub fn compute_reader<R: ?Sized>(&self, reader: &mut R) -> Result<Tag, std::io::Error>
+    where
+        R: Read,
+    {
+        let mut compute = Compute::new(self);
+        std::io::copy(reader, &mut compute)?;
+        Ok(compute.finalize())
+    }
+
+    pub fn verify<T>(&self, tag: T) -> Verify<T>
+    where
+        T: AsRef<Tag> + Send + Sync,
+    {
+        Verify::new(tag, self)
     }
 
     pub fn add_generated_key(

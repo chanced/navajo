@@ -29,8 +29,8 @@ pub use mac::Mac;
 
 pub mod constant_time;
 
-mod kms;
-pub use kms::{Kms, KmsSync};
+pub mod kms;
+pub use kms::Kms;
 
 mod origin;
 pub use origin::Origin;

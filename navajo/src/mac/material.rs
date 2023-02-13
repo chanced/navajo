@@ -1,17 +1,19 @@
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use zeroize::ZeroizeOnDrop;
 
 use crate::{error::InvalidKeyLength, sensitive::Bytes, Key};
 
 use super::Algorithm;
 
-#[derive(Clone, ZeroizeOnDrop, Debug)]
+#[derive(Clone, ZeroizeOnDrop, Debug, Deserialize, Serialize)]
 pub(super) struct Material {
     #[zeroize(skip)]
     pub(super) algorithm: Algorithm,
     pub(super) bytes: Bytes,
     pub(super) prefix: Option<Bytes>,
 }
+
 impl PartialEq for Material {
     fn eq(&self, other: &Self) -> bool {
         self.algorithm == other.algorithm && self.bytes == other.bytes
