@@ -700,6 +700,10 @@ name = "navajo-aws"
 version = "0.0.0"
 
 [[package]]
+name = "navajo-azure"
+version = "0.0.0"
+
+[[package]]
 name = "navajo-cli"
 version = "0.0.0"
 dependencies = [

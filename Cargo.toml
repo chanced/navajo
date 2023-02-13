@@ -1,2 +1,9 @@
 [workspace]
-members = ["navajo", "navajo-gcp", "navajo-aws", "navajo-vault", "navajo-cli"]
+members = [
+	"navajo",
+	"navajo-gcp",
+	"navajo-aws",
+	"navajo-vault",
+	"navajo-cli",
+	"navajo-azure",
+]
