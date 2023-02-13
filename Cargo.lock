@@ -682,7 +682,7 @@ dependencies = [
  "pkcs8",
  "rand",
  "rayon",
- "ring",
+ "ring 0.16.20",
  "serde",
  "serde_bytes",
  "serde_json",
@@ -718,6 +718,10 @@ version = "0.0.0"
 [[package]]
 name = "navajo-vault"
 version = "0.0.0"
+
+[[package]]
+name = "no_std"
+version = "0.1.0"
 
 [[package]]
 name = "num_cpus"
@@ -998,6 +1002,10 @@ dependencies = [
 
 [[package]]
 name = "ring"
+version = "0.1.0"
+
+[[package]]
+name = "ring"
 version = "0.16.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3053cf52e236a3ed746dfc745aa9cacf1b791d846bdaf412f60a8d7d6e17c8fc"
@@ -1016,6 +1024,10 @@ name = "ryu"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b4b9743ed687d4b4bcedf9ff5eaa7398495ae14e61cba0a295704edbc7decde"
+
+[[package]]
+name = "sans-ring"
+version = "0.1.0"
 
 [[package]]
 name = "scopeguard"
