@@ -166,11 +166,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    
-
-    
-
-    
+    use super::*;
+    use futures::stream::iter;
+    use futures::StreamExt;
 
     #[cfg(feature = "std")]
     #[tokio::test]
@@ -271,23 +269,17 @@ mod tests {
         let key = hex::decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
             .unwrap();
         let mac =
-            crate::mac::Mac::new_with_external_key(&key, Algorithm::Sha256, None, None).unwrap();
-
-        let id = mac.primary_key().id;
+            crate::mac::Mac::new_with_external_key(&key, crate::mac::Algorithm::Sha256, None, None)
+                .unwrap();
 
         fn to_try_stream(d: Vec<u8>) -> Result<Vec<u8>, String> {
             Ok(d)
         }
-        let stream_data = stream::iter(hex_data).map(to_try_stream);
+        let stream_data = iter(hex_data).map(to_try_stream);
         let computed = stream_data.compute_mac(&mac).await.unwrap();
         let expected =
             hex::decode("72fd211411c56848ccc90eafd19269a7fa1c3067d5bce20836575d786f828f4e")
                 .unwrap();
-        println!(
-            "expected: {}72fd211411c56848ccc90eafd19269a7fa1c3067d5bce20836575d786f828f4e",
-            hex::encode(id.to_be_bytes())
-        );
-        println!("computed: {}", hex::encode(computed.primary_tag.as_ref()));
         assert_eq!(&computed, &expected);
     }
 }

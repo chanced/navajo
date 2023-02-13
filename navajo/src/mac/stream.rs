@@ -152,11 +152,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    
-
-    
-
-    
+    use super::*;
+    use crate::mac::Algorithm;
+    use futures::{stream, StreamExt};
 
     #[cfg(feature = "std")]
     #[tokio::test]

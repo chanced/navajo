@@ -7,21 +7,27 @@ mod header;
 mod key_info;
 mod material;
 mod method;
+mod nonce;
 mod segment;
 mod size;
+mod writer;
+use nonce::Nonce;
 
 use alloc::vec::Vec;
 pub use key_info::AeadKeyInfo;
 
 use crate::{
     error::{KeyNotFoundError, RemoveKeyError},
+    key::Key,
     keyring::Keyring,
+    Buffer,
 };
 pub use algorithm::Algorithm;
 pub use ciphertext_info::CiphertextInfo;
+pub use encryptor::StreamEncryptor;
 pub use method::Method;
 pub use segment::Segment;
-pub use size::Size;
+use size::Size;
 // use cipher::{ciphers, ring_ciphers, Cipher};
 
 use material::Material;
@@ -47,6 +53,14 @@ impl Aead {
     /// Returns a [`Vec`] containing [`AeadKeyInfo`] for each key in this keyring.
     pub fn keys(&self) -> Vec<AeadKeyInfo> {
         self.keyring.keys().iter().map(AeadKeyInfo::new).collect()
+    }
+
+    pub fn encrypt_in_place<'b, B: Buffer<'b>>(
+        &self,
+        data: &'b mut B,
+        aad: &[u8],
+    ) -> Result<(), crate::error::EncryptError> {
+        self.keyring.primary_key().encrypt_in_place(data, aad)
     }
 
     pub fn promote_key(
@@ -82,7 +96,6 @@ impl Aead {
         self.keyring.update_meta(key_id, meta).map(AeadKeyInfo::new)
     }
 }
-
 // mod algorithm;
 // mod ciphertext_info;
 // mod header;

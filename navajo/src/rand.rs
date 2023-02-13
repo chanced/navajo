@@ -3,7 +3,6 @@ use ring::rand::{SecureRandom as _, SystemRandom};
 
 use random::{rngs::OsRng, CryptoRng, RngCore};
 
-#[cfg(feature = "ring")]
 pub(crate) fn fill(dst: &mut [u8]) {
     Random::fill(dst)
 }
@@ -12,19 +11,19 @@ pub(crate) fn fill(dst: &mut [u8]) {
 /// feature is enabled, otherwise it uses [rand's `OsRng`](https://docs.rs/rand/0.8/rand/rngs/struct.OsRng.html).
 pub struct Random;
 
-#[cfg(feature = "ring")]
 impl CryptoRng for Random {}
 
-#[cfg(feature = "ring")]
 impl Random {
     pub fn new() -> Self {
         Self
     }
 
     pub fn fill(dst: &mut [u8]) {
+        #[cfg(feature = "ring")]
         SystemRandom::new().fill(dst).unwrap_or_else(|_| {
             OsRng.fill_bytes(dst);
         });
+        OsRng.fill_bytes(dst);
     }
 }
 

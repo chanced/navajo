@@ -43,9 +43,16 @@ impl Mac {
             keyring: Keyring::new(material, Origin::Generated, meta),
         }
     }
-
+    /// Returns a [`Compute`] which can then be used as a [`std::io::Write`] or convert into a [`ComputeStream`].
     pub fn compute(&self) -> Compute {
         Compute::new(self)
+    }
+
+    /// Computes a MAC for the given data using the primary key.
+    pub fn compute_slice(&self, data: &[u8]) -> Tag {
+        let mut compute = Compute::new(self);
+        compute.update(data);
+        compute.finalize()
     }
 
     pub fn verify<T>(&self, tag: T) -> Verify<T>

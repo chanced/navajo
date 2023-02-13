@@ -1,3 +1,5 @@
+// #![allow(incomplete_features)]
+// #![feature(generic_const_exprs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate alloc;
@@ -39,4 +41,7 @@ pub use status::Status;
 mod key_info;
 pub use key_info::KeyInfo;
 
-mod bytes;
+mod buffer;
+pub use buffer::Buffer;
+
+mod sensitive;

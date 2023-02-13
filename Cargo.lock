@@ -655,10 +655,12 @@ dependencies = [
 name = "navajo"
 version = "0.0.0"
 dependencies = [
+ "aead",
  "aes",
  "aes-gcm",
  "aes-siv",
  "blake3",
+ "bytes",
  "cfg-if",
  "chacha20poly1305",
  "cmac",
@@ -667,11 +669,11 @@ dependencies = [
  "digest",
  "ed25519",
  "futures",
+ "generic-array",
  "hashbrown",
  "hex",
  "hex-literal",
  "hmac",
- "opaque-debug",
  "p256",
  "p384",
  "paste",

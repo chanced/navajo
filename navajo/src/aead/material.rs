@@ -2,16 +2,18 @@ use alloc::vec;
 
 use zeroize::ZeroizeOnDrop;
 
-use super::cipher::Cipher;
+use super::size::{AES_128_GCM, AES_256_GCM, CHACHA20_POLY1305, XCHACHA20_POLY1305};
 use super::Algorithm;
+use super::{cipher::Cipher, nonce::Nonce};
 use crate::{
-    bytes::SensitiveBytes,
     key::{Key, KeyMaterial},
+    sensitive::Bytes,
+    Buffer,
 };
 
 #[derive(Clone, ZeroizeOnDrop, Eq)]
 pub(super) struct Material {
-    bytes: SensitiveBytes,
+    bytes: Bytes,
     #[zeroize(skip)]
     algorithm: Algorithm,
 }
@@ -31,13 +33,26 @@ impl Material {
         let bytes = vec![0u8; algorithm.key_len()].into();
         Self { bytes, algorithm }
     }
-    pub(super) fn create_cipher(&self) -> Cipher {
+    pub(super) fn cipher(&self) -> Cipher {
         Cipher::new(self.algorithm, &self.bytes)
     }
 }
 
 impl Key<Material> {
     pub(super) fn bytes(&self) -> &[u8] {
-        &self.material_ref().bytes
+        &self.material().bytes
+    }
+    pub(super) fn cipher(&self) -> Cipher {
+        self.material().cipher()
+    }
+    pub fn encrypt_in_place<'a, B: Buffer<'a>>(
+        &self,
+        data: &'a mut B,
+        aad: &[u8],
+    ) -> Result<(), crate::error::EncryptError> {
+        let nonce = Nonce::new(self.algorithm().nonce_len());
+
+        self.cipher().encrypt_in_place(data, aad, nonce);
+        todo!()
     }
 }

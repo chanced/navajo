@@ -1,16 +1,16 @@
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::ZeroizeOnDrop;
 
-use crate::{bytes::SensitiveBytes, error::InvalidKeyLength, Key};
+use crate::{error::InvalidKeyLength, sensitive::Bytes, Key};
 
 use super::Algorithm;
 
-#[derive(Clone, Zeroize, ZeroizeOnDrop, Debug)]
+#[derive(Clone, ZeroizeOnDrop, Debug)]
 pub(super) struct Material {
     #[zeroize(skip)]
     pub(super) algorithm: Algorithm,
-    pub(super) bytes: SensitiveBytes,
-    pub(super) prefix: Option<SensitiveBytes>,
+    pub(super) bytes: Bytes,
+    pub(super) prefix: Option<Bytes>,
 }
 impl PartialEq for Material {
     fn eq(&self, other: &Self) -> bool {
@@ -30,7 +30,7 @@ impl Material {
         algorithm: Algorithm,
     ) -> Result<Self, InvalidKeyLength> {
         algorithm.validate_key_len(bytes.len())?;
-        let bytes = SensitiveBytes(Arc::from(bytes));
+        let bytes = Bytes(Arc::from(bytes));
         Ok(Self {
             algorithm,
             bytes,
@@ -70,6 +70,7 @@ impl crate::KeyMaterial for Material {
 
 #[derive(Clone, Debug)]
 pub(super) enum CryptoKey {
+    #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
     Ring(Box<ring::hmac::Key>),
     RustCrypto(Box<crate::mac::RustCryptoKey>),
     #[cfg(feature = "blake3")]

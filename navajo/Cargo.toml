@@ -50,14 +50,6 @@ version = "0.13"
 package = "rand"
 version = "0.8"
 
-# ring
-[dependencies.ring]
-version = "0.16"
-optional = true
-
-#typenum
-[dependencies.typenum]
-features = ["no_std"]
 
 # serde
 [dependencies.serde]
@@ -74,6 +66,19 @@ features = ["alloc"]
 # serde_bytes
 [dependencies.serde_bytes]
 version = "0.11"
+
+# ring
+[dependencies.ring]
+version = "0.16"
+optional = true
+
+# typenum
+[dependencies.typenum]
+features = ["no_std"]
+
+# generic-array
+[dependencies.generic-array]
+version = "0.14.6"
 
 # aes-siv
 [dependencies.aes-siv]
@@ -93,6 +98,10 @@ version = "*"
 version = "0.12"
 optional = true
 
+# aead
+[dependencies.rust_crypto_aead]
+version = "0.5"
+package = "aead"
 
 # aes-gcm
 [dependencies.aes-gcm]
@@ -163,16 +172,15 @@ version = "0.10"
 [dependencies.dbl]
 version = "0.3"
 
-
-# opaque_debug
-[dependencies.opaque-debug]
-version = "0.3"
-
-
 # blake3
 [dependencies.blake3]
 version = "1.3"
 optional = true
+
+# bytes
+[dependencies.bytes]
+version = "1.4"
+
 
 # -------------------------
 #    Test dependencies
@@ -188,7 +196,7 @@ version = "0.3"
 
 [features]
 default = [
-	# "std",
+	"std",
 	"ring",
 	"aead",
 	"signature",

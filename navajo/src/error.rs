@@ -62,16 +62,16 @@ impl From<UnspecifiedError> for EncryptError {
         Self::Unspecified
     }
 }
-
-pub(crate) enum NonceSequenceError {
-    CounterLimitExceeded,
-    UnspecifiedError,
-}
-impl From<ring::error::Unspecified> for NonceSequenceError {
-    fn from(_: ring::error::Unspecified) -> Self {
-        Self::UnspecifiedError
+#[derive(Clone, Debug)]
+pub(crate) struct CounterLimitExceeded;
+impl core::fmt::Display for CounterLimitExceeded {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "counter limit exceeded")
     }
 }
+#[cfg(feature = "std")]
+impl std::error::Error for CounterLimitExceeded {}
+
 #[derive(Debug)]
 pub enum DecryptStreamError<E> {
     Unspecified,
@@ -122,12 +122,9 @@ impl<E> From<UnspecifiedError> for DecryptStreamError<E> {
     }
 }
 
-impl<E> From<NonceSequenceError> for EncryptStreamError<E> {
-    fn from(e: NonceSequenceError) -> Self {
-        match e {
-            NonceSequenceError::CounterLimitExceeded => Self::CounterLimitExceeded,
-            NonceSequenceError::UnspecifiedError => Self::Unspecified,
-        }
+impl<E> From<CounterLimitExceeded> for EncryptStreamError<E> {
+    fn from(_: CounterLimitExceeded) -> Self {
+        Self::CounterLimitExceeded
     }
 }
 
@@ -188,6 +185,8 @@ impl From<UnspecifiedError> for DecryptError {
         Self::Unspecified
     }
 }
+
+#[cfg(feature = "ring")]
 impl From<ring::error::Unspecified> for DecryptError {
     fn from(_: ring::error::Unspecified) -> Self {
         Self::Unspecified

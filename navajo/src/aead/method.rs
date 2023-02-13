@@ -53,9 +53,10 @@ impl From<Method> for u8 {
         match method {
             Method::Online => 0,
             Method::StreamingHmacSha256(segment) => match segment {
-                Segment::FourKB => 1,
-                Segment::SixtyFourKB => 2,
-                Segment::OneMB => 3,
+                Segment::FourKiloBytes => 1,
+                Segment::SixtyFourKiloBytes => 2,
+                Segment::OneMegaByte => 3,
+                Segment::FourMegaBytes => 4,
             },
         }
     }
@@ -81,9 +82,10 @@ impl TryFrom<u8> for Method {
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             0 => Ok(Method::Online),
-            1 => Ok(Method::StreamingHmacSha256(Segment::FourKB)),
-            2 => Ok(Method::StreamingHmacSha256(Segment::SixtyFourKB)),
-            3 => Ok(Method::StreamingHmacSha256(Segment::OneMB)),
+            1 => Ok(Method::StreamingHmacSha256(Segment::FourKiloBytes)),
+            2 => Ok(Method::StreamingHmacSha256(Segment::SixtyFourKiloBytes)),
+            3 => Ok(Method::StreamingHmacSha256(Segment::OneMegaByte)),
+            4 => Ok(Method::StreamingHmacSha256(Segment::FourMegaBytes)),
             _ => Err("missing or unknown encryption method".into()),
         }
     }

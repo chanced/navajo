@@ -108,10 +108,6 @@ where
     pub(crate) fn material(&self) -> &M {
         &self.material
     }
-    pub(crate) fn material_ref(&self) -> &M {
-        &self.material
-    }
-
     pub(crate) fn origin(&self) -> Origin {
         self.origin
     }

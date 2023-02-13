@@ -1,53 +1,54 @@
+use core::option::Iter;
+
 use alloc::{collections::VecDeque, vec::Vec};
 use ring::error::Unspecified;
 
-use crate::Aead;
+use crate::{error::EncryptError, Aead};
 
-use super::{cipher::Cipher, Algorithm, Segment};
+use super::{cipher::Cipher, writer::WriteAead, Algorithm, Segment};
 
-pub struct Encryptor {
+pub struct StreamEncryptor {
     key_id: u32,
     algorithm: Algorithm,
     cipher: Option<Cipher>,
-    segment_size: Option<Segment>,
-    #[cfg(feature = "std")]
     buffer: Vec<u8>,
-    #[cfg(not(feature = "std"))]
-    buffer: VecDeque<u8>,
-    ciphertext: Vec<u8>,
+    ciphertext: VecDeque<u8>,
+    nonce: Option<Vec<u8>>,
+    segment: Segment,
 }
 
-impl Encryptor {
-    pub fn new(aead: &Aead, segment_size: Option<Segment>) -> Self {
+impl StreamEncryptor {
+    pub(super) fn new(aead: &Aead, segment: Segment) -> Self {
         let key = aead.keyring.primary_key();
         let algorithm = key.algorithm();
         Self {
             key_id: key.id(),
             algorithm,
             cipher: None,
-            #[cfg(feature = "std")]
             buffer: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            buffer: VecDeque::new(),
-            segment_size,
-            ciphertext: Vec::new(),
+            ciphertext: VecDeque::new(),
+            nonce: None,
+            segment,
         }
     }
 
-    pub fn push(&mut self, data: &[u8]) {
-        let mut v: VecDeque<u8> = VecDeque::default();
-        v.extend(data.iter());
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "std")] {{
-                    self.buffer.extend_from_slice(data);
-            }}
-            else {{
-                self.buffer.extend(data);
-            }}
-        }
-    }
-
-    pub fn update(&mut self) -> Result<(), Unspecified> {
+    pub(super) fn slice(self, slice: &[u8]) -> Result<Vec<u8>, EncryptError> {
         todo!()
+    }
+    pub(super) fn update(&mut self, data: &[u8]) {
+        // self.cipher.unwrap().
+        todo!()
+    }
+
+    pub(super) fn finalize(self) -> Result<Vec<u8>, EncryptError> {
+        todo!()
+    }
+
+    pub(super) fn next(&mut self) -> Option<Vec<u8>> {
+        todo!()
+    }
+
+    pub(super) fn buffered_len(&self) -> usize {
+        self.buffer.len()
     }
 }
