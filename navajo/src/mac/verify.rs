@@ -1,10 +1,8 @@
 use futures::{Stream, TryStream};
 
-use crate::{error::MacVerificationError};
+use crate::error::MacVerificationError;
 
-use super::{
-    compute::Compute, Mac, Tag, VerifyStream, VerifyTryStream,
-};
+use super::{compute::Compute, Mac, Tag, VerifyStream, VerifyTryStream};
 
 pub struct Verify<T>
 where

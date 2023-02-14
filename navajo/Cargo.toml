@@ -196,7 +196,7 @@ version = "0.3"
 
 [features]
 default = [
-	# "std",
+	"std",
 	"ring",
 	"aead",
 	"signature",
