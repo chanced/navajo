@@ -297,7 +297,6 @@ impl Mac {
     where
         T: AsRef<Tag>,
     {
-        let tag = tag.as_ref().clone();
         let mut verify = Verify::new(tag, self);
         verify.update(data);
         verify.finalize()
@@ -329,7 +328,6 @@ impl Mac {
         T: AsRef<Tag>,
         R: std::io::Read,
     {
-        let tag = tag.as_ref().clone();
         let mut verify = Verify::new(tag, self);
         std::io::copy(reader, &mut verify)?;
         let verified = verify.finalize()?;
@@ -418,7 +416,7 @@ impl Mac {
     pub fn primary_key(&self) -> MacKeyInfo {
         self.keyring.primary_key().into()
     }
-    /// Returns a [`Vec`] containing a [`KeyInfo`](crate::key::KeyInfo) for each key in this keyring.
+    /// Returns a [`Vec`] containing a [`MacKeyInfo`] for each key in this keyring.
     pub fn keys(&self) -> Vec<MacKeyInfo> {
         self.keyring.keys().iter().map(MacKeyInfo::new).collect()
     }

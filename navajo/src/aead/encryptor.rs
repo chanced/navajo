@@ -1,7 +1,6 @@
 use core::option::Iter;
 
 use alloc::{collections::VecDeque, vec::Vec};
-use ring::error::Unspecified;
 
 use crate::{error::EncryptError, Aead};
 

@@ -51,8 +51,14 @@ impl Key<Material> {
         aad: &[u8],
     ) -> Result<(), crate::error::EncryptError> {
         let nonce = Nonce::new(self.algorithm().nonce_len());
-
-        self.cipher().encrypt_in_place(data, aad, nonce);
-        todo!()
+        self.cipher().encrypt_in_place(nonce, aad, data)
+    }
+    pub fn decrypt_in_place<B: Buffer>(
+        &self,
+        data: &mut B,
+        aad: &[u8],
+    ) -> Result<(), crate::error::DecryptError> {
+        let nonce = Nonce::new(self.algorithm().nonce_len());
+        self.cipher().decrypt_in_place(nonce, aad, data)
     }
 }

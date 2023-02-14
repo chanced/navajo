@@ -197,7 +197,7 @@ version = "0.3"
 [features]
 default = [
 	"std",
-	"ring",
+	# "ring",
 	"aead",
 	"signature",
 	"mac",

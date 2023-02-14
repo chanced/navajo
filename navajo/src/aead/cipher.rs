@@ -1,6 +1,11 @@
-use crate::{aead::nonce::Nonce, error::EncryptError, Buffer};
+use crate::{
+    aead::nonce::Nonce,
+    buffer::RcBuffer,
+    error::{DecryptError, EncryptError},
+    Buffer,
+};
 
-use super::{algorithm::RustCryptoAlgorithm, Algorithm};
+use super::Algorithm;
 
 const HEADER_LEN: usize = 5;
 
@@ -12,20 +17,35 @@ pub(super) enum Cipher {
 }
 
 impl Cipher {
-    pub(super) fn encrypt_in_place<B>(
-        &self,
-        data: &mut B,
-        aad: &[u8],
+    pub(super) fn decrypt_in_place<B>(
+        &mut self,
         nonce: Nonce,
+        aad: &[u8],
+        data: &mut B,
+    ) -> Result<(), DecryptError>
+    where
+        B: Buffer,
+    {
+        match self {
+            Self::RustCrypto(rc) => rc.decrypt_in_place(nonce, aad, data),
+            #[cfg(feature = "ring")]
+            Self::Ring(ring) => ring.decrypt_in_place(nonce, aad, data),
+        }
+    }
+    pub(super) fn encrypt_in_place<B>(
+        &mut self,
+        nonce: Nonce,
+        aad: &[u8],
+        data: &mut B,
     ) -> Result<(), EncryptError>
     where
         B: Buffer,
     {
-        // match self {
-        //     Self::RustCrypto(rc) => //rc.encrypt_in_place(nonce, aad, data),
-        //     Self::Ring(ring) => ring.encrypt_in_place(nonce, aad, data),
-        // }
-        todo!()
+        match self {
+            Self::RustCrypto(rc) => rc.encrypt_in_place(nonce, aad, data),
+            #[cfg(feature = "ring")]
+            Self::Ring(ring) => ring.encrypt_in_place(nonce, aad, data),
+        }
     }
     pub(super) fn new(algorithm: Algorithm, key: &[u8]) -> Self {
         match algorithm {
@@ -36,10 +56,7 @@ impl Cipher {
                 }
                 #[cfg(not(feature = "ring"))]
                 {
-                    Self::RustCrypto(RustCryptoCipher::new(
-                        RustCryptoAlgorithm::ChaCha20Poly1305,
-                        key,
-                    ))
+                    Self::RustCrypto(RustCryptoCipher::new_chacha20_poly1305(key))
                 }
             }
             Algorithm::Aes128Gcm => {
@@ -49,7 +66,7 @@ impl Cipher {
                 }
                 #[cfg(not(feature = "ring"))]
                 {
-                    Self::RustCrypto(RustCryptoCipher::new(RustCryptoAlgorithm::Aes128Gcm, key))
+                    Self::RustCrypto(RustCryptoCipher::new_aes_128_gcm(key))
                 }
             }
             Algorithm::Aes256Gcm => {
@@ -59,26 +76,27 @@ impl Cipher {
                 }
                 #[cfg(not(feature = "ring"))]
                 {
-                    Self::RustCrypto(RustCryptoCipher::new(RustCryptoAlgorithm::Aes256Gcm, key))
+                    Self::RustCrypto(RustCryptoCipher::new_aes_256_gcm(key))
                 }
             }
-            Algorithm::XChaCha20Poly1305 => Self::RustCrypto(RustCryptoCipher::new(
-                RustCryptoAlgorithm::XChaCha20Poly1305,
-                key,
-            )),
+            Algorithm::XChaCha20Poly1305 => {
+                Self::RustCrypto(RustCryptoCipher::new_x_chacha20_poly1305(key))
+            }
         }
     }
 }
 
 #[cfg(feature = "ring")]
-
 pub(super) struct RingCipher(ring::aead::LessSafeKey);
+
+#[cfg(feature = "ring")]
 impl RingCipher {
     pub(super) fn new(algorithm: &'static ring::aead::Algorithm, key: &[u8]) -> RingCipher {
         let unbounded = ring::aead::UnboundKey::new(algorithm, key).unwrap(); // safe, keys are only generated and are always the correct size
         let key = ring::aead::LessSafeKey::new(unbounded);
         RingCipher(key)
     }
+
     pub(super) fn encrypt_in_place<B>(
         &self,
         nonce: Nonce,
@@ -89,10 +107,27 @@ impl RingCipher {
         B: Buffer,
     {
         let aad = ring::aead::Aad::from(aad);
-        // self.0.seal_in_place_append_tag(nonce.into(), aad, data)?;
-        todo!()
+        self.0.seal_in_place_append_tag(nonce.into(), aad, data)?;
+        Ok(())
+    }
+    pub(super) fn decrypt_in_place<B>(
+        &self,
+        nonce: Nonce,
+        aad: &[u8],
+        data: &mut B,
+    ) -> Result<(), EncryptError>
+    where
+        B: Buffer,
+    {
+        let aad = ring::aead::Aad::from(aad);
+        self.0.open_in_place(nonce.into(), aad, data.as_mut())?;
+        data.truncate(self.0.algorithm().tag_len());
+        Ok(())
     }
 }
+
+// todo: should some(all?) of these be boxed?
+#[allow(clippy::large_enum_variant)]
 pub(super) enum RustCryptoCipher {
     #[cfg(not(feature = "ring"))]
     Aes128Gcm(aes_gcm::Aes128Gcm),
@@ -102,67 +137,94 @@ pub(super) enum RustCryptoCipher {
     ChaCha20Poly1305(chacha20poly1305::ChaCha20Poly1305),
     XChaCha20Poly1305(chacha20poly1305::XChaCha20Poly1305),
 }
-
 impl RustCryptoCipher {
-    pub(super) fn new(algorithm: RustCryptoAlgorithm, key: &[u8]) -> Self {
-        match algorithm {
-            #[cfg(not(feature = "ring"))]
-            RustCryptoAlgorithm::ChaCha20Poly1305 => {
-                use chacha20poly1305::KeyInit;
-                let key = chacha20poly1305::ChaCha20Poly1305::new_from_slice(key).unwrap(); // safe: keys are always generated and the correct size
-                Self::ChaCha20Poly1305(key)
-            }
-            #[cfg(not(feature = "ring"))]
-            RustCryptoAlgorithm::Aes128Gcm => {
-                use aes_gcm::KeyInit;
-                let key = aes_gcm::Aes128Gcm::new_from_slice(key).unwrap(); // safe: keys are always generated and the correct size
-                Self::Aes128Gcm(key)
-            }
-            #[cfg(not(feature = "ring"))]
-            RustCryptoAlgorithm::Aes256Gcm => {
-                use aes_gcm::KeyInit;
-                let key = aes_gcm::Aes256Gcm::new_from_slice(key).unwrap(); // safe: keys are always generated and the correct size
-                Self::Aes128Gcm(key)
-            }
-            RustCryptoAlgorithm::XChaCha20Poly1305 => {
-                use aes_gcm::KeyInit;
-                let key = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key).unwrap(); // safe: keys are always generated and the correct size
-                Self::XChaCha20Poly1305(key)
-            }
-        }
+    #[cfg(not(feature = "ring"))]
+    fn new_chacha20_poly1305(key: &[u8]) -> Self {
+        use chacha20poly1305::KeyInit;
+        let key = chacha20poly1305::ChaCha20Poly1305::new_from_slice(key).unwrap(); // safe: keys are always generated and the correct size
+        Self::ChaCha20Poly1305(key)
     }
-}
-
-fn prepend_header<B: Buffer>(data: &mut B, header: &[u8]) {
-    let original_len = data.as_ref().len();
-    let header_len = header.len();
-    let shifted = data.as_ref()[original_len - header_len..].to_vec();
-    data.extend(shifted.iter());
-    // shifts the data to the right by header len
-    let data = data.as_mut();
-    #[allow(clippy::needless_range_loop)]
-    for i in (0..original_len - header_len).rev() {
-        data[i + header_len] = data[i];
-        if i < header_len {
-            data[i] = header[i];
-        }
+    fn new_x_chacha20_poly1305(key: &[u8]) -> Self {
+        use chacha20poly1305::KeyInit;
+        let key = chacha20poly1305::XChaCha20Poly1305::new_from_slice(key).unwrap(); // safe: keys are always generated and the correct size
+        Self::XChaCha20Poly1305(key)
     }
-}
-#[cfg(test)]
-mod tests {
-    use alloc::vec;
-
-    use super::*;
-
-    #[test]
-    fn test_prepend_header() {
-        let header = [0, 1, 2, 3, 4];
-        let mut data = vec![10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
-
-        prepend_header(&mut data, &header);
-        assert_eq!(
-            data,
-            vec![0, 1, 2, 3, 4, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
-        )
+    #[cfg(not(feature = "ring"))]
+    fn new_aes_128_gcm(key: &[u8]) -> Self {
+        use aes_gcm::KeyInit;
+        let key = aes_gcm::Aes128Gcm::new_from_slice(key).unwrap(); // safe: keys are always generated and the correct size
+        Self::Aes128Gcm(key)
+    }
+    #[cfg(not(feature = "ring"))]
+    fn new_aes_256_gcm(key: &[u8]) -> Self {
+        use aes_gcm::KeyInit;
+        let key = aes_gcm::Aes256Gcm::new_from_slice(key).unwrap(); // safe: keys are always generated and the correct size
+        Self::Aes256Gcm(key)
+    }
+    pub(super) fn encrypt_in_place<B>(
+        &self,
+        nonce: Nonce,
+        aad: &[u8],
+        data: &mut B,
+    ) -> Result<(), EncryptError>
+    where
+        B: Buffer,
+    {
+        let mut buffer = RcBuffer(data);
+        match self {
+            #[cfg(not(feature = "ring"))]
+            Self::Aes128Gcm(aes) => {
+                use aes_gcm::aead::AeadInPlace;
+                aes.encrypt_in_place(&nonce.into(), aad, &mut buffer)
+            }
+            #[cfg(not(feature = "ring"))]
+            Self::Aes256Gcm(aes) => {
+                use aes_gcm::aead::AeadInPlace;
+                aes.encrypt_in_place(&nonce.into(), aad, &mut buffer)
+            }
+            #[cfg(not(feature = "ring"))]
+            Self::ChaCha20Poly1305(chacha) => {
+                use chacha20poly1305::aead::AeadInPlace;
+                chacha.encrypt_in_place(&nonce.into(), aad, &mut buffer)
+            }
+            Self::XChaCha20Poly1305(cipher) => {
+                use chacha20poly1305::aead::AeadInPlace;
+                cipher.encrypt_in_place(&nonce.into(), aad, &mut buffer)
+            }
+        }?;
+        Ok(())
+    }
+    pub(super) fn decrypt_in_place<B>(
+        &self,
+        nonce: Nonce,
+        aad: &[u8],
+        data: &mut B,
+    ) -> Result<(), DecryptError>
+    where
+        B: Buffer,
+    {
+        let mut buffer = RcBuffer(data);
+        match self {
+            #[cfg(not(feature = "ring"))]
+            Self::Aes128Gcm(aes) => {
+                use aes_gcm::aead::AeadInPlace;
+                aes.decrypt_in_place(&nonce.into(), aad, &mut buffer)
+            }
+            #[cfg(not(feature = "ring"))]
+            Self::Aes256Gcm(aes) => {
+                use aes_gcm::aead::AeadInPlace;
+                aes.decrypt_in_place(&nonce.into(), aad, &mut buffer)
+            }
+            #[cfg(not(feature = "ring"))]
+            Self::ChaCha20Poly1305(chacha) => {
+                use chacha20poly1305::aead::AeadInPlace;
+                chacha.decrypt_in_place(&nonce.into(), aad, &mut buffer)
+            }
+            Self::XChaCha20Poly1305(cipher) => {
+                use chacha20poly1305::aead::AeadInPlace;
+                cipher.decrypt_in_place(&nonce.into(), aad, &mut buffer)
+            }
+        }?;
+        Ok(())
     }
 }

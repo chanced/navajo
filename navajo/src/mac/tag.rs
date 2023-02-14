@@ -102,12 +102,12 @@ impl Tag {
     ///
     /// # Errors
     /// - If `len` is less than 13 and greater than 0, and [`omit_header`] is
-    ///   `false`, [`TruncationErrorLLTooShort`] will be returned.
+    ///   `false`, [`TruncationError::MinLengthNotMet`] will be returned.
     /// - If `len` is greater than the length of the primary tag, a
     ///  [`TruncationError::MinLengthNotMet`] will be returned.
     ///  [`TruncationError::MinLengthNotMet`] will be returned.
     /// - If an algorithm in the keyset does not permit truncation,
-    ///   [`Truncation::NotTruncatable`] will be retruned.
+    ///   [`TruncationError::NotTruncatable`] will be retruned.
     ///
     ///
     /// ## Example

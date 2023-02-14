@@ -6,14 +6,14 @@ use super::{compute::Compute, Mac, Tag, VerifyStream, VerifyTryStream};
 
 pub struct Verify<T>
 where
-    T: AsRef<Tag> + Send + Sync,
+    T: AsRef<Tag>,
 {
     tag: T,
     hasher: Compute,
 }
 impl<T> Verify<T>
 where
-    T: AsRef<Tag> + Send + Sync,
+    T: AsRef<Tag>,
 {
     pub(super) fn new(tag: T, mac: &Mac) -> Self {
         let _t = tag.as_ref();
@@ -24,6 +24,19 @@ where
         self.hasher.update(data)
     }
 
+    pub fn finalize(self) -> Result<Tag, MacVerificationError> {
+        let computed = self.hasher.finalize();
+        if self.tag.as_ref() == computed {
+            Ok(computed)
+        } else {
+            Err(MacVerificationError)
+        }
+    }
+}
+impl<T> Verify<T>
+where
+    T: AsRef<Tag> + Send + Sync,
+{
     pub fn stream<S, D>(self, stream: S) -> VerifyStream<S, D, T>
     where
         D: AsRef<[u8]>,
@@ -39,21 +52,12 @@ where
     {
         VerifyTryStream::new(stream, self)
     }
-
-    pub fn finalize(self) -> Result<Tag, MacVerificationError> {
-        let computed = self.hasher.finalize();
-        if self.tag.as_ref() == computed {
-            Ok(computed)
-        } else {
-            Err(MacVerificationError)
-        }
-    }
 }
 
 #[cfg(feature = "std")]
 impl<T> std::io::Write for Verify<T>
 where
-    T: AsRef<Tag> + Send + Sync,
+    T: AsRef<Tag>,
 {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.update(buf);

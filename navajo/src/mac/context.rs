@@ -4,7 +4,6 @@ use alloc::{boxed::Box, vec::Vec};
 use super::{
     entry::Entry,
     material::{CryptoKey, Material},
-    output::Output,
     RustCryptoKey,
 };
 
@@ -176,7 +175,7 @@ macro_rules! rust_crypto_contexts {
         pub(crate) enum RustCryptoContext {
                 $(
                     #[cfg(all(feature = "hmac_sha2", not(feature="ring")))]
-                    $ring(pub(super) [< Hmac $ring Context>]),
+                    $ring([< Hmac $ring Context>]),
                 )*
                 $(
                     #[cfg(feature = "hmac_sha2")]
@@ -240,8 +239,8 @@ macro_rules! rust_crypto_contexts {
                     let key = *key;
                     match key {
                         $(
-                            #[cfg(all(feature = "hmac_sha2", not(feature="ring")))]
-                            RustCryptoKey::$ring(key) => key.0.into(),
+                            #[cfg(all(not(feature="ring"), feature = "hmac_sha2"))]
+                            RustCryptoKey::$ring(key) => Self::$ring(key.0.into()),
                         )*
                         $(
                             #[cfg(feature = "hmac_sha2")]

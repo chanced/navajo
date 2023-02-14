@@ -166,7 +166,7 @@ macro_rules! rust_crypto_internal_tags {
                     match self {
                         $(
                             #[cfg(not(feature = "ring"))]
-                            Self::[< Hmac $ring InternalTag >](tag) => tag.as_ref(),
+                            Self::$ring(tag) => tag.as_ref(),
                         )*
                         $(
                             #[cfg(feature="hmac_sha2")]

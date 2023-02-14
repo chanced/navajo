@@ -71,16 +71,6 @@ impl Algorithm {
     }
 }
 
-pub(super) enum RustCryptoAlgorithm {
-    #[cfg(not(feature = "ring"))]
-    Aes128Gcm,
-    #[cfg(not(feature = "ring"))]
-    Aes256Gcm,
-    #[cfg(not(feature = "ring"))]
-    ChaCha20Poly1305,
-    XChaCha20Poly1305,
-}
-
 // impl Algorithm {
 
 //     /// The length of the tag in bytes

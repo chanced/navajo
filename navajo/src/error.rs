@@ -54,6 +54,13 @@ impl fmt::Display for EncryptError {
         }
     }
 }
+
+impl From<rust_crypto_aead::Error> for EncryptError {
+    fn from(_: rust_crypto_aead::Error) -> Self {
+        Self::Unspecified
+    }
+}
+
 #[cfg(feature = "std")]
 impl std::error::Error for EncryptError {}
 
@@ -62,6 +69,13 @@ impl From<UnspecifiedError> for EncryptError {
         Self::Unspecified
     }
 }
+#[cfg(feature = "ring")]
+impl From<ring::error::Unspecified> for EncryptError {
+    fn from(_: ring::error::Unspecified) -> Self {
+        Self::Unspecified
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct CounterLimitExceeded;
 impl core::fmt::Display for CounterLimitExceeded {
@@ -107,6 +121,13 @@ where
         }
     }
 }
+
+impl From<rust_crypto_aead::Error> for DecryptError {
+    fn from(_: rust_crypto_aead::Error) -> Self {
+        Self::Unspecified
+    }
+}
+
 #[derive(Debug)]
 pub enum EncryptStreamError<E> {
     Unspecified,

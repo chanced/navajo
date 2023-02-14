@@ -9,8 +9,7 @@ use crate::kms::Kms;
 use crate::rand;
 use crate::Origin;
 use crate::Status;
-use aes_gcm::aead::AeadMutInPlace;
-use aes_gcm::aead::Buffer;
+
 use aes_gcm::Aes256Gcm;
 use alloc::format;
 use alloc::string::ToString;
@@ -277,7 +276,7 @@ where
 {
     fn seal_first_pass(&self, associated_data: &[u8]) -> Result<Vec<u8>, SealError> {
         let mut serialized = serde_json::to_vec(self)?;
-
+        use aes_gcm::aead::AeadInPlace;
         // Round 1: AES-256-GCM
         let key = Aes256Gcm::generate_key(&mut crate::Random);
         let mut cipher = Aes256Gcm::new(&key);
@@ -296,6 +295,7 @@ where
         let key = ChaCha20Poly1305::generate_key(&mut crate::Random);
         let mut cipher = ChaCha20Poly1305::new(&key);
         let nonce = ChaCha20Poly1305::generate_nonce(&mut crate::Random);
+        use chacha20poly1305::aead::AeadInPlace;
         data.reserve(CHACHA20_POLY1305_TAG_SIZE);
         cipher.encrypt_in_place(&nonce, associated_data, data)?;
         let cipher_and_nonce = [key.as_slice(), nonce.as_slice()].concat();
@@ -444,6 +444,7 @@ where
         buffer: &mut Vec<u8>,
         associated_data: &[u8],
     ) -> Result<usize, OpenError> {
+        use chacha20poly1305::aead::AeadInPlace;
         if key.len() != CHACHA20_POLY1305_KEY_SIZE + CHACHA20_POLY1305_NONCE_SIZE {
             return Err("kms returned invalid data".into());
         }
@@ -456,6 +457,7 @@ where
     }
 
     fn open_second_pass(buffer: &mut Vec<u8>, associated_data: &[u8]) -> Result<(), OpenError> {
+        use aes_gcm::aead::AeadInPlace;
         let mut data = buffer.split_off(AES_256_GCM_KEY_SIZE + AES_256_GCM_NONCE_SIZE);
         let nonce = buffer.split_off(AES_256_GCM_KEY_SIZE);
         let nonce = aes_gcm::Nonce::from_slice(&nonce);
