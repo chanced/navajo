@@ -131,7 +131,7 @@ mod tests {
         let mut hasher = Compute::new(&mac);
         hasher.update(b"message");
         let tag = hasher.finalize();
-        assert_eq!(tag.omit_header().unwrap().as_ref(), &expected[..]);
+        assert_eq!(tag.omit_header().unwrap(), &expected[..]);
     }
     #[test]
     fn test_chunked() {
@@ -244,8 +244,8 @@ mod tests {
         let mut hasher = Compute::new(&mac);
         hasher.update(long_str.as_bytes());
         let tag = hasher.finalize();
-        assert_eq!(tag.omit_header().unwrap().as_ref().len(), expected[..].len());
-        assert_eq!(tag.omit_header().unwrap().as_ref(), &expected[..]);
+        assert_eq!(tag.omit_header().unwrap().len(), expected[..].len());
+        assert_eq!(tag.omit_header().unwrap(), &expected[..]);
         // assert_eq!(
         //     tag.omit_header().as_ref(),
         //     hex::decode("1b2dd9405426e0c7de12085c5ddd7fdee131064112cd6249ed4af2d2a3c69295")

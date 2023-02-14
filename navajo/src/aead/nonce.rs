@@ -1,5 +1,6 @@
+use alloc::boxed::Box;
 use generic_array::GenericArray;
-use ring::error::Unspecified;
+
 use typenum::{U12, U24};
 
 use crate::error::UnspecifiedError;
@@ -177,6 +178,8 @@ impl NonceSequence {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+
     use super::*;
 
     #[test]

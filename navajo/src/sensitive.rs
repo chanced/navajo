@@ -1,6 +1,6 @@
 use core::ops::Deref;
 
-use alloc::sync::Arc;
+use alloc::{sync::Arc, vec::Vec};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 

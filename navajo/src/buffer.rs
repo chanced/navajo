@@ -2,18 +2,18 @@ use alloc::{collections::VecDeque, vec::Vec};
 use bytes::BytesMut;
 use cfg_if::cfg_if;
 
-pub trait Buffer<'a>: AsRef<[u8]> + AsMut<[u8]> + Extend<&'a u8> {
-    fn truncate(&'a mut self, len: usize);
+pub trait Buffer: AsRef<[u8]> + AsMut<[u8]> + for<'a> Extend<&'a u8> {
+    fn truncate(&mut self, len: usize);
 }
 
-impl<'a> Buffer<'a> for Vec<u8> {
-    fn truncate(&'a mut self, len: usize) {
+impl Buffer for Vec<u8> {
+    fn truncate(&mut self, len: usize) {
         self.truncate(len)
     }
 }
 
-impl<'a> Buffer<'a> for BytesMut {
-    fn truncate(&'a mut self, len: usize) {
+impl Buffer for BytesMut {
+    fn truncate(&mut self, len: usize) {
         self.truncate(len)
     }
 }

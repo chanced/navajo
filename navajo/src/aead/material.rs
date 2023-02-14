@@ -45,9 +45,9 @@ impl Key<Material> {
     pub(super) fn cipher(&self) -> Cipher {
         self.material().cipher()
     }
-    pub fn encrypt_in_place<'a, B: Buffer<'a>>(
+    pub fn encrypt_in_place<B: Buffer>(
         &self,
-        data: &'a mut B,
+        data: &mut B,
         aad: &[u8],
     ) -> Result<(), crate::error::EncryptError> {
         let nonce = Nonce::new(self.algorithm().nonce_len());

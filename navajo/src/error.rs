@@ -254,10 +254,40 @@ impl From<u8> for InvalidAlgorithm {
 #[derive(Debug)]
 pub enum TruncationError {
     NotTruncatable,
-    TooLong,
-    TooShort,
+    LengthExceeded,
+    MinLengthNotMet,
 }
 
+#[cfg(feature = "std")]
+#[derive(Debug)]
+pub enum MacVerificationReadError {
+    MacVerificationError,
+    IoError(std::io::Error),
+}
+#[cfg(feature = "std")]
+impl core::fmt::Display for MacVerificationReadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::MacVerificationError => write!(f, "MAC verification failed"),
+            Self::IoError(e) => write!(f, "io error: {e}"),
+        }
+    }
+}
+#[cfg(feature = "std")]
+impl From<std::io::Error> for MacVerificationReadError {
+    fn from(e: std::io::Error) -> Self {
+        Self::IoError(e)
+    }
+}
+#[cfg(feature = "std")]
+impl From<MacVerificationError> for MacVerificationReadError {
+    fn from(_: MacVerificationError) -> Self {
+        Self::MacVerificationError
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for MacVerificationReadError {}
 #[derive(Debug, Clone)]
 pub struct MacVerificationError;
 impl fmt::Display for MacVerificationError {
@@ -292,7 +322,7 @@ impl From<crypto_common::InvalidLength> for InvalidKeyLength {
     }
 }
 #[derive(Debug)]
-pub struct SealError(String);
+pub struct SealError(pub String);
 
 impl fmt::Display for SealError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -327,7 +357,7 @@ impl From<chacha20poly1305::Error> for SealError {
 impl std::error::Error for SealError {}
 
 #[derive(Debug)]
-pub struct OpenError(String);
+pub struct OpenError(pub String);
 
 impl fmt::Display for OpenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -338,6 +368,11 @@ impl fmt::Display for OpenError {
 impl From<String> for OpenError {
     fn from(e: String) -> Self {
         Self(e)
+    }
+}
+impl From<&str> for OpenError {
+    fn from(e: &str) -> Self {
+        Self(e.to_string())
     }
 }
 
@@ -354,11 +389,6 @@ impl From<chacha20poly1305::Error> for OpenError {
 }
 impl From<crypto_common::InvalidLength> for OpenError {
     fn from(e: crypto_common::InvalidLength) -> Self {
-        Self(e.to_string())
-    }
-}
-impl From<&str> for OpenError {
-    fn from(e: &str) -> Self {
         Self(e.to_string())
     }
 }

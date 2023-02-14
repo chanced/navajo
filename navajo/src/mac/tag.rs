@@ -60,7 +60,11 @@ pub struct Tag {
     /// `as_ref`.
     omit_header: bool,
 }
-
+impl AsRef<Tag> for Tag {
+    fn as_ref(&self) -> &Tag {
+        self
+    }
+}
 impl Tag {
     // fn verify_slice(&self, tag: &[u8]) -> Result<(), MacVerificationError> {
     //     if tag.len() < 8 {
@@ -85,7 +89,8 @@ impl Tag {
         todo!()
     }
 
-    /// Returns this `Tag` cloned with truncation to `len` bytes if possible.
+    /// Returns this `Tag` cloned with truncation set to `len` bytes if
+    /// possible.
     ///
     /// Note that the truncation will be applied to entire output. The header of
     /// the `Tag` is 4 bytes. Unless the header is to be omitted (by calling
@@ -95,12 +100,15 @@ impl Tag {
     /// A value of `0` will remove the truncation, effectively calling
     /// [`remove_truncation`].
     ///
-    /// ## Errors
+    /// # Errors
     /// - If `len` is less than 13 and greater than 0, and [`omit_header`] is
-    ///   `false`, an error will be returned.
-    /// - If `len` is greater than the size of any of the keys in the keyring,
-    ///  an error will be returned.
-    /// - If an algorithm in the keyset does not permit truncation.
+    ///   `false`, [`TruncationErrorLLTooShort`] will be returned.
+    /// - If `len` is greater than the length of the primary tag, a
+    ///  [`TruncationError::MinLengthNotMet`] will be returned.
+    ///  [`TruncationError::MinLengthNotMet`] will be returned.
+    /// - If an algorithm in the keyset does not permit truncation,
+    ///   [`Truncation::NotTruncatable`] will be retruned.
+    ///
     ///
     /// ## Example
     pub fn truncate(&self, len: usize) -> Result<Self, TruncationError> {
@@ -108,10 +116,13 @@ impl Tag {
             return Ok(self.remove_truncation());
         }
         if len < 8 {
-            return Err(TruncationError::TooShort);
+            return Err(TruncationError::MinLengthNotMet);
         }
         if !self.omit_header && len < 12 {
-            return Err(TruncationError::TooShort);
+            return Err(TruncationError::MinLengthNotMet);
+        }
+        if len > self.primary_tag.len() {
+            return Err(TruncationError::LengthExceeded);
         }
         Ok(Self {
             omit_header: self.omit_header,
@@ -123,13 +134,16 @@ impl Tag {
         })
     }
 
-    /// Returns this a clone of this `Tag` with a flag set indicating that the
-    /// header should be omitted when represented as bytes. Any calls to `as_bytes`
-    /// or `as_ref` will return the MAC bytes without the header.
+    /// Returns a clone of this `Tag` with a flag set indicating that the header
+    /// should be omitted when represented as bytes. Any calls to `as_bytes` or
+    /// `as_ref` will return the MAC bytes without the header.
+    /// ## Errors
+    /// - If the `Tag`'s truncaction has been set to less than 8,
+    ///  `TruncationError::MinLengthNotMet` will be returned.
     pub fn omit_header(&self) -> Result<Self, TruncationError> {
         if let Some(truncation) = self.truncate_to {
             if truncation < 8 {
-                return Err(TruncationError::TooShort);
+                return Err(TruncationError::MinLengthNotMet);
             }
         }
         Ok(Self {
@@ -191,6 +205,12 @@ impl Tag {
     pub(super) fn tag_count(&self) -> usize {
         self.entries.len()
     }
+
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
+        self.as_bytes().len()
+    }
+
     fn eq_slice(&self, other: &[u8]) -> Result<(), MacVerificationError> {
         if other.len() == self.primary_tag.len()
             && verify_slices_are_equal(self.primary_tag.as_ref(), other).is_ok()
@@ -255,6 +275,13 @@ impl PartialEq<[u8]> for Tag {
         self.eq_slice(other).is_ok()
     }
 }
+
+impl PartialEq<&[u8]> for Tag {
+    fn eq(&self, other: &&[u8]) -> bool {
+        self.eq_slice(other).is_ok()
+    }
+}
+
 impl PartialEq<Vec<u8>> for Tag {
     fn eq(&self, other: &Vec<u8>) -> bool {
         self.eq_slice(other.as_slice()).is_ok()

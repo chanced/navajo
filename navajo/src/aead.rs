@@ -55,9 +55,9 @@ impl Aead {
         self.keyring.keys().iter().map(AeadKeyInfo::new).collect()
     }
 
-    pub fn encrypt_in_place<'b, B: Buffer<'b>>(
+    pub fn encrypt_in_place<B: Buffer>(
         &self,
-        data: &'b mut B,
+        data: &mut B,
         aad: &[u8],
     ) -> Result<(), crate::error::EncryptError> {
         self.keyring.primary_key().encrypt_in_place(data, aad)

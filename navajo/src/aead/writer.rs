@@ -1,10 +1,8 @@
-use std::io::Write;
-
 use super::StreamEncryptor;
-
+#[cfg(feature = "std")]
 pub struct WriteAead<W>
 where
-    W: Write,
+    W: std::io::Write,
 {
     encryptor: StreamEncryptor,
     writer: W,

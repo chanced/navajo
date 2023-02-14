@@ -5,7 +5,7 @@ use ring::error::Unspecified;
 
 use crate::{error::EncryptError, Aead};
 
-use super::{cipher::Cipher, writer::WriteAead, Algorithm, Segment};
+use super::{cipher::Cipher, Algorithm, Segment};
 
 pub struct StreamEncryptor {
     key_id: u32,
