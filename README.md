@@ -12,7 +12,7 @@ It has been published to cargo for name reservation.
 
 ## Credit
 
-navajo is inspired by and modeled after the amazing work of Google's [tink
+navajo is inspired by and modeled after Google's [tink
 project](https://github.com/google/tink). The two projects are not wire
 compatible.
 
