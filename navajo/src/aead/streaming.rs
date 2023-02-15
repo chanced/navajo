@@ -61,12 +61,7 @@ impl StreamingEncrypt {
     fn online_header_len(&self) -> usize {
         Method::LEN + KEY_ID_LEN
     }
-    fn streaming_header_len(&self) -> usize {
-        self.online_header_len() + self.nonce_seq.prefix_len() + self.algorithm.key_len()
-    }
-    fn tag_len(&self) -> usize {
-        self.algorithm.tag_len()
-    }
+
     fn next_segment_rng(&self) -> Option<(usize, Range<usize>)> {
         let counter = self.counter();
         if counter == 0 {

@@ -4,14 +4,52 @@ use serde::{Deserialize, Serialize};
 
 use super::Size;
 
+/// Ad
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum Algorithm {
     /// https://datatracker.ietf.org/doc/html/rfc8439
     ChaCha20Poly1305,
+    /// AES 128 GCM
     Aes128Gcm,
+    /// AES 256 GCM
     Aes256Gcm,
+    /// https://en.wikipedia.org/w/index.php?title=ChaCha20-Poly1305&section=3#XChaCha20-Poly1305_%E2%80%93_extended_nonce_variant
     XChaCha20Poly1305,
+}
+
+impl Algorithm {
+    /// The length of the nonce in bytes
+    pub fn size(&self) -> Size {
+        match self {
+            Algorithm::Aes128Gcm => AES_128_GCM,
+            Algorithm::Aes256Gcm => AES_256_GCM,
+            Algorithm::ChaCha20Poly1305 => CHACHA20_POLY1305,
+            Algorithm::XChaCha20Poly1305 => XCHACHA20_POLY1305,
+        }
+    }
+    pub fn nonce_len(&self) -> usize {
+        self.size().nonce
+    }
+    pub fn key_len(&self) -> usize {
+        self.size().key
+    }
+    pub fn tag_len(&self) -> usize {
+        self.size().tag
+    }
+    pub fn nonce_prefix_len(&self) -> usize {
+        // nonce len - 4 bytes for sequence number - 1 byte for last block indicator
+        self.size().nonce - 4 - 1
+    }
+    pub fn header_len(&self) -> usize {
+        self.nonce_len() + self.key_len()
+    }
+    pub fn streaming_nonce_prefix_len(&self) -> usize {
+        self.nonce_len() - 5
+    }
+    pub fn streaming_header_len(&self) -> usize {
+        self.header_len() + self.streaming_nonce_prefix_len() + self.key_len()
+    }
 }
 
 impl core::fmt::Display for Algorithm {
@@ -44,30 +82,6 @@ impl TryFrom<u8> for Algorithm {
             3 => Ok(Algorithm::XChaCha20Poly1305),
             _ => Err("invalid algorithm".into()),
         }
-    }
-}
-impl Algorithm {
-    /// The length of the nonce in bytes
-    pub fn size(&self) -> Size {
-        match self {
-            Algorithm::Aes128Gcm => AES_128_GCM,
-            Algorithm::Aes256Gcm => AES_256_GCM,
-            Algorithm::ChaCha20Poly1305 => CHACHA20_POLY1305,
-            Algorithm::XChaCha20Poly1305 => XCHACHA20_POLY1305,
-        }
-    }
-    pub fn nonce_len(&self) -> usize {
-        self.size().nonce
-    }
-    pub fn key_len(&self) -> usize {
-        self.size().key
-    }
-    pub fn tag_len(&self) -> usize {
-        self.size().tag
-    }
-    pub fn nonce_prefix_len(&self) -> usize {
-        // nonce len - 4 bytes for sequence number - 1 byte for last block indicator
-        self.size().nonce - 4 - 1
     }
 }
 
