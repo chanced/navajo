@@ -1,7 +1,7 @@
 # navajo
 
 navajo provides cryptographic and key management APIs built upon the outstanding
-libraries [RustCrypto](https://github.com/RustCrypto) suite, optionally
+[RustCrypto](https://github.com/RustCrypto) suite, optionally
 [_ring_](https://github.com/briansmith/ring), and [more](#dependencies).
 
 ## ⚠️ This crate is not ready for use
