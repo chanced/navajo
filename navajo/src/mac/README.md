@@ -29,7 +29,7 @@ mac.verify(&tag, b"an example").unwrap();
 ```rust
 use navajo::mac::{Mac, Algorithm};
 use std::fs::{ File, BufReader };
-use std::io::prelude::\*;
+use std::io::prelude::*;
 
 let mac = Mac::new(Algorithm::Sha256, None);
 let file = fs::File::open("foo.txt").unwrap();
