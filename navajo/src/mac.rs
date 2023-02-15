@@ -1,3 +1,5 @@
+#![doc = include_str!("./mac/README.md")]
+
 mod algorithm;
 mod compute;
 mod context;
@@ -30,6 +32,7 @@ use material::*;
 use output::Output;
 use output::{rust_crypto_internal_tag, rust_crypto_internal_tags};
 
+/// Message Authentication Code Keyring (HMAC & CMAC)
 pub struct Mac {
     keyring: Keyring<Material>,
 }

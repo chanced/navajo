@@ -5,6 +5,7 @@ use crate::error::InvalidLengthError;
 
 use super::Algorithm;
 
+/// Psuedo-random key
 #[derive(Clone, Debug)]
 pub struct Prk {
     pub(super) inner: PrkInner,

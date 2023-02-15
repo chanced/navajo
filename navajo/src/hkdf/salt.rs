@@ -2,7 +2,7 @@ use super::{
     prk::{PrkInner, RustCryptoPrk},
     Algorithm, Prk,
 };
-
+/// A salt for HKDF.
 pub struct Salt {
     inner: SaltInner,
     algorithm: Algorithm,

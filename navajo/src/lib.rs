@@ -1,5 +1,5 @@
-// #![allow(incomplete_features)]
-// #![feature(generic_const_exprs)]
+#![warn(missing_docs)]
+#![doc = include_str!("./README.md")]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate alloc;
@@ -17,7 +17,7 @@ pub mod error;
 
 mod id;
 
-mod rand;
+pub mod rand;
 pub use rand::Random;
 
 mod timestamp;

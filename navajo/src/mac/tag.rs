@@ -66,14 +66,6 @@ impl AsRef<Tag> for Tag {
     }
 }
 impl Tag {
-    // fn verify_slice(&self, tag: &[u8]) -> Result<(), MacVerificationError> {
-    //     if tag.len() < 8 {
-    //         return Err(MacVerificationError);
-    //     }
-    //     if self.entries.len() == 1 {
-    //     } else {
-    //     }
-    // }
     /// Returns this [`Tag`] cloned without truncation.
     pub fn remove_truncation(&self) -> Self {
         Self {
@@ -316,7 +308,7 @@ mod tests {
     use crate::mac::output::Output;
 
     use super::*;
-    #[cfg(feature="blake3")]
+    #[cfg(feature = "blake3")]
     #[test]
     fn test_verify_bake3() {
         let mut hash_arr = [0; 32];
@@ -356,5 +348,4 @@ mod tests {
 
         assert_eq!(tag_2, tag_3);
     }
-
 }

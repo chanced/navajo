@@ -4,7 +4,6 @@ use alloc::{
     borrow::Cow,
     string::{String, ToString},
 };
-pub use random::Error as RandError;
 
 #[cfg(feature = "ring")]
 use ring;
@@ -244,12 +243,6 @@ impl fmt::Display for MalformedError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for MalformedError {}
-
-pub(crate) enum HeaderError {
-    Unspecified,
-    Malformed(MalformedError),
-    KeyNotFound(KeyNotFoundError),
-}
 
 #[derive(Clone, Copy, Debug)]
 pub struct InvalidAlgorithm(pub(crate) u8);

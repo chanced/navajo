@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+/// HKDF algorithms
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Algorithm {
     HkdfSha256,
