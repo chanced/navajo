@@ -316,9 +316,9 @@ mod tests {
     use crate::mac::output::Output;
 
     use super::*;
-
+    #[cfg(feature="blake3")]
     #[test]
-    fn test_verify() {
+    fn test_verify_bake3() {
         let mut hash_arr = [0; 32];
         let id = crate::keyring::gen_id();
         let id_bytes = id.to_be_bytes();
@@ -356,4 +356,5 @@ mod tests {
 
         assert_eq!(tag_2, tag_3);
     }
+
 }

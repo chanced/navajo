@@ -181,6 +181,11 @@ optional = true
 [dependencies.bytes]
 version = "1.4"
 
+#hkdf
+[dependencies.rust_crypto_hkdf]
+package = "hkdf"
+version = "0.12"
+
 
 # -------------------------
 #    Test dependencies
@@ -197,7 +202,7 @@ version = "0.3"
 [features]
 default = [
 	"std",
-	# "ring",
+	"ring",
 	"aead",
 	"signature",
 	"mac",

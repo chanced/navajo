@@ -1,4 +1,7 @@
-use core::fmt::{self};
+use core::{
+    fmt::{self},
+    ops::Sub,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +19,48 @@ pub enum Segment {
     SixtyFourKiloBytes = SIXTY_FOUR_KB,
     OneMegaByte = ONE_MB,
     FourMegaBytes = FOUR_MB,
+}
+
+impl Sub for Segment {
+    type Output = usize;
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.to_usize() - rhs.to_usize()
+    }
+}
+impl Sub<Segment> for usize {
+    type Output = usize;
+    fn sub(self, rhs: Segment) -> Self::Output {
+        self - rhs.to_usize()
+    }
+}
+impl Sub<usize> for Segment {
+    type Output = usize;
+    fn sub(self, rhs: usize) -> Self::Output {
+        self.to_usize() - rhs
+    }
+}
+
+impl PartialEq<usize> for Segment {
+    fn eq(&self, other: &usize) -> bool {
+        self.to_usize() == *other
+    }
+}
+
+impl PartialOrd<usize> for Segment {
+    fn partial_cmp(&self, other: &usize) -> Option<core::cmp::Ordering> {
+        self.to_usize().partial_cmp(other)
+    }
+}
+impl PartialEq<Segment> for usize {
+    fn eq(&self, other: &Segment) -> bool {
+        self.eq(&other.to_usize())
+    }
+}
+
+impl PartialOrd<Segment> for usize {
+    fn partial_cmp(&self, other: &Segment) -> Option<core::cmp::Ordering> {
+        self.partial_cmp(&other.to_usize())
+    }
 }
 
 impl Segment {
@@ -50,22 +95,5 @@ impl TryFrom<usize> for Segment {
             FOUR_MB => Ok(Segment::FourMegaBytes),
             _ => Err("Invalid segment size"),
         }
-    }
-}
-
-impl PartialEq<Segment> for usize {
-    fn eq(&self, other: &Segment) -> bool {
-        match other {
-            Segment::FourKiloBytes => *self == FOUR_KB,
-            Segment::SixtyFourKiloBytes => *self == SIXTY_FOUR_KB,
-            Segment::OneMegaByte => *self == ONE_MB,
-            Segment::FourMegaBytes => *self == FOUR_MB,
-        }
-    }
-}
-
-impl PartialEq<usize> for Segment {
-    fn eq(&self, other: &usize) -> bool {
-        *self == *other
     }
 }

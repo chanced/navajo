@@ -673,6 +673,7 @@ dependencies = [
  "hashbrown",
  "hex",
  "hex-literal",
+ "hkdf",
  "hmac",
  "p256",
  "p384",

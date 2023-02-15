@@ -2,15 +2,17 @@ mod algorithm;
 mod cipher;
 mod ciphertext_info;
 mod decryptor;
-mod encryptor;
 mod header;
 mod key_info;
 mod material;
 mod method;
 mod nonce;
+mod seed;
 mod segment;
 mod size;
+mod streaming;
 mod writer;
+
 use nonce::Nonce;
 
 use alloc::vec::Vec;
@@ -24,10 +26,10 @@ use crate::{
 };
 pub use algorithm::Algorithm;
 pub use ciphertext_info::CiphertextInfo;
-pub use encryptor::StreamEncryptor;
 pub use method::Method;
 pub use segment::Segment;
 use size::Size;
+pub use streaming::StreamingEncrypt;
 // use cipher::{ciphers, ring_ciphers, Cipher};
 
 use material::Material;
@@ -41,6 +43,7 @@ impl Aead {
             keyring: Keyring::new(Material::new(algorithm), crate::Origin::Generated, meta),
         }
     }
+
     pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<serde_json::Value>) -> &mut Self {
         self.keyring
             .add(Material::new(algorithm), crate::Origin::Generated, meta);
@@ -50,7 +53,9 @@ impl Aead {
     pub fn primary_key(&self) -> AeadKeyInfo {
         self.keyring.primary_key().into()
     }
-    /// Returns a [`Vec`] containing [`AeadKeyInfo`] for each key in this keyring.
+
+    /// Returns a [`Vec`] containing [`AeadKeyInfo`] for each key in this
+    /// keyring.
     pub fn keys(&self) -> Vec<AeadKeyInfo> {
         self.keyring.keys().iter().map(AeadKeyInfo::new).collect()
     }

@@ -4,6 +4,7 @@ use alloc::{boxed::Box, vec::Vec};
 use super::{
     entry::Entry,
     material::{CryptoKey, Material},
+    output::Output,
     RustCryptoKey,
 };
 

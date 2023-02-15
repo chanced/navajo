@@ -1,4 +1,4 @@
-use core::fmt::{self, Debug};
+use core::fmt::{self, Debug, Display};
 
 use alloc::{
     borrow::Cow,
@@ -77,14 +77,14 @@ impl From<ring::error::Unspecified> for EncryptError {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct CounterLimitExceeded;
-impl core::fmt::Display for CounterLimitExceeded {
+pub struct SegmentLimitExceeded;
+impl core::fmt::Display for SegmentLimitExceeded {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "counter limit exceeded")
     }
 }
 #[cfg(feature = "std")]
-impl std::error::Error for CounterLimitExceeded {}
+impl std::error::Error for SegmentLimitExceeded {}
 
 #[derive(Debug)]
 pub enum DecryptStreamError<E> {
@@ -130,11 +130,30 @@ impl From<rust_crypto_aead::Error> for DecryptError {
 
 #[derive(Debug)]
 pub enum EncryptStreamError<E> {
-    Unspecified,
-    MissingPrimaryKey,
-    CounterLimitExceeded,
-    EmptyCleartext,
     Upstream(E),
+    Streaming(StreamingEncryptError),
+}
+impl<E> From<StreamingEncryptError> for EncryptStreamError<E> {
+    fn from(e: StreamingEncryptError) -> Self {
+        Self::Streaming(e)
+    }
+}
+
+#[derive(Debug)]
+pub enum StreamingEncryptError {
+    Unspecified,
+    SegmentLimitExceeded,
+    EmptyCleartext,
+}
+impl From<UnspecifiedError> for StreamingEncryptError {
+    fn from(_: UnspecifiedError) -> Self {
+        Self::Unspecified
+    }
+}
+impl From<SegmentLimitExceeded> for StreamingEncryptError {
+    fn from(_: SegmentLimitExceeded) -> Self {
+        Self::SegmentLimitExceeded
+    }
 }
 
 impl<E> From<UnspecifiedError> for DecryptStreamError<E> {
@@ -143,33 +162,9 @@ impl<E> From<UnspecifiedError> for DecryptStreamError<E> {
     }
 }
 
-impl<E> From<CounterLimitExceeded> for EncryptStreamError<E> {
-    fn from(_: CounterLimitExceeded) -> Self {
-        Self::CounterLimitExceeded
-    }
-}
-
-impl<E> fmt::Display for EncryptStreamError<E>
-where
-    E: fmt::Display,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
-            Self::MissingPrimaryKey => write!(f, "missing primary key"),
-            Self::Upstream(e) => fmt::Display::fmt(e, f),
-            Self::CounterLimitExceeded => write!(f, "counter limit exceeded"),
-            Self::EmptyCleartext => write!(f, "cleartext is empty"),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl<E> std::error::Error for EncryptStreamError<E> where E: std::error::Error {}
-
-impl<E> From<UnspecifiedError> for EncryptStreamError<E> {
-    fn from(_: UnspecifiedError) -> Self {
-        Self::Unspecified
+impl<E> From<SegmentLimitExceeded> for EncryptStreamError<E> {
+    fn from(_: SegmentLimitExceeded) -> Self {
+        Self::Streaming(StreamingEncryptError::SegmentLimitExceeded)
     }
 }
 
@@ -480,5 +475,27 @@ pub enum VerifyTryStreamError<E> {
 impl<E> From<MacVerificationError> for VerifyTryStreamError<E> {
     fn from(_: MacVerificationError) -> Self {
         Self::FailedVerification
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct InvalidLengthError;
+
+impl Display for InvalidLengthError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "invalid length")
+    }
+}
+
+#[cfg(feature = "ring")]
+impl From<ring::error::Unspecified> for InvalidLengthError {
+    fn from(_: ring::error::Unspecified) -> Self {
+        Self {}
+    }
+}
+
+impl From<rust_crypto_hkdf::InvalidLength> for InvalidLengthError {
+    fn from(_: rust_crypto_hkdf::InvalidLength) -> Self {
+        Self {}
     }
 }

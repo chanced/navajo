@@ -90,13 +90,14 @@ impl Entry {
     }
 }
 
+#[cfg(feature = "blake3")]
 #[cfg(test)]
 mod tests {
 
     use super::Output;
     use super::*;
     #[test]
-    fn test_verify() {
+    fn test_verify_blake3() {
         let mut hash_arr = [0; 32];
         let id = crate::keyring::gen_id();
         let id_bytes = id.to_be_bytes();

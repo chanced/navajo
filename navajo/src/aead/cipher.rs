@@ -7,8 +7,6 @@ use crate::{
 
 use super::Algorithm;
 
-const HEADER_LEN: usize = 5;
-
 #[allow(clippy::large_enum_variant)]
 pub(super) enum Cipher {
     #[cfg(feature = "ring")]
@@ -17,36 +15,6 @@ pub(super) enum Cipher {
 }
 
 impl Cipher {
-    pub(super) fn decrypt_in_place<B>(
-        &mut self,
-        nonce: Nonce,
-        aad: &[u8],
-        data: &mut B,
-    ) -> Result<(), DecryptError>
-    where
-        B: Buffer,
-    {
-        match self {
-            Self::RustCrypto(rc) => rc.decrypt_in_place(nonce, aad, data),
-            #[cfg(feature = "ring")]
-            Self::Ring(ring) => ring.decrypt_in_place(nonce, aad, data),
-        }
-    }
-    pub(super) fn encrypt_in_place<B>(
-        &mut self,
-        nonce: Nonce,
-        aad: &[u8],
-        data: &mut B,
-    ) -> Result<(), EncryptError>
-    where
-        B: Buffer,
-    {
-        match self {
-            Self::RustCrypto(rc) => rc.encrypt_in_place(nonce, aad, data),
-            #[cfg(feature = "ring")]
-            Self::Ring(ring) => ring.encrypt_in_place(nonce, aad, data),
-        }
-    }
     pub(super) fn new(algorithm: Algorithm, key: &[u8]) -> Self {
         match algorithm {
             Algorithm::ChaCha20Poly1305 => {
@@ -84,6 +52,36 @@ impl Cipher {
             }
         }
     }
+    pub(super) fn decrypt_in_place<B>(
+        &mut self,
+        nonce: Nonce,
+        aad: &[u8],
+        data: &mut B,
+    ) -> Result<(), DecryptError>
+    where
+        B: Buffer,
+    {
+        match self {
+            Self::RustCrypto(rc) => rc.decrypt_in_place(nonce, aad, data),
+            #[cfg(feature = "ring")]
+            Self::Ring(ring) => ring.decrypt_in_place(nonce, aad, data),
+        }
+    }
+    pub(super) fn encrypt_in_place<B>(
+        &mut self,
+        nonce: Nonce,
+        aad: &[u8],
+        data: &mut B,
+    ) -> Result<(), EncryptError>
+    where
+        B: Buffer,
+    {
+        match self {
+            Self::RustCrypto(rc) => rc.encrypt_in_place(nonce, aad, data),
+            #[cfg(feature = "ring")]
+            Self::Ring(ring) => ring.encrypt_in_place(nonce, aad, data),
+        }
+    }
 }
 
 #[cfg(feature = "ring")]
@@ -115,7 +113,7 @@ impl RingCipher {
         nonce: Nonce,
         aad: &[u8],
         data: &mut B,
-    ) -> Result<(), EncryptError>
+    ) -> Result<(), DecryptError>
     where
         B: Buffer,
     {

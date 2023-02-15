@@ -36,16 +36,14 @@ impl Method {
     pub fn header_len(&self, algorithm: Algorithm) -> usize {
         match self {
             // method + key id + nonce
-            Method::Online => Method::len() + KEY_ID_LEN + algorithm.nonce_len(),
+            Method::Online => Method::LEN + KEY_ID_LEN + algorithm.nonce_len(),
             // method + key id + salt + nonce prefix
             Method::StreamingHmacSha256(_) => {
-                Method::len() + KEY_ID_LEN + algorithm.key_len() + algorithm.nonce_prefix_len()
+                Method::LEN + KEY_ID_LEN + algorithm.key_len() + algorithm.nonce_prefix_len()
             }
         }
     }
-    pub(super) fn len() -> usize {
-        1
-    }
+    pub(super) const LEN: usize = 1;
 }
 
 impl From<Method> for u8 {

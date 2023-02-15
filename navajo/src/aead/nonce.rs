@@ -97,6 +97,12 @@ impl NonceSequence {
         }
         result
     }
+    pub(crate) fn prefix(&self) -> &[u8] {
+        match self {
+            Self::Twelve(seed) => &seed[..12 - 5],
+            Self::TwentyFour(seed) => &seed[..24 - 5],
+        }
+    }
     pub(crate) fn counter(&self) -> u32 {
         u32::from_be_bytes(
             self.seed()[self.len() - 5..self.len() - 1]
@@ -121,10 +127,10 @@ impl NonceSequence {
         let len = self.len();
         self.seed_mut()[len - 5..len - 1].copy_from_slice(&value.to_be_bytes()[..]);
     }
-    fn increment_seed(&mut self) -> Result<(), crate::error::CounterLimitExceeded> {
+    fn increment_seed(&mut self) -> Result<(), crate::error::SegmentLimitExceeded> {
         let mut counter = self.counter();
         if counter == u32::MAX {
-            return Err(crate::error::CounterLimitExceeded);
+            return Err(crate::error::SegmentLimitExceeded);
         }
         counter += 1;
         self.set_counter(counter);
@@ -149,7 +155,7 @@ impl NonceSequence {
         self.seed_mut()[len - 1] = 1;
         self.nonce()
     }
-    pub(crate) fn next(&mut self) -> Result<Nonce, crate::error::CounterLimitExceeded> {
+    pub(crate) fn next(&mut self) -> Result<Nonce, crate::error::SegmentLimitExceeded> {
         let nonce = self.nonce();
         self.increment_seed()?;
         Ok(nonce)
@@ -157,6 +163,13 @@ impl NonceSequence {
 
     pub(crate) fn last(self) -> Nonce {
         self.set_last_block_flag()
+    }
+
+    pub(crate) fn prefix_len(&self) -> usize {
+        match self {
+            NonceSequence::Twelve(_) => 12 - 5,
+            NonceSequence::TwentyFour(_) => 24 - 5,
+        }
     }
 }
 
@@ -185,6 +198,7 @@ mod tests {
     #[test]
     fn test_nonce_sequence_new() {
         let mut seq = NonceSequence::new(12);
+
         assert_ne!(seq.seed()[..7], [0u8; 7]);
         assert_eq!(seq.seed()[7..], [0u8; 5]);
 
