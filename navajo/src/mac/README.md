@@ -51,15 +51,15 @@ fn to_try_stream<T>(d: T) -> Result<T, ()> { Ok(d) }
 
 #[tokio::main]
 async fn main() {
-	let mac = Mac::new(Algorithm::Sha256, None);
-	let data = vec![b"hello", b"world"];
-	let stream = stream::iter(data);
-	let tag = mac.compute_stream(stream).await;
+    let mac = Mac::new(Algorithm::Sha256, None);
+    let data = vec![b"hello", b"world"];
+    let stream = stream::iter(data);
+    let tag = mac.compute_stream(stream).await;
 
-	let try_stream = stream::iter(data).map(to_try_stream);
-	let result = mac.verify_try_stream(&tag, try_stream).await;
+    let try_stream = stream::iter(data).map(to_try_stream);
+    let result = mac.verify_try_stream(&tag, try_stream).await;
 
-	println!("{result:?}");
+    println!("{result:?}");
 }
 ```
 
@@ -69,7 +69,7 @@ async fn main() {
 use navajo::Mac;
 use hex::{decode, encode};
  let external_key = decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
-	.unwrap();
+    .unwrap();
 let mac = Mac::new_with_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
 let tag = mac.compute(b"hello world").omit_header().unwrap();
 assert_eq!(encode(tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a")
