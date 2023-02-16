@@ -9,7 +9,7 @@ pub(super) trait DigestOutput: AsRef<[u8]> + Clone {
 
 #[derive(Clone, Debug)]
 pub(super) enum Output {
-    #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+    #[cfg(all(feature = "ring", feature = "sha2"))]
     Ring(RingOutput),
     RustCrypto(RustCryptoOutput),
     #[cfg(feature = "blake3")]
@@ -18,7 +18,7 @@ pub(super) enum Output {
 impl Output {
     pub(super) fn as_bytes(&self) -> &[u8] {
         match self {
-            #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+            #[cfg(all(feature = "ring", feature = "sha2"))]
             Self::Ring(output) => output.as_ref(),
             Self::RustCrypto(output) => output.as_ref(),
             Self::Blake3(output) => output.as_ref(),
@@ -29,7 +29,7 @@ impl Output {
 impl DigestOutput for Output {
     fn truncatable(&self) -> bool {
         match self {
-            #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+            #[cfg(all(feature = "ring", feature = "sha2"))]
             Self::Ring(output) => output.truncatable(),
             Self::RustCrypto(output) => output.truncatable(),
             Self::Blake3(output) => output.truncatable(),
@@ -44,7 +44,7 @@ impl AsRef<[u8]> for Output {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(all(feature = "ring", feature="hmac_sha2"))] {
+    if #[cfg(all(feature = "ring", feature="sha2"))] {
         #[derive(Clone, Debug)]
         pub(super) struct RingOutput(ring::hmac::Tag);
         impl AsRef<[u8]> for RingOutput {
@@ -134,16 +134,16 @@ macro_rules! rust_crypto_internal_tags {
             #[derive(Clone, Debug)]
             pub(super) enum RustCryptoOutput {
                 $(
-                    #[cfg(all(feature="hmac_sha2", not(feature = "ring")))]
+                    #[cfg(all(feature="sha2", not(feature = "ring")))]
                     $ring(crate::mac::[< Hmac $ring InternalTag >]),
                 )*
                 $(
-                    #[cfg(feature="hmac_sha2")]
+                    #[cfg(feature="sha2")]
                     $sha2(crate::mac::[< Hmac $sha2 InternalTag >]),
                 )*
 
                 $(
-                    #[cfg(feature="hmac_sha3")]
+                    #[cfg(feature="sha3")]
                     $sha3(crate::mac::[< Hmac $sha3 InternalTag >]),
                 )*
                 $(
@@ -156,9 +156,9 @@ macro_rules! rust_crypto_internal_tags {
                     Self::RustCrypto(output)
                 }
             }
-			$( rust_crypto_internal_tag!(Hmac, sha2, $ring, feature = "hmac_sha2", not(feature="ring")); )*
-            $( rust_crypto_internal_tag!(Hmac, sha2, $sha2, feature = "hmac_sha2"); )*
-            $( rust_crypto_internal_tag!(Hmac, sha3, $sha3, feature = "hmac_sha3"); )*
+			$( rust_crypto_internal_tag!(Hmac, sha2, $ring, feature = "sha2", not(feature="ring")); )*
+            $( rust_crypto_internal_tag!(Hmac, sha2, $sha2, feature = "sha2"); )*
+            $( rust_crypto_internal_tag!(Hmac, sha3, $sha3, feature = "sha3"); )*
             $( rust_crypto_internal_tag!(Cmac, aes, $aes, feature = "cmac_aes"); )*
 
             impl AsRef<[u8]> for RustCryptoOutput {
@@ -169,12 +169,12 @@ macro_rules! rust_crypto_internal_tags {
                             Self::$ring(tag) => tag.as_ref(),
                         )*
                         $(
-                            #[cfg(feature="hmac_sha2")]
+                            #[cfg(feature="sha2")]
                             Self::$sha2(tag) => tag.as_ref(),
 
                         )*
                         $(
-                            #[cfg(feature="hmac_sha3")]
+                            #[cfg(feature="sha3")]
                             Self::$sha3(tag) => tag.as_ref(),
                         )*
                         $(

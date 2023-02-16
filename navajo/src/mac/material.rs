@@ -72,7 +72,7 @@ impl crate::KeyMaterial for Material {
 
 #[derive(Clone, Debug)]
 pub(super) enum CryptoKey {
-    #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+    #[cfg(all(feature = "ring", feature = "sha2"))]
     Ring(Box<ring::hmac::Key>),
     RustCrypto(Box<crate::mac::RustCryptoKey>),
     #[cfg(feature = "blake3")]
@@ -84,7 +84,7 @@ impl From<Box<blake3::Hasher>> for CryptoKey {
         Self::Blake3(key)
     }
 }
-#[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+#[cfg(all(feature = "ring", feature = "sha2"))]
 impl From<Box<ring::hmac::Key>> for CryptoKey {
     fn from(key: Box<ring::hmac::Key>) -> Self {
         Self::Ring(key)
@@ -100,19 +100,19 @@ impl CryptoKey {
     pub(super) fn new(algorithm: Algorithm, bytes: &[u8]) -> Result<Self, InvalidKeyLength> {
         algorithm.validate_key_len(bytes.len())?;
         match algorithm {
-            #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+            #[cfg(all(feature = "ring", feature = "sha2"))]
             Algorithm::Sha256 => Ok(Self::Ring(Box::new(ring::hmac::Key::new(
-                ring::hmac::HMAC_SHA256,
+                ring::hmac::SHA256,
                 bytes,
             )))),
             #[cfg(all(feature = "ring"))]
             Algorithm::Sha384 => Ok(Self::Ring(Box::new(ring::hmac::Key::new(
-                ring::hmac::HMAC_SHA384,
+                ring::hmac::SHA384,
                 bytes,
             )))),
             #[cfg(all(feature = "ring"))]
             Algorithm::Sha512 => Ok(Self::Ring(Box::new(ring::hmac::Key::new(
-                ring::hmac::HMAC_SHA512,
+                ring::hmac::SHA512,
                 bytes,
             )))),
             #[cfg(feature = "blake3")]
@@ -163,15 +163,15 @@ macro_rules! rust_crypto_keys {
             #[derive(Clone)]
             pub(crate) enum RustCryptoKey {
                 $(
-                    #[cfg(all(feature = "hmac_sha2", not(feature="ring")))]
+                    #[cfg(all(feature = "sha2", not(feature="ring")))]
                     $ring([< Hmac $ring Key>]),
                 )*
                 $(
-                    #[cfg(feature = "hmac_sha2")]
+                    #[cfg(feature = "sha2")]
                     $sha2([< Hmac $sha2 Key >]),
                 )*
                 $(
-                    #[cfg(feature = "hmac_sha3")]
+                    #[cfg(feature = "sha3")]
                     $sha3([< Hmac $sha3 Key >]),
                 )*
                 $(
@@ -194,15 +194,15 @@ macro_rules! rust_crypto_keys {
                     use crate::mac::Algorithm::*;
                     Ok(match algorithm {
                         $(
-                            #[cfg(all(feature = "hmac_sha2", not(feature="ring")))]
+                            #[cfg(all(feature = "sha2", not(feature="ring")))]
                             $ring => Self::$ring(bytes.try_into()?),
                         )*
                         $(
-                            #[cfg(feature = "hmac_sha2")]
+                            #[cfg(feature = "sha2")]
                             $sha2 => Self::$sha2(bytes.try_into()?),
                         )*
                         $(
-                            #[cfg(feature = "hmac_sha3")]
+                            #[cfg(feature = "sha3")]
                             $sha3 => Self::$sha3(bytes.try_into()?),
                         )*
                         $(
@@ -214,9 +214,9 @@ macro_rules! rust_crypto_keys {
                 }
             }
         }
-        $( rust_crypto_key!(Hmac, sha2, $ring, feature = "hmac_sha2", not(feature="ring")); )*
-        $( rust_crypto_key!(Hmac, sha2, $sha2, feature = "hmac_sha2"); )*
-        $( rust_crypto_key!(Hmac, sha3, $sha3, feature = "hmac_sha3"); )*
+        $( rust_crypto_key!(Hmac, sha2, $ring, feature = "sha2", not(feature="ring")); )*
+        $( rust_crypto_key!(Hmac, sha2, $sha2, feature = "sha2"); )*
+        $( rust_crypto_key!(Hmac, sha3, $sha3, feature = "sha3"); )*
         $( rust_crypto_key!(Cmac, aes, $aes, feature = "cmac_aes"); )*
 
     };

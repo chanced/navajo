@@ -39,12 +39,12 @@ impl Context {
 pub(super) enum ContextInner {
     #[cfg(feature = "blake3")]
     Blake3(crate::mac::Blake3Context),
-    #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+    #[cfg(all(feature = "ring", feature = "sha2"))]
     Ring(crate::mac::RingContext),
     RustCrypto(crate::mac::RustCryptoContext),
 }
 
-#[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+#[cfg(all(feature = "ring", feature = "sha2"))]
 impl From<Box<ring::hmac::Key>> for ContextInner {
     fn from(key: Box<ring::hmac::Key>) -> Self {
         Self::Ring(key.into())
@@ -67,7 +67,7 @@ impl From<Box<RustCryptoKey>> for ContextInner {
 impl ContextInner {
     pub(super) fn new(key: CryptoKey) -> ContextInner {
         match key {
-            #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+            #[cfg(all(feature = "ring", feature = "sha2"))]
             CryptoKey::Ring(key) => key.into(),
             CryptoKey::RustCrypto(key) => key.into(),
             #[cfg(feature = "blake3")]
@@ -78,7 +78,7 @@ impl ContextInner {
         match self {
             #[cfg(feature = "blake3")]
             Self::Blake3(ctx) => ctx.update(data),
-            #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+            #[cfg(all(feature = "ring", feature = "sha2"))]
             Self::Ring(ctx) => ctx.update(data),
             Self::RustCrypto(ctx) => ctx.update(data),
         }
@@ -87,7 +87,7 @@ impl ContextInner {
         match self {
             #[cfg(feature = "blake3")]
             Self::Blake3(ctx) => ctx.finalize(),
-            #[cfg(all(feature = "ring", feature = "hmac_sha2"))]
+            #[cfg(all(feature = "ring", feature = "sha2"))]
             Self::Ring(ctx) => ctx.finalize(),
             Self::RustCrypto(ctx) => ctx.finalize(),
         }
@@ -116,7 +116,7 @@ impl MacContext for Blake3Context {
     }
 }
 cfg_if::cfg_if! {
-    if #[cfg(all(feature = "ring", feature="hmac_sha2"))]{
+    if #[cfg(all(feature = "ring", feature="sha2"))]{
         pub(super) struct RingContext(Box<ring::hmac::Context>);
 
         impl MacContext for RingContext {
@@ -175,15 +175,15 @@ macro_rules! rust_crypto_contexts {
         paste::paste!{
         pub(crate) enum RustCryptoContext {
                 $(
-                    #[cfg(all(feature = "hmac_sha2", not(feature="ring")))]
+                    #[cfg(all(feature = "sha2", not(feature="ring")))]
                     $ring([< Hmac $ring Context>]),
                 )*
                 $(
-                    #[cfg(feature = "hmac_sha2")]
+                    #[cfg(feature = "sha2")]
                     $sha2([< Hmac $sha2 Context>]),
                 )*
                 $(
-                    #[cfg(feature = "hmac_sha3")]
+                    #[cfg(feature = "sha3")]
                     $sha3([< Hmac $sha3 Context>]),
                 )*
                 $(
@@ -196,15 +196,15 @@ macro_rules! rust_crypto_contexts {
                 fn update(&mut self, data: &[u8]) {
                     match self{
                         $(
-                            #[cfg(all(feature = "hmac_sha2", not(feature="ring")))]
+                            #[cfg(all(feature = "sha2", not(feature="ring")))]
                             RustCryptoContext::$ring(ctx) => ctx.update(data),
                         )*
                         $(
-                            #[cfg(feature = "hmac_sha2")]
+                            #[cfg(feature = "sha2")]
                             RustCryptoContext::$sha2(ctx) => ctx.update(data),
                         )*
                         $(
-                            #[cfg(feature = "hmac_sha3")]
+                            #[cfg(feature = "sha3")]
                             RustCryptoContext::$sha3(ctx) => ctx.update(data),
                         )*
                         $(
@@ -216,15 +216,15 @@ macro_rules! rust_crypto_contexts {
                 fn finalize(self) -> Output {
                     match self{
                         $(
-                            #[cfg(all(feature = "hmac_sha2", not(feature="ring")))]
+                            #[cfg(all(feature = "sha2", not(feature="ring")))]
                             RustCryptoContext::$ring(ctx) => ctx.finalize(),
                         )*
                         $(
-                            #[cfg(feature = "hmac_sha2")]
+                            #[cfg(feature = "sha2")]
                             RustCryptoContext::$sha2(ctx) => ctx.finalize(),
                         )*
                         $(
-                            #[cfg(feature = "hmac_sha3")]
+                            #[cfg(feature = "sha3")]
                             RustCryptoContext::$sha3(ctx) => ctx.finalize(),
                         )*
                         $(
@@ -240,15 +240,15 @@ macro_rules! rust_crypto_contexts {
                     let key = *key;
                     match key {
                         $(
-                            #[cfg(all(not(feature="ring"), feature = "hmac_sha2"))]
+                            #[cfg(all(not(feature="ring"), feature = "sha2"))]
                             RustCryptoKey::$ring(key) => Self::$ring(key.0.into()),
                         )*
                         $(
-                            #[cfg(feature = "hmac_sha2")]
+                            #[cfg(feature = "sha2")]
                             RustCryptoKey::$sha2(key) => Self::$sha2(key.0.into()),
                         )*
                         $(
-                            #[cfg(feature = "hmac_sha3")]
+                            #[cfg(feature = "sha3")]
                             RustCryptoKey::$sha3(key) => Self::$sha3(key.0.into()),
                         )*
                         $(
@@ -258,9 +258,9 @@ macro_rules! rust_crypto_contexts {
                     }
                 }
             }
-			$( rust_crypto_context_inner!(Hmac, sha2, $ring, feature = "hmac_sha2", not(feature="ring")); )*
-            $( rust_crypto_context_inner!(Hmac, sha2, $sha2, feature = "hmac_sha2"); )*
-            $( rust_crypto_context_inner!(Hmac, sha3, $sha3, feature = "hmac_sha3"); )*
+			$( rust_crypto_context_inner!(Hmac, sha2, $ring, feature = "sha2", not(feature="ring")); )*
+            $( rust_crypto_context_inner!(Hmac, sha2, $sha2, feature = "sha2"); )*
+            $( rust_crypto_context_inner!(Hmac, sha3, $sha3, feature = "sha3"); )*
             $( rust_crypto_context_inner!(Cmac, aes, $aes, feature = "cmac_aes"); )*
         }
 	}
