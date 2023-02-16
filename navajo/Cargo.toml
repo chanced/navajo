@@ -181,6 +181,7 @@ optional = true
 # bytes
 [dependencies.bytes]
 version = "1.4"
+optional = true
 
 #hkdf
 [dependencies.rust_crypto_hkdf]
@@ -202,6 +203,7 @@ version = "0.3"
 
 [features]
 default = [
+	"bytes",     #remove this
 	"std",
 	"ring",
 	"aead",

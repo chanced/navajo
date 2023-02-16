@@ -1,3 +1,5 @@
+use core::ops::Deref;
+
 use alloc::boxed::Box;
 use generic_array::GenericArray;
 
@@ -29,6 +31,12 @@ impl Nonce {
             }
         };
         result
+    }
+}
+impl Deref for Nonce {
+    type Target = [u8];
+    fn deref(&self) -> &Self::Target {
+        self.as_ref()
     }
 }
 
@@ -78,7 +86,7 @@ impl From<Nonce> for ring::aead::Nonce {
         }
     }
 }
-
+#[derive(Debug)]
 pub(crate) enum NonceSequence {
     Twelve(u32, [u8; 12]),
     TwentyFour(u32, Box<[u8; 24]>),
@@ -96,6 +104,24 @@ impl NonceSequence {
             Self::TwentyFour(_, ref mut seed) => crate::rand::fill(&mut seed[..24 - 5]),
         }
         result
+    }
+    pub(crate) fn new_with_prefix(seed: &[u8]) -> Result<Self, UnspecifiedError> {
+        match seed.len() {
+            7 => Ok(Self::Twelve(0, {
+                let mut result = [0u8; 12];
+                result[..7].copy_from_slice(seed);
+                result
+            })),
+            19 => Ok(Self::TwentyFour(
+                0,
+                Box::new({
+                    let mut result = [0u8; 24];
+                    result[..19].copy_from_slice(seed);
+                    result
+                }),
+            )),
+            _ => Err(UnspecifiedError),
+        }
     }
     pub(crate) fn prefix(&self) -> &[u8] {
         match self {
@@ -131,9 +157,8 @@ impl NonceSequence {
             NonceSequence::TwentyFour(ref mut ctr, _) => *ctr = value,
         }
     }
-    fn increment_seed(&mut self) {
-        let mut counter = self.counter();
-        self.set_counter(counter + 1);
+    fn increment(&mut self) {
+        self.set_counter(self.counter() + 1);
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -154,11 +179,11 @@ impl NonceSequence {
             return Err(crate::error::SegmentLimitExceeded);
         }
         let nonce = self.nonce();
-        self.increment_seed();
+        self.increment();
         Ok(nonce)
     }
 
-    pub(crate) fn last(&mut self) -> Result<Nonce, crate::error::SegmentLimitExceeded> {
+    pub(crate) fn last(mut self) -> Result<Nonce, crate::error::SegmentLimitExceeded> {
         if self.counter() == u32::MAX {
             return Err(crate::error::SegmentLimitExceeded);
         }

@@ -41,14 +41,14 @@ impl Algorithm {
         // nonce len - 4 bytes for sequence number - 1 byte for last block indicator
         self.size().nonce - 4 - 1
     }
-    pub fn header_len(&self) -> usize {
+    pub fn online_header_len(&self) -> usize {
         self.nonce_len() + self.key_len()
     }
     pub fn streaming_nonce_prefix_len(&self) -> usize {
         self.nonce_len() - 5
     }
     pub fn streaming_header_len(&self) -> usize {
-        self.header_len() + self.streaming_nonce_prefix_len() + self.key_len()
+        self.online_header_len() + self.streaming_nonce_prefix_len() + self.key_len()
     }
 }
 

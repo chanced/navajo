@@ -1,5 +1,6 @@
 ///! Constant-time operations
 ///
+///
 use crate::error::UnspecifiedError;
 /// Compares `a` and `b` at constant-time with repect to each other, unless the
 /// lengths are not equal.

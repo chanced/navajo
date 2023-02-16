@@ -1,9 +1,10 @@
-use super::StreamingEncrypt;
+use super::{Buffer, Encrypt};
 #[cfg(feature = "std")]
-pub struct WriteAead<W>
+pub struct WriteAead<W, B>
 where
     W: std::io::Write,
+    B: Buffer,
 {
-    encryptor: StreamingEncrypt,
+    encryptor: Encrypt<B>,
     writer: W,
 }

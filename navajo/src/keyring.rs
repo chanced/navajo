@@ -24,6 +24,7 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
+use zeroize::ZeroizeOnDrop;
 const CHACHA20_POLY1305_KEY_SIZE: usize = 32;
 const CHACHA20_POLY1305_NONCE_SIZE: usize = 12;
 const CHACHA20_POLY1305_TAG_SIZE: usize = 16;
@@ -36,13 +37,14 @@ const PRIMARY_KEY_NOT_FOUND_MSG:&str = "primary key not found in keyring\n\t\n\t
 
 pub(crate) const KEY_ID_LEN: usize = 4;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, ZeroizeOnDrop)]
 pub(crate) struct Keyring<M>
 where
     M: KeyMaterial,
 {
     keys: Vec<Key<M>>,
     primary_key_idx: usize,
+    #[zeroize(skip)]
     lookup: HashMap<u32, usize>,
 }
 impl<Material> PartialEq for Keyring<Material>

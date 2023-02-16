@@ -11,7 +11,7 @@ use crate::{
     Buffer,
 };
 
-#[derive(Clone, ZeroizeOnDrop, Eq)]
+#[derive(Clone, Debug, ZeroizeOnDrop, Eq)]
 pub(super) struct Material {
     bytes: Bytes,
     #[zeroize(skip)]

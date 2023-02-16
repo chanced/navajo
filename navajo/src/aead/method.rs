@@ -13,7 +13,7 @@ pub enum Method {
     /// Header wireformat is:
     ///
     /// ```plaintext
-    /// || Method (1) || Key Id (4) || Nonce (Algorithm Nonce) ||
+    /// || Method (1) || Key Id (4) || Nonce (Algorithm Nonce Size) ||
     /// ```
     Online,
     /// streamed with a constant segment size using the STREAM method as described by

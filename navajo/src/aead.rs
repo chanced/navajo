@@ -1,7 +1,8 @@
 mod algorithm;
 mod cipher;
 mod ciphertext_info;
-mod decryptor;
+mod decrypt;
+mod encrypt;
 mod header;
 mod key_info;
 mod material;
@@ -10,30 +11,29 @@ mod nonce;
 mod seed;
 mod segment;
 mod size;
-mod streaming;
 mod writer;
-
-use nonce::Nonce;
-
 use alloc::vec::Vec;
 pub use key_info::AeadKeyInfo;
+use material::Material;
+use size::Size;
+use zeroize::ZeroizeOnDrop;
 
 use crate::{
     error::{KeyNotFoundError, RemoveKeyError},
-    key::Key,
     keyring::Keyring,
     Buffer,
 };
 pub use algorithm::Algorithm;
 pub use ciphertext_info::CiphertextInfo;
+
+pub use decrypt::Decrypt;
+
+pub use encrypt::Encrypt;
 pub use method::Method;
 pub use segment::Segment;
-use size::Size;
-pub use streaming::StreamingEncrypt;
 // use cipher::{ciphers, ring_ciphers, Cipher};
 
-use material::Material;
-
+#[derive(Clone, Debug, ZeroizeOnDrop)]
 pub struct Aead {
     keyring: Keyring<Material>,
 }
