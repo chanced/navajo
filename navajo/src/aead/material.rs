@@ -36,6 +36,9 @@ impl Material {
     pub(super) fn cipher(&self) -> Cipher {
         Cipher::new(self.algorithm, &self.bytes)
     }
+    pub(super) fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
 }
 
 impl Key<Material> {

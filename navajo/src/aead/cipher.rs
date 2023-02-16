@@ -53,7 +53,7 @@ impl Cipher {
         }
     }
     pub(super) fn decrypt_in_place<B>(
-        &mut self,
+        &self,
         nonce: Nonce,
         aad: &[u8],
         data: &mut B,
@@ -68,7 +68,7 @@ impl Cipher {
         }
     }
     pub(super) fn encrypt_in_place<B>(
-        &mut self,
+        &self,
         nonce: Nonce,
         aad: &[u8],
         data: &mut B,

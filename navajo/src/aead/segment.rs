@@ -1,6 +1,6 @@
 use core::{
     fmt::{self},
-    ops::Sub,
+    ops::{Add, Sub},
 };
 
 use serde::{Deserialize, Serialize};
@@ -37,6 +37,19 @@ impl Sub<usize> for Segment {
     type Output = usize;
     fn sub(self, rhs: usize) -> Self::Output {
         self.to_usize() - rhs
+    }
+}
+impl Add<usize> for Segment {
+    type Output = usize;
+    fn add(self, rhs: usize) -> Self::Output {
+        self.to_usize() + rhs
+    }
+}
+impl Add<Segment> for usize {
+    type Output = usize;
+
+    fn add(self, rhs: Segment) -> Self::Output {
+        self + rhs.to_usize()
     }
 }
 

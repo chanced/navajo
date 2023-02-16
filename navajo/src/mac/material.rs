@@ -102,17 +102,17 @@ impl CryptoKey {
         match algorithm {
             #[cfg(all(feature = "ring", feature = "sha2"))]
             Algorithm::Sha256 => Ok(Self::Ring(Box::new(ring::hmac::Key::new(
-                ring::hmac::SHA256,
+                ring::hmac::HMAC_SHA256,
                 bytes,
             )))),
             #[cfg(all(feature = "ring"))]
             Algorithm::Sha384 => Ok(Self::Ring(Box::new(ring::hmac::Key::new(
-                ring::hmac::SHA384,
+                ring::hmac::HMAC_SHA384,
                 bytes,
             )))),
             #[cfg(all(feature = "ring"))]
             Algorithm::Sha512 => Ok(Self::Ring(Box::new(ring::hmac::Key::new(
-                ring::hmac::SHA512,
+                ring::hmac::HMAC_SHA512,
                 bytes,
             )))),
             #[cfg(feature = "blake3")]

@@ -1,21 +1,21 @@
 # Message Authentication Code ([HMAC](https://www.rfc-editor.org/rfc/rfc2104) & [CMAC](https://www.rfc-editor.org/rfc/rfc4493))
 
-| Primitive | Hashing Algorithm | Crates                                                                                                                 | Feature              | Enabled |
-| --------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------- | :-----: |
-| HMAC      | **Sha256**        | [_ring_](https://crates.io/crates/hma) OR [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2) | `"sha2"` + `"mac"`   |   ✔️    |
-| HMAC      | **Sha384**        | [_ring_](https://crates.io/crates/hma) OR [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2) | `"sha2"` + `"mac"`   |   ✔️    |
-| HMAC      | **Sha512**        | [_ring_](https://crates.io/crates/hma) OR [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2) | `"sha2"` +`"mac"`    |   ✔️    |
-| HMAC      | **Sha224**        | [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2)                                           | `"sha2"` + `"mac"`   |   ✔️    |
-| HMAC      | **Sha512/256**    | [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2)                                           | `"sha2"` + `"mac"`   |   ✔️    |
-| HMAC      | **Sha512/224**    | [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2)                                           | `"sha2"` + `"mac"`   |   ✔️    |
-| HMAC      | **Sha3 256**      | [hmac](https://crates.io/crates/hmac), [sha3](https://crates.io/crates/sha3)                                           | `"sha3"` + `"mac"`   |   ✔️    |
-| HMAC      | **Sha3 224**      | [hmac](https://crates.io/crates/hmac), [sha3](https://crates.io/crates/sha3)                                           | `"sha3"` + `"mac"`   |   ✔️    |
-| HMAC      | **Sha3 384**      | [hmac](https://crates.io/crates/hmac), [sha3](https://crates.io/crates/sha3)                                           | `"sha3"` + `"mac"`   |   ✔️    |
-| HMAC      | **Sha3 512**      | [hmac](https://crates.io/crates/hmac), [sha3](https://crates.io/crates/sha3)                                           | `"sha3"` + `"mac"`   |   ✔️    |
-| HMAC      | **BLAKE3**        | [hmac](https://crates.io/crates/blake3)                                                                                | `"blake3"` + `"mac"` |   ✔️    |
-| CMAC      | **AES 128**       | [cmac](https://crates.io/crates/aes) + [cmac](https://crates.io/crates/cmac)                                           | `"aes"` + `"mac"`    |   ✔️    |
-| CMAC      | **AES 128**       | [cmac](https://crates.io/crates/aes) + [cmac](https://crates.io/crates/cmac)                                           | `"aes"` + `"mac"`    |   ✔️    |
-| CMAC      | **AES 256**       | [cmac](https://crates.io/crates/aes) + [cmac](https://crates.io/crates/cmac)                                           | `"aes"` + `"mac"`    |   ✔️    |
+| Primitive | Hashing algorithm | Backend crate(s)                                                                                                       | Feature Flags       | Enabled by default |
+| :-------: | ----------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------- | :----------------: |
+|   HMAC    | **BLAKE3**        | [blake3](https://crates.io/crates/blake3)                                                                              | `"mac"`, `"blake3"` |         ✔️         |
+|   HMAC    | **Sha256**        | [_ring_](https://crates.io/crates/hma) OR [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac) | `"mac"`, `"sha2"`   |         ✔️         |
+|   HMAC    | **Sha384**        | [_ring_](https://crates.io/crates/hma) OR [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac) | `"mac"`, `"sha2"`   |         ✔️         |
+|   HMAC    | **Sha512**        | [_ring_](https://crates.io/crates/hma) OR [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac) | `"mac"`, `"sha2"`   |         ✔️         |
+|   HMAC    | **Sha224**        | [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha2"`   |         ✔️         |
+|   HMAC    | **Sha512/256**    | [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha2"`   |         ✔️         |
+|   HMAC    | **Sha512/224**    | [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha2"`   |         ✔️         |
+|   HMAC    | **Sha3 256**      | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha3"`   |         ✔️         |
+|   HMAC    | **Sha3 224**      | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha3"`   |         ✔️         |
+|   HMAC    | **Sha3 384**      | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha3"`   |         ✔️         |
+|   HMAC    | **Sha3 512**      | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha3"`   |         ✔️         |
+|   CMAC    | **AES 128**       | [aes](https://crates.io/crates/aes), [cmac](https://crates.io/crates/cmac)                                             | `"mac"`, `"aes"`    |         ✔️         |
+|   CMAC    | **AES 128**       | [aes](https://crates.io/crates/aes), [cmac](https://crates.io/crates/cmac)                                             | `"mac"`, `"aes"`    |         ✔️         |
+|   CMAC    | **AES 256**       | [aes](https://crates.io/crates/aes), [cmac](https://crates.io/crates/cmac)                                             | `"mac"`, `"aes"`    |         ✔️         |
 
 ### Basic usage
 

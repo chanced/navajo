@@ -12,15 +12,18 @@ pub(crate) trait KeyMaterial:
     fn algorithm(&self) -> Self::Algorithm;
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ZeroizeOnDrop)]
 pub(crate) struct Key<M>
 where
     M: KeyMaterial,
 {
     id: u32,
+    #[zeroize(skip)]
     status: Status,
+    #[zeroize(skip)]
     origin: Origin,
     material: M,
+    #[zeroize(skip)]
     meta: Option<Arc<Value>>,
 }
 impl<M> Key<M>

@@ -80,61 +80,60 @@ impl From<Nonce> for ring::aead::Nonce {
 }
 
 pub(crate) enum NonceSequence {
-    Twelve([u8; 12]),
-    TwentyFour(Box<[u8; 24]>),
+    Twelve(u32, [u8; 12]),
+    TwentyFour(u32, Box<[u8; 24]>),
 }
 
 impl NonceSequence {
     pub(crate) fn new(size: usize) -> Self {
         let mut result = match size {
-            12 => Self::Twelve([0u8; 12]),
-            24 => Self::TwentyFour(Box::new([0u8; 24])),
+            12 => Self::Twelve(0, [0u8; 12]),
+            24 => Self::TwentyFour(0, Box::new([0u8; 24])),
             _ => panic!("NonceSequence must be 12 or 24 bytes\nthis is a bug!\n\nplease report it to https://github.com/chanced/navajo/issues/new"),
         };
         match result {
-            Self::Twelve(ref mut seed) => crate::rand::fill(&mut seed[..12 - 5]),
-            Self::TwentyFour(ref mut seed) => crate::rand::fill(&mut seed[..24 - 5]),
+            Self::Twelve(_, ref mut seed) => crate::rand::fill(&mut seed[..12 - 5]),
+            Self::TwentyFour(_, ref mut seed) => crate::rand::fill(&mut seed[..24 - 5]),
         }
         result
     }
     pub(crate) fn prefix(&self) -> &[u8] {
         match self {
-            Self::Twelve(seed) => &seed[..12 - 5],
-            Self::TwentyFour(seed) => &seed[..24 - 5],
+            Self::Twelve(_, seed) => &seed[..12 - 5],
+            Self::TwentyFour(_, seed) => &seed[..24 - 5],
         }
     }
+
     pub(crate) fn counter(&self) -> u32 {
-        u32::from_be_bytes(
-            self.seed()[self.len() - 5..self.len() - 1]
-                .try_into()
-                .unwrap(),
-        )
+        match self {
+            NonceSequence::Twelve(ctr, _) => *ctr,
+            NonceSequence::TwentyFour(ctr, _) => *ctr,
+        }
     }
 
     fn seed(&self) -> &[u8] {
         match self {
-            Self::Twelve(seed) => seed.as_ref(),
-            Self::TwentyFour(seed) => seed.as_ref(),
+            Self::Twelve(_, seed) => seed.as_ref(),
+            Self::TwentyFour(_, seed) => seed.as_ref(),
         }
     }
     fn seed_mut(&mut self) -> &mut [u8] {
         match self {
-            Self::Twelve(seed) => seed,
-            Self::TwentyFour(seed) => seed.as_mut_slice(),
+            Self::Twelve(_, seed) => seed,
+            Self::TwentyFour(_, seed) => seed.as_mut_slice(),
         }
     }
     fn set_counter(&mut self, value: u32) {
         let len = self.len();
         self.seed_mut()[len - 5..len - 1].copy_from_slice(&value.to_be_bytes()[..]);
-    }
-    fn increment_seed(&mut self) -> Result<(), crate::error::SegmentLimitExceeded> {
-        let mut counter = self.counter();
-        if counter == u32::MAX {
-            return Err(crate::error::SegmentLimitExceeded);
+        match self {
+            NonceSequence::Twelve(ref mut ctr, _) => *ctr = value,
+            NonceSequence::TwentyFour(ref mut ctr, _) => *ctr = value,
         }
-        counter += 1;
-        self.set_counter(counter);
-        Ok(())
+    }
+    fn increment_seed(&mut self) {
+        let mut counter = self.counter();
+        self.set_counter(counter + 1);
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -145,31 +144,49 @@ impl NonceSequence {
     }
     fn nonce(&self) -> Nonce {
         match self {
-            Self::Twelve(seed) => Nonce::Twelve(*seed),
-            Self::TwentyFour(seed) => Nonce::TwentyFour(seed.clone()),
+            Self::Twelve(_, seed) => Nonce::Twelve(*seed),
+            Self::TwentyFour(_, seed) => Nonce::TwentyFour(seed.clone()),
         }
     }
 
-    fn set_last_block_flag(mut self) -> Nonce {
-        let len = self.len();
-        self.seed_mut()[len - 1] = 1;
-        self.nonce()
-    }
     pub(crate) fn next(&mut self) -> Result<Nonce, crate::error::SegmentLimitExceeded> {
+        if self.counter() == u32::MAX {
+            return Err(crate::error::SegmentLimitExceeded);
+        }
         let nonce = self.nonce();
-        self.increment_seed()?;
+        self.increment_seed();
         Ok(nonce)
     }
 
-    pub(crate) fn last(self) -> Nonce {
-        self.set_last_block_flag()
+    pub(crate) fn last(&mut self) -> Result<Nonce, crate::error::SegmentLimitExceeded> {
+        if self.counter() == u32::MAX {
+            return Err(crate::error::SegmentLimitExceeded);
+        }
+        let len = self.len();
+        self.seed_mut()[len - 1] = 1;
+        Ok(self.nonce())
     }
 
     pub(crate) fn prefix_len(&self) -> usize {
         match self {
-            NonceSequence::Twelve(_) => 12 - 5,
-            NonceSequence::TwentyFour(_) => 24 - 5,
+            NonceSequence::Twelve(_, _) => 12 - 5,
+            NonceSequence::TwentyFour(_, _) => 24 - 5,
         }
+    }
+    pub(crate) fn try_into_nonce(&mut self) -> Result<Nonce, UnspecifiedError> {
+        if self.counter() > 0 {
+            return Err(UnspecifiedError);
+        }
+        Ok(match self {
+            NonceSequence::Twelve(_, nonce) => {
+                crate::rand::fill(&mut nonce[12 - 5..]);
+                Nonce::Twelve(*nonce)
+            }
+            NonceSequence::TwentyFour(_, nonce) => {
+                crate::rand::fill(&mut nonce[24 - 5..]);
+                Nonce::TwentyFour(nonce.to_owned())
+            }
+        })
     }
 }
 
@@ -220,7 +237,7 @@ mod tests {
         assert_eq!(next.as_ref()[7..], vec![0, 0, 0, 4, 0]);
 
         let last = seq.last();
-        assert_eq!(last.as_ref()[7..], vec![0, 0, 0, 5, 1]);
+        assert_eq!(last.unwrap().as_ref()[7..], vec![0, 0, 0, 5, 1]);
 
         let mut bounds_check = NonceSequence::new(12);
         bounds_check.set_counter(u32::MAX);
@@ -248,7 +265,7 @@ mod tests {
         assert_eq!(next.as_ref()[19..], vec![0, 0, 0, 4, 0]);
 
         let last = seq.last();
-        assert_eq!(last.as_ref()[19..], vec![0, 0, 0, 5, 1]);
+        assert_eq!(last.unwrap().as_ref()[19..], vec![0, 0, 0, 5, 1]);
 
         let mut bounds_check = NonceSequence::new(24);
         bounds_check.set_counter(u32::MAX);

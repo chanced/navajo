@@ -130,26 +130,84 @@ impl From<rust_crypto_aead::Error> for DecryptError {
 #[derive(Debug)]
 pub enum EncryptStreamError<E> {
     Upstream(E),
-    Streaming(StreamingEncryptError),
+    Streaming(StreamingEncryptNextError),
 }
-impl<E> From<StreamingEncryptError> for EncryptStreamError<E> {
-    fn from(e: StreamingEncryptError) -> Self {
+impl<E> From<StreamingEncryptNextError> for EncryptStreamError<E> {
+    fn from(e: StreamingEncryptNextError) -> Self {
         Self::Streaming(e)
     }
 }
-
 #[derive(Debug)]
-pub enum StreamingEncryptError {
+pub enum StreamingEncryptFinalizeError {
     Unspecified,
     SegmentLimitExceeded,
     EmptyCleartext,
 }
-impl From<UnspecifiedError> for StreamingEncryptError {
+impl From<StreamingEncryptNextError> for StreamingEncryptFinalizeError {
+    fn from(err: StreamingEncryptNextError) -> Self {
+        match err {
+            StreamingEncryptNextError::Unspecified => Self::Unspecified,
+            StreamingEncryptNextError::SegmentLimitExceeded => Self::SegmentLimitExceeded,
+        }
+    }
+}
+impl From<EncryptError> for StreamingEncryptFinalizeError {
+    fn from(err: EncryptError) -> Self {
+        match err {
+            EncryptError::Unspecified => Self::Unspecified,
+            EncryptError::MissingPrimaryKey => {
+                unreachable!("could not find primary key in a call to streaming encrypt finalize")
+            }
+        }
+    }
+}
+
+impl From<UnspecifiedError> for StreamingEncryptFinalizeError {
     fn from(_: UnspecifiedError) -> Self {
         Self::Unspecified
     }
 }
-impl From<SegmentLimitExceeded> for StreamingEncryptError {
+impl From<SegmentLimitExceeded> for StreamingEncryptFinalizeError {
+    fn from(_: SegmentLimitExceeded) -> Self {
+        Self::SegmentLimitExceeded
+    }
+}
+impl Display for StreamingEncryptFinalizeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
+            Self::SegmentLimitExceeded => fmt::Display::fmt(&SegmentLimitExceeded, f),
+            Self::EmptyCleartext => write!(f, "empty cleartext"),
+        }
+    }
+}
+#[cfg(feature = "std")]
+impl std::error::Error for StreamingEncryptFinalizeError {}
+
+#[derive(Debug)]
+pub enum StreamingEncryptNextError {
+    Unspecified,
+    SegmentLimitExceeded,
+}
+
+impl Display for StreamingEncryptNextError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
+            Self::SegmentLimitExceeded => fmt::Display::fmt(&SegmentLimitExceeded, f),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for StreamingEncryptNextError {}
+
+impl From<UnspecifiedError> for StreamingEncryptNextError {
+    fn from(_: UnspecifiedError) -> Self {
+        Self::Unspecified
+    }
+}
+impl From<SegmentLimitExceeded> for StreamingEncryptNextError {
     fn from(_: SegmentLimitExceeded) -> Self {
         Self::SegmentLimitExceeded
     }
@@ -163,7 +221,7 @@ impl<E> From<UnspecifiedError> for DecryptStreamError<E> {
 
 impl<E> From<SegmentLimitExceeded> for EncryptStreamError<E> {
     fn from(_: SegmentLimitExceeded) -> Self {
-        Self::Streaming(StreamingEncryptError::SegmentLimitExceeded)
+        Self::Streaming(StreamingEncryptNextError::SegmentLimitExceeded)
     }
 }
 
