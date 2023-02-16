@@ -205,16 +205,13 @@ default = [
 	"std",
 	"ring",
 	"aead",
+	"aes",
 	"signature",
 	"mac",
 	"blake3",
 	"sha2",
 	"sha3",
-	"cmac_aes",
 ]
-sha2 = ["hmac", "sha2"]
-sha3 = ["hmac", "sha3"]
-cmac_aes = ["cmac", "aes"]
 signature = ["ed25519", "p256", "p384"]
 mac = ["rayon"]
 aead = []

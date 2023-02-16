@@ -187,7 +187,7 @@ macro_rules! rust_crypto_contexts {
                     $sha3([< Hmac $sha3 Context>]),
                 )*
                 $(
-                    #[cfg(feature = "cmac_aes")]
+                    #[cfg(feature = "aes")]
                     $aes([< Cmac $aes Context>]),
                 )*
             }
@@ -208,7 +208,7 @@ macro_rules! rust_crypto_contexts {
                             RustCryptoContext::$sha3(ctx) => ctx.update(data),
                         )*
                         $(
-                            #[cfg(feature = "cmac_aes")]
+                            #[cfg(feature = "aes")]
                             RustCryptoContext::$aes(ctx) => ctx.update(data),
                         )*
                     }
@@ -228,7 +228,7 @@ macro_rules! rust_crypto_contexts {
                             RustCryptoContext::$sha3(ctx) => ctx.finalize(),
                         )*
                         $(
-                            #[cfg(feature = "cmac_aes")]
+                            #[cfg(feature = "aes")]
                             RustCryptoContext::$aes(ctx) => ctx.finalize(),
                         )*
                     }
@@ -252,7 +252,7 @@ macro_rules! rust_crypto_contexts {
                             RustCryptoKey::$sha3(key) => Self::$sha3(key.0.into()),
                         )*
                         $(
-                            #[cfg(feature = "cmac_aes")]
+                            #[cfg(feature = "aes")]
                             RustCryptoKey::$aes(key) => Self::$aes(key.0.into()),
                         )*
                     }
@@ -261,7 +261,7 @@ macro_rules! rust_crypto_contexts {
 			$( rust_crypto_context_inner!(Hmac, sha2, $ring, feature = "sha2", not(feature="ring")); )*
             $( rust_crypto_context_inner!(Hmac, sha2, $sha2, feature = "sha2"); )*
             $( rust_crypto_context_inner!(Hmac, sha3, $sha3, feature = "sha3"); )*
-            $( rust_crypto_context_inner!(Cmac, aes, $aes, feature = "cmac_aes"); )*
+            $( rust_crypto_context_inner!(Cmac, aes, $aes, feature = "aes"); )*
         }
 	}
 }

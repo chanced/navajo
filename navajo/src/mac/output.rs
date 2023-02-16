@@ -147,7 +147,7 @@ macro_rules! rust_crypto_internal_tags {
                     $sha3(crate::mac::[< Hmac $sha3 InternalTag >]),
                 )*
                 $(
-                    #[cfg(feature="cmac_aes")]
+                    #[cfg(feature="aes")]
                     $aes(crate::mac::[< Cmac $aes InternalTag >]),
                 )*
             }
@@ -159,7 +159,7 @@ macro_rules! rust_crypto_internal_tags {
 			$( rust_crypto_internal_tag!(Hmac, sha2, $ring, feature = "sha2", not(feature="ring")); )*
             $( rust_crypto_internal_tag!(Hmac, sha2, $sha2, feature = "sha2"); )*
             $( rust_crypto_internal_tag!(Hmac, sha3, $sha3, feature = "sha3"); )*
-            $( rust_crypto_internal_tag!(Cmac, aes, $aes, feature = "cmac_aes"); )*
+            $( rust_crypto_internal_tag!(Cmac, aes, $aes, feature = "aes"); )*
 
             impl AsRef<[u8]> for RustCryptoOutput {
                 fn as_ref(&self) -> &[u8] {
@@ -178,7 +178,7 @@ macro_rules! rust_crypto_internal_tags {
                             Self::$sha3(tag) => tag.as_ref(),
                         )*
                         $(
-                            #[cfg(feature="cmac_aes")]
+                            #[cfg(feature="aes")]
                             Self::$aes(tag) => tag.as_ref(),
 
                         )*

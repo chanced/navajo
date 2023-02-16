@@ -175,7 +175,7 @@ macro_rules! rust_crypto_keys {
                     $sha3([< Hmac $sha3 Key >]),
                 )*
                 $(
-                    #[cfg(feature = "cmac_aes")]
+                    #[cfg(feature = "aes")]
                     $aes([< Cmac $aes Key >]),
                 )*
             }
@@ -206,7 +206,7 @@ macro_rules! rust_crypto_keys {
                             $sha3 => Self::$sha3(bytes.try_into()?),
                         )*
                         $(
-                            #[cfg(feature = "cmac_aes")]
+                            #[cfg(feature = "aes")]
                             $aes => Self::$aes(bytes.try_into()?),
                         )*
                         _ => unreachable!(),
@@ -217,7 +217,7 @@ macro_rules! rust_crypto_keys {
         $( rust_crypto_key!(Hmac, sha2, $ring, feature = "sha2", not(feature="ring")); )*
         $( rust_crypto_key!(Hmac, sha2, $sha2, feature = "sha2"); )*
         $( rust_crypto_key!(Hmac, sha3, $sha3, feature = "sha3"); )*
-        $( rust_crypto_key!(Cmac, aes, $aes, feature = "cmac_aes"); )*
+        $( rust_crypto_key!(Cmac, aes, $aes, feature = "aes"); )*
 
     };
 }

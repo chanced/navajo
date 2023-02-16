@@ -46,11 +46,11 @@ pub enum Algorithm {
     Blake3,
 
     // CMAC
-    #[cfg(feature = "cmac_aes")]
+    #[cfg(feature = "aes")]
     Aes128,
-    #[cfg(feature = "cmac_aes")]
+    #[cfg(feature = "aes")]
     Aes192,
-    #[cfg(feature = "cmac_aes")]
+    #[cfg(feature = "aes")]
     Aes256,
 }
 
@@ -64,18 +64,31 @@ impl Algorithm {
         match self {
             #[cfg(feature = "sha2")]
             Algorithm::Sha256 => 32,
+            #[cfg(feature = "sha2")]
             Algorithm::Sha224 => 28,
+            #[cfg(feature = "sha2")]
             Algorithm::Sha384 => 48,
+            #[cfg(feature = "sha2")]
             Algorithm::Sha512 => 64,
+            #[cfg(feature = "sha2")]
             Algorithm::Sha512_224 => 28,
+            #[cfg(feature = "sha2")]
             Algorithm::Sha512_256 => 32,
+            #[cfg(feature = "sha3")]
             Algorithm::Sha3_256 => 32,
+            #[cfg(feature = "sha3")]
             Algorithm::Sha3_224 => 28,
+            #[cfg(feature = "sha3")]
             Algorithm::Sha3_384 => 48,
+            #[cfg(feature = "sha3")]
             Algorithm::Sha3_512 => 64,
+            #[cfg(feature = "blake3")]
             Algorithm::Blake3 => 32,
+            #[cfg(feature = "aes")]
             Algorithm::Aes128 => 16,
+            #[cfg(feature = "aes")]
             Algorithm::Aes192 => 18,
+            #[cfg(feature = "aes")]
             Algorithm::Aes256 => 32,
         }
     }
@@ -90,7 +103,7 @@ impl Algorithm {
                     return Err(InvalidKeyLength);
                 }
             }
-            #[cfg(feature = "cmac_aes")]
+            #[cfg(feature = "aes")]
             Algorithm::Aes128 => {
                 if len != AES128_KEY_LEN {
                     Err(InvalidKeyLength)
@@ -98,7 +111,7 @@ impl Algorithm {
                     Ok(())
                 }
             }
-            #[cfg(feature = "cmac_aes")]
+            #[cfg(feature = "aes")]
             Algorithm::Aes192 => {
                 if len != AES192_KEY_LEN {
                     Err(InvalidKeyLength)
@@ -106,7 +119,7 @@ impl Algorithm {
                     Ok(())
                 }
             }
-            #[cfg(feature = "cmac_aes")]
+            #[cfg(feature = "aes")]
             Algorithm::Aes256 => {
                 if len != AES256_KEY_LEN {
                     Err(InvalidKeyLength)
@@ -141,11 +154,11 @@ impl Algorithm {
             Algorithm::Sha3_512 => SHA3_512_KEY_LEN,
             #[cfg(feature = "blake3")]
             Algorithm::Blake3 => BLAKE3_KEY_LEN,
-            #[cfg(feature = "cmac_aes")]
+            #[cfg(feature = "aes")]
             Algorithm::Aes128 => AES128_KEY_LEN,
-            #[cfg(feature = "cmac_aes")]
+            #[cfg(feature = "aes")]
             Algorithm::Aes192 => AES192_KEY_LEN,
-            #[cfg(feature = "cmac_aes")]
+            #[cfg(feature = "aes")]
             Algorithm::Aes256 => AES256_KEY_LEN,
         }
     }
