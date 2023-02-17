@@ -1,11 +1,17 @@
 use core::ops::Deref;
 
 use alloc::boxed::Box;
+use digest::InvalidLength;
 use generic_array::GenericArray;
 
 use typenum::{U12, U24};
 
 use crate::error::UnspecifiedError;
+
+pub(crate) enum NonceOrNonceSequence {
+    Nonce(Nonce),
+    NonceSequence(NonceSequence),
+}
 
 pub(crate) enum Nonce {
     Twelve([u8; 12]),
@@ -31,6 +37,13 @@ impl Nonce {
             }
         };
         result
+    }
+    pub(crate) fn new_from_slice(size: usize, slice: &[u8]) -> Result<Self, InvalidLength> {
+        match size {
+            12 => Ok(Self::Twelve(slice.try_into().map_err(|_| InvalidLength)?)),
+            24 => Ok(Self::TwentyFour(Box::new(slice.try_into().map_err(|_| InvalidLength)?))),
+            _ => unreachable!("NonceSequence must be 12 or 24 bytes\nthis is a bug!\n\nplease report it to https://github.com/chanced/navajo/issues/new"),
+        }
     }
 }
 impl Deref for Nonce {
@@ -105,7 +118,11 @@ impl NonceSequence {
         }
         result
     }
-    pub(crate) fn new_with_prefix(seed: &[u8]) -> Result<Self, UnspecifiedError> {
+    pub(crate) fn new_with_prefix(len: usize, seed: &[u8]) -> Result<Self, UnspecifiedError> {
+        if len - 5 != seed.len() {
+            return Err(UnspecifiedError);
+        }
+
         match seed.len() {
             7 => Ok(Self::Twelve(0, {
                 let mut result = [0u8; 12];

@@ -56,7 +56,7 @@ impl Buffer for bytes::BytesMut {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct BufferZeroizer<B: Buffer>(pub B);
+pub(crate) struct BufferZeroizer<B: Buffer>(pub B);
 
 impl<B> Buffer for BufferZeroizer<B>
 where

@@ -31,7 +31,7 @@ where
     B: Buffer,
 {
     key: Key<Material>,
-    buffer: BufferZeroizer<B>,
+    buf: BufferZeroizer<B>,
     #[zeroize(skip)]
     segment: Option<Segment>,
     #[zeroize(skip)]
@@ -44,19 +44,19 @@ impl<B> Encrypt<B>
 where
     B: Buffer,
 {
-    pub fn new(buffer: B, segment: Option<Segment>, aead: &Aead) -> Self {
+    pub fn new(buf: B, segment: Option<Segment>, aead: &Aead) -> Self {
         let key = aead.keyring.primary_key().clone();
         Self {
             key,
             segment,
-            buffer: BufferZeroizer(buffer),
+            buf: BufferZeroizer(buf),
             nonce_seq: None,
             cipher: None,
         }
     }
 
     pub fn update(&mut self, data: &[u8]) {
-        self.buffer.extend_from_slice(data)
+        self.buf.extend_from_slice(data)
     }
     pub fn algorithm(&self) -> Algorithm {
         self.key.algorithm()
@@ -67,7 +67,7 @@ where
     }
 
     pub fn buffered_len(&self) -> usize {
-        self.buffer.len()
+        self.buf.len()
     }
 
     pub fn next(&mut self, aad: &[u8]) -> Result<Option<B>, StreamingEncryptNextError> {
@@ -142,18 +142,18 @@ where
         let nonce = Nonce::new(self.algorithm().nonce_len());
         let header = self.header(None, &nonce, &[]);
         let cipher = Cipher::new(self.algorithm(), self.key.bytes());
-        let mut buf = mem::take(&mut self.buffer.0);
+        let mut buf = mem::take(&mut self.buf.0);
         cipher
             .encrypt_in_place(nonce, aad, &mut buf)
             .map_err(|_| EncryptError::Unspecified)?;
-        prepend_to_buffer(&mut self.buffer, &header);
+        prepend_to_buffer(&mut self.buf, &header);
         Ok(vec![buf])
     }
 
     fn next_segment_rng(&self) -> Option<Range<usize>> {
         let segment = self.segment?;
         if self.counter() == 0 {
-            if self.buffer.len() > segment - self.algorithm().online_header_len() {
+            if self.buf.len() > segment - self.algorithm().online_header_len() {
                 Some(
                     0..segment
                         - self.algorithm().streaming_header_len()
@@ -162,7 +162,7 @@ where
             } else {
                 None
             }
-        } else if self.buffer.len() > segment - self.algorithm().tag_len() {
+        } else if self.buf.len() > segment - self.algorithm().tag_len() {
             Some(0..segment - self.algorithm().tag_len())
         } else {
             None
@@ -170,8 +170,8 @@ where
     }
     fn next_buffered_segment(&mut self) -> Option<BufferZeroizer<B>> {
         self.next_segment_rng().map(|rng| {
-            let mut buf = self.buffer.split_off(rng.end);
-            core::mem::swap(&mut self.buffer, &mut buf);
+            let mut buf = self.buf.split_off(rng.end);
+            core::mem::swap(&mut self.buf, &mut buf);
             buf
         })
     }
@@ -217,7 +217,7 @@ where
         }
         let nonce_seq = self.nonce_seq.take().ok_or(UnspecifiedError)?;
         let nonce = nonce_seq.last()?;
-        let mut buf = mem::take(&mut self.buffer.0);
+        let mut buf = mem::take(&mut self.buf.0);
         cipher.encrypt_in_place(nonce, aad, &mut buf)?;
         segments.push(buf);
         Ok(segments)

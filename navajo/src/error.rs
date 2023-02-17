@@ -240,6 +240,11 @@ impl From<KeyNotFoundError> for DecryptError {
         Self::KeyNotFound(e)
     }
 }
+impl From<MalformedError> for DecryptError {
+    fn from(e: MalformedError) -> Self {
+        Self::Malformed(e)
+    }
+}
 
 impl fmt::Display for DecryptError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -270,12 +275,6 @@ impl From<ring::error::Unspecified> for DecryptError {
 pub struct MalformedError(Cow<'static, str>);
 
 impl<E> From<MalformedError> for DecryptStreamError<E> {
-    fn from(e: MalformedError) -> Self {
-        Self::Malformed(e)
-    }
-}
-
-impl From<MalformedError> for DecryptError {
     fn from(e: MalformedError) -> Self {
         Self::Malformed(e)
     }
