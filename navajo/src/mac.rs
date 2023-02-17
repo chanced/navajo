@@ -1,7 +1,7 @@
 #![doc = include_str!("./mac/README.md")]
 
 mod algorithm;
-mod compute;
+mod computer;
 mod context;
 mod entry;
 mod key_info;
@@ -10,17 +10,17 @@ mod output;
 mod stream;
 mod tag;
 mod try_stream;
-mod verify;
+mod verifier;
 
 pub use algorithm::Algorithm;
-pub use compute::Compute;
+pub use computer::Computer;
 use futures::{Stream, TryStream};
 pub use key_info::MacKeyInfo;
 pub use stream::{ComputeStream, StreamMac, VerifyStream};
 pub use try_stream::{ComputeTryStream, TryStreamMac, VerifyTryStream};
 
 pub use tag::Tag;
-pub use verify::Verify;
+pub use verifier::Verifier;
 
 use crate::error::{
     InvalidKeyLength, KeyNotFoundError, MacVerificationError, OpenError, RemoveKeyError, SealError,
@@ -208,7 +208,7 @@ impl Mac {
     /// assert_eq!(encode(tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a")
     /// ```
     pub fn compute(&self, data: &[u8]) -> Tag {
-        let mut compute = Compute::new(self);
+        let mut compute = Computer::new(self);
         compute.update(data);
         compute.finalize()
     }
@@ -234,7 +234,7 @@ impl Mac {
         S: Stream<Item = D>,
         D: AsRef<[u8]>,
     {
-        let compute = Compute::new(self);
+        let compute = Computer::new(self);
         ComputeStream::new(stream, compute)
     }
     /// Computes a [`Tag`] from a [`TryStream`] of [`AsRef<[u8]>`](core::convert::AsRef<[u8]>).
@@ -259,7 +259,7 @@ impl Mac {
         S: TryStream<Ok = D>,
         D: AsRef<[u8]>,
     {
-        let compute = Compute::new(self);
+        let compute = Computer::new(self);
         ComputeTryStream::new(try_stream, compute)
     }
 
@@ -279,7 +279,7 @@ impl Mac {
     where
         R: std::io::Read,
     {
-        let mut compute = Compute::new(self);
+        let mut compute = Computer::new(self);
         std::io::copy(reader, &mut compute)?;
         Ok(compute.finalize())
     }
@@ -300,7 +300,7 @@ impl Mac {
     where
         T: AsRef<Tag>,
     {
-        let mut verify = Verify::new(tag, self);
+        let mut verify = Verifier::new(tag, self);
         verify.update(data);
         verify.finalize()
     }
@@ -331,7 +331,7 @@ impl Mac {
         T: AsRef<Tag>,
         R: std::io::Read,
     {
-        let mut verify = Verify::new(tag, self);
+        let mut verify = Verifier::new(tag, self);
         std::io::copy(reader, &mut verify)?;
         let verified = verify.finalize()?;
         Ok(verified)
@@ -342,6 +342,7 @@ impl Mac {
     /// ```rust
     /// use navajo::mac::{Mac, Algorithm};
     /// use futures::{ StreamExt, stream };
+    /// use hex::{encode};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -352,7 +353,7 @@ impl Mac {
     ///     assert_eq!(encode(&tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a");
     ///     let data = vec![b"hello", b"world"];
     ///     let stream = stream::iter(data);
-    ///     let tag = mac.verify_stream(tag, stream).await?;
+    ///     let tag = mac.verify_stream(tag, stream).await.unwrap();
     ///     println!("tag: {}", hex::encode(&tag))
     /// }
     /// ```
@@ -362,7 +363,7 @@ impl Mac {
         S: Stream<Item = D>,
         D: AsRef<[u8]>,
     {
-        let verify = Verify::new(tag, self);
+        let verify = Verifier::new(tag, self);
         VerifyStream::new(stream, verify)
     }
     /// Verifies a [`Tag`] against a [`TryStream`] `stream` of [`AsRef<[u8]>`](core::convert::AsRef<[u8]>).
@@ -394,7 +395,7 @@ impl Mac {
         D: AsRef<[u8]>,
         E: Send + Sync,
     {
-        let verify = Verify::new(tag, self);
+        let verify = Verifier::new(tag, self);
         VerifyTryStream::new(stream, verify)
     }
 

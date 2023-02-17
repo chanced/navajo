@@ -8,13 +8,13 @@ const BUFFER_SIZE: usize = 64; // Todo: profile this
 
 use super::{ComputeStream, ComputeTryStream, Context, Mac, Tag};
 
-/// Generates a [`Tag`] for bytes using all keys in [`Mac`].
-pub struct Compute {
+/// Computes a [`Tag`] for the provided bytes using each key in [`Mac`].
+pub struct Computer {
     contexts: Vec<Context>,
     buffer: Vec<u8>,
 }
 
-impl Compute {
+impl Computer {
     pub fn new<M>(mac: M) -> Self
     where
         M: AsRef<super::Mac>,
@@ -92,7 +92,7 @@ impl Compute {
     }
 }
 
-impl<T> From<&T> for Compute
+impl<T> From<&T> for Computer
 where
     T: AsRef<Mac>,
 {
@@ -102,7 +102,7 @@ where
 }
 
 #[cfg(feature = "std")]
-impl std::io::Write for Compute {
+impl std::io::Write for Computer {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.update(buf);
         Ok(buf.len())
@@ -128,7 +128,7 @@ mod tests {
                 .unwrap();
         let mac = crate::mac::Mac::new_with_external_key(&key, Sha256, None, None).unwrap();
 
-        let mut hasher = Compute::new(&mac);
+        let mut hasher = Computer::new(&mac);
         hasher.update(b"message");
         let tag = hasher.finalize();
         assert_eq!(tag.omit_header().unwrap(), &expected[..]);
@@ -241,7 +241,7 @@ mod tests {
         
         Tkin-Gloe-lh-A-Kha Ah-Ya-Tsinne-Tkin-Tsin-Tliti-Tse-Nill"#;
 
-        let mut hasher = Compute::new(&mac);
+        let mut hasher = Computer::new(&mac);
         hasher.update(long_str.as_bytes());
         let tag = hasher.finalize();
         assert_eq!(tag.omit_header().unwrap().len(), expected[..].len());

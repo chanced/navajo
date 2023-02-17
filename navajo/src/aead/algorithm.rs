@@ -19,8 +19,7 @@ pub enum Algorithm {
 }
 
 impl Algorithm {
-    /// The length of the nonce in bytes
-    pub fn size(&self) -> Size {
+    fn size(&self) -> Size {
         match self {
             Algorithm::Aes128Gcm => AES_128_GCM,
             Algorithm::Aes256Gcm => AES_256_GCM,

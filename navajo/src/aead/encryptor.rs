@@ -1,13 +1,14 @@
 use core::{mem, ops::Range};
 
-use alloc::vec::Vec;
+use alloc::{
+    collections::{vec_deque::IntoIter, VecDeque},
+    vec::Vec,
+};
 use zeroize::ZeroizeOnDrop;
 
 use crate::{
     buffer::{prepend_to_buffer, BufferZeroizer},
-    error::{
-        EncryptError, StreamingEncryptFinalizeError, StreamingEncryptNextError, UnspecifiedError,
-    },
+    error::{EncryptError, EncryptFinalError, UnspecifiedError},
     hkdf,
     key::Key,
     rand, sensitive, Aead, Buffer,
@@ -26,7 +27,7 @@ use super::{
 /// Otherwise, it will encrypt data using AEAD as described in [RFC
 /// 5116](https://tools.ietf.org/html/rfc5116) with a 5 byte header prepended.
 #[derive(ZeroizeOnDrop, Debug)]
-pub struct Encrypt<B>
+pub struct Encryptor<B>
 where
     B: Buffer,
 {
@@ -38,9 +39,11 @@ where
     nonce_seq: Option<NonceSequence>,
     #[zeroize(skip)] // ring's aead keys do not implement Zeroize. Not sure about Rust Crypto's
     cipher: Option<Cipher>,
+    #[zeroize(skip)]
+    segments: VecDeque<B>,
 }
 
-impl<B> Encrypt<B>
+impl<B> Encryptor<B>
 where
     B: Buffer,
 {
@@ -52,12 +55,18 @@ where
             buf: BufferZeroizer(buf),
             nonce_seq: None,
             cipher: None,
+            segments: VecDeque::new(),
         }
     }
 
-    pub fn update(&mut self, data: &[u8]) {
-        self.buf.extend_from_slice(data)
+    pub fn update(&mut self, additional_data: &[u8], data: &[u8]) -> Result<(), EncryptError> {
+        self.buf.extend_from_slice(data);
+        while let Some(buf) = self.try_encrypt_seg(additional_data)? {
+            self.segments.push_back(buf);
+        }
+        Ok(())
     }
+
     pub fn algorithm(&self) -> Algorithm {
         self.key.algorithm()
     }
@@ -69,12 +78,10 @@ where
     pub fn buffered_len(&self) -> usize {
         self.buf.len()
     }
-
-    pub fn next(&mut self, aad: &[u8]) -> Result<Option<B>, StreamingEncryptNextError> {
+    fn try_encrypt_seg(&mut self, aad: &[u8]) -> Result<Option<B>, EncryptError> {
         self.next_buffered_segment()
             .map(|mut buf| {
                 let mut header: Option<Vec<u8>> = None;
-
                 if self.counter() == 0 {
                     let nonce_seq = NonceSequence::new(self.algorithm().nonce_len());
                     let (salt, derived_key) = Self::derive_key(&self.key, aad);
@@ -83,18 +90,9 @@ where
                     header = Some(header_bytes);
                     self.cipher = Some(Cipher::new(self.algorithm(), &derived_key))
                 }
-
                 let nonce = self.nonce_seq.as_mut().ok_or(UnspecifiedError)?.next()?;
-
-                let cipher = self
-                    .cipher
-                    .take()
-                    .ok_or(StreamingEncryptNextError::Unspecified)?;
-
-                cipher
-                    .encrypt_in_place(nonce, aad, &mut buf)
-                    .map_err(|_| StreamingEncryptNextError::Unspecified)?;
-
+                let cipher = self.cipher.take().ok_or(EncryptError::Unspecified)?;
+                cipher.encrypt_in_place(nonce, aad, &mut buf)?;
                 if let Some(header) = header {
                     prepend_to_buffer(&mut buf, &header);
                 }
@@ -111,12 +109,11 @@ where
     ///
     /// Finalize **must** be called or the remaining segments will **not** be encrypted.
     #[must_use = "finalize must be called"]
-    pub fn finalize(mut self, aad: &[u8]) -> Result<Vec<B>, StreamingEncryptFinalizeError> {
-        let mut segments = Vec::new();
+    pub fn finalize(mut self, aad: &[u8]) -> Result<IntoIter<B>, EncryptFinalError> {
         if self.counter() == 0 {
             let buf_len = self.buffered_len();
             if buf_len == 0 {
-                return Err(StreamingEncryptFinalizeError::EmptyCleartext);
+                return Err(EncryptFinalError::EmptyCleartext);
             }
 
             if self.segment.is_none() {
@@ -131,14 +128,13 @@ where
                 }
             }
         }
-
-        while let Some(seg) = self.next(aad)? {
-            segments.push(seg);
+        while let Some(seg) = self.try_encrypt_seg(aad)? {
+            self.segments.push_back(seg);
         }
-        self.last(aad, segments)
+        self.last(aad)
     }
 
-    fn finalize_one_shot(mut self, aad: &[u8]) -> Result<Vec<B>, StreamingEncryptFinalizeError> {
+    fn finalize_one_shot(mut self, aad: &[u8]) -> Result<IntoIter<B>, EncryptFinalError> {
         let nonce = Nonce::new(self.algorithm().nonce_len());
         let header = self.header(None, &nonce, &[]);
         let cipher = Cipher::new(self.algorithm(), self.key.bytes());
@@ -147,7 +143,9 @@ where
             .encrypt_in_place(nonce, aad, &mut buf)
             .map_err(|_| EncryptError::Unspecified)?;
         prepend_to_buffer(&mut self.buf, &header);
-        Ok(vec![buf])
+        self.segments.push_front(buf);
+        let segments = mem::take(&mut self.segments);
+        Ok(segments.into_iter())
     }
 
     fn next_segment_rng(&self) -> Option<Range<usize>> {
@@ -202,25 +200,29 @@ where
         (salt_bytes, sensitive::Bytes::from(derived_key))
     }
 
-    fn last(
-        mut self,
-        aad: &[u8],
-        mut segments: Vec<B>,
-    ) -> Result<Vec<B>, StreamingEncryptFinalizeError> {
-        let cipher = self
-            .cipher
-            .take()
-            .ok_or(StreamingEncryptFinalizeError::Unspecified)?;
-
+    fn last(mut self, aad: &[u8]) -> Result<IntoIter<B>, EncryptFinalError> {
+        let cipher = self.cipher.take().ok_or(EncryptError::Unspecified)?;
         if self.buffered_len() == 0 {
-            return Ok(segments);
+            let segments = mem::take(&mut self.segments);
+            return Ok(segments.into_iter());
         }
         let nonce_seq = self.nonce_seq.take().ok_or(UnspecifiedError)?;
         let nonce = nonce_seq.last()?;
         let mut buf = mem::take(&mut self.buf.0);
         cipher.encrypt_in_place(nonce, aad, &mut buf)?;
-        segments.push(buf);
-        Ok(segments)
+        self.segments.push_back(buf);
+        let segments = mem::take(&mut self.segments);
+        Ok(segments.into_iter())
+    }
+}
+
+impl<B> Iterator for Encryptor<B>
+where
+    B: Buffer,
+{
+    type Item = B;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.segments.pop_front()
     }
 }
 

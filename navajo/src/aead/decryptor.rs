@@ -15,18 +15,17 @@ use crate::{
 
 use super::{cipher::Cipher, nonce::NonceOrNonceSequence, Aead, Algorithm, Method, Segment};
 
-pub struct Decrypt<B> {
+pub struct Decryptor<B> {
     aead: Aead,
     buf: B,
     key_id: Option<u32>,
     key: Option<Key<Material>>,
-    segment: Option<Segment>,
     nonce: Option<NonceOrNonceSequence>,
     cipher: Option<Cipher>,
     method: Option<Method>,
 }
 
-impl<B> Decrypt<B>
+impl<B> Decryptor<B>
 where
     B: Buffer,
 {
@@ -36,7 +35,6 @@ where
             buf,
             key: None,
             key_id: None,
-            segment: None,
             nonce: None,
             cipher: None,
             method: None,
@@ -45,34 +43,67 @@ where
     pub fn algorithm(&self) -> Option<Algorithm> {
         self.key.as_ref().map(|c| c.algorithm())
     }
-    pub fn update(
-        &mut self,
-        additional_data: &[u8],
-        ciphertext: &[u8],
-    ) -> Result<Option<Vec<B>>, DecryptError> {
+    pub fn update(&mut self, ciphertext: &[u8]) {
         self.buf.extend_from_slice(ciphertext);
-        let mut results = vec![];
-        while let Some(segment) = self.next(additional_data)? {
-            results.push(segment);
-        }
-        if results.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(results))
-        }
     }
 
-    fn next(&mut self, aad: &[u8]) -> Result<Option<B>, DecryptError> {
+    fn next(&mut self, additional_data: &[u8]) -> Result<Option<B>, DecryptError> {
         if self.buf.is_empty() {
             return Ok(None);
         }
         if !self.header_is_complete() {
-            self.parse_header(aad)?;
+            self.parse_header(additional_data)?;
         }
         if self.cipher.is_none() {
             return Ok(None);
         }
-        Ok(None)
+        let seg_end = self.next_segment_end();
+        if seg_end.is_none() {
+            return Ok(None);
+        }
+        let seg_end = seg_end.unwrap();
+        let nonce = match self.nonce.as_mut().unwrap() {
+            NonceOrNonceSequence::Nonce(_) => {
+                unreachable!("nonce must be a nonce sequence for streams")
+            }
+            NonceOrNonceSequence::NonceSequence(seq) => seq.next()?,
+        };
+        let mut data = self.extract_segment(seg_end);
+        self.cipher
+            .as_ref()
+            .unwrap()
+            .decrypt_in_place(nonce, additional_data, &mut data)?;
+
+        return Ok(Some(data));
+    }
+    fn extract_segment(&mut self, end: usize) -> B {
+        let mut buf = self.buf.split_off(end);
+        core::mem::swap(&mut self.buf, &mut buf);
+        buf
+    }
+    fn next_segment_end(&self) -> Option<usize> {
+        self.method
+            .map(|method| match method {
+                Method::Online => None,
+                Method::StreamingHmacSha256(segment) => {
+                    let algorithm = self.algorithm()?;
+                    if self.counter() == 0 {
+                        let last = segment - algorithm.streaming_nonce_prefix_len();
+                        if self.buf.len() < last {
+                            None
+                        } else {
+                            Some(last)
+                        }
+                    } else if self.buf.len() > segment {
+                        // inetntionally checking for > instead of >= to allow
+                        // for the last segment to be finalized
+                        Some(segment.into())
+                    } else {
+                        None
+                    }
+                }
+            })
+            .flatten()
     }
 
     fn header_is_complete(&self) -> bool {
@@ -152,7 +183,7 @@ where
                 }
                 let nonce = &buf[idx..idx + algorithm.nonce_len()];
                 let nonce = Nonce::new_from_slice(algorithm.nonce_len(), nonce)
-                    .map_err(|e| DecryptError::Malformed(e.to_string().into()))?;
+                    .map_err(|_| DecryptError::Unspecified)?;
                 self.nonce = Some(NonceOrNonceSequence::Nonce(nonce));
 
                 Ok(Some(idx + algorithm.nonce_len()))
@@ -162,11 +193,10 @@ where
                     return Ok(None);
                 }
                 let nonce_prefix = &buf[idx..idx + algorithm.nonce_prefix_len()];
-                let nonce_seq =
-                    NonceSequence::new_with_prefix(algorithm.nonce_prefix_len(), nonce_prefix)
-                        .map_err(|e| DecryptError::Malformed(e.to_string().into()))?;
+                let nonce_seq = NonceSequence::new_with_prefix(algorithm.nonce_len(), nonce_prefix)
+                    .map_err(|_| DecryptError::Unspecified)?;
                 self.nonce = Some(NonceOrNonceSequence::NonceSequence(nonce_seq));
-                Ok(Some(algorithm.nonce_prefix_len()))
+                Ok(Some(idx + algorithm.nonce_prefix_len()))
             }
         }
     }
@@ -174,7 +204,9 @@ where
         if self.buf.is_empty() {
             return Ok(None);
         }
-        self.method = Some(self.buf.as_ref()[0].try_into()?);
+        let method: Method = self.buf.as_ref()[0].try_into()?;
+        self.method = Some(method);
+
         Ok(Some(Method::LEN))
     }
 
@@ -203,13 +235,14 @@ where
                 Some(idx)
             }
             Method::StreamingHmacSha256(_) => {
-                if buf.len() < idx + KEY_ID_LEN {
+                let key_len = key.len();
+                if buf.len() < idx + key_len {
                     None
                 } else {
-                    let salt = &buf[idx..idx + KEY_ID_LEN];
+                    let salt = &buf[idx..idx + key_len];
                     let derived_key = self.derive_key(salt, aad);
                     self.cipher = Some(Cipher::new(algorithm, &derived_key));
-                    Some(idx + KEY_ID_LEN)
+                    Some(idx + key_len)
                 }
             }
         }
@@ -219,7 +252,7 @@ where
         let key = self.key.as_ref().unwrap();
         let salt = Salt::new(hkdf::Algorithm::HkdfSha256, salt);
         let prk = salt.extract(key.material().bytes());
-        let mut derived_key = vec![0u8; key.algorithm().key_len()];
+        let mut derived_key = vec![0u8; key.len()];
         prk.expand(&[aad], &mut derived_key).unwrap(); // safety: key is always an appropriate length
         derived_key
     }
@@ -234,13 +267,16 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::rand;
+
     use super::*;
     #[test]
-    fn test_parsing_header() {
+    fn test_parsing_online_header() {
         let method = Method::Online;
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
-        let key_id = aead.primary_key().id;
-        let mut nonce = vec![0u8; aead.primary_key().algorithm.nonce_len()];
+        let key = aead.keyring.primary_key();
+        let key_id = key.id();
+        let mut nonce = vec![0u8; key.nonce_len()];
         crate::rand::fill(&mut nonce);
         let buf = [
             &method.to_be_bytes()[..],
@@ -248,12 +284,11 @@ mod tests {
             &nonce[..],
         ]
         .concat();
-        let mut dec = Decrypt::new(&aead, buf);
+        let mut dec = Decryptor::new(&aead, buf);
         dec.next(&[]).unwrap();
         assert_eq!(dec.method, Some(method));
         assert_eq!(dec.key_id, Some(key_id));
         assert!(dec.nonce.is_some());
-
         let n = dec.nonce.as_ref().unwrap();
         match n {
             NonceOrNonceSequence::Nonce(n) => {
@@ -265,6 +300,47 @@ mod tests {
         }
         assert!(dec.cipher.is_some());
         assert!(dec.key.is_some());
+        assert!(dec.buf.is_empty());
+    }
+    #[test]
+    fn test_parsing_streaming_header() {
+        let method = Method::StreamingHmacSha256(Segment::FourMegaBytes);
+        let aead = Aead::new(Algorithm::Aes128Gcm, None);
+        let key_id = aead.primary_key().id;
+        let mut seed = vec![0u8; aead.primary_key().algorithm.key_len()];
+        rand::fill(&mut seed);
+        let mut nonce = vec![0u8; aead.primary_key().algorithm.nonce_prefix_len()];
+        crate::rand::fill(&mut nonce);
+        let buf = [
+            &method.to_be_bytes()[..],
+            &key_id.to_be_bytes()[..],
+            &seed[..],
+            &nonce[..],
+        ]
+        .concat();
+        let mut dec = Decryptor::new(&aead, buf);
+
+        dec.next(&[]).unwrap();
+        assert_eq!(dec.method, Some(method));
+        assert_eq!(dec.key_id, Some(key_id));
+
+        assert!(dec.nonce.is_some());
+
+        let n = dec.nonce.as_ref().unwrap();
+        match n {
+            NonceOrNonceSequence::Nonce(_) => {
+                panic!("expected nonce nonce sequence, got nonce");
+            }
+            NonceOrNonceSequence::NonceSequence(n) => {
+                assert_eq!(
+                    n.bytes(),
+                    &[&nonce[..], &0u32.to_be_bytes()[..], &[0]].concat()
+                );
+            }
+        }
+        assert!(dec.cipher.is_some());
+        assert!(dec.key.is_some());
+        println!("{:?}", dec.buf);
         assert!(dec.buf.is_empty());
     }
 }

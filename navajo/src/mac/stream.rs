@@ -8,7 +8,7 @@ use pin_project::pin_project;
 
 use crate::error::MacVerificationError;
 
-use super::{verify::Verify, Compute, Mac, Tag};
+use super::{verifier::Verifier, Computer, Mac, Tag};
 
 const BLOCK_SIZE: usize = 256; // todo: profile this
 
@@ -27,7 +27,7 @@ pub trait StreamMac: Stream {
         Self::Item: AsRef<[u8]>,
         T: AsRef<Tag> + Send + Sync,
     {
-        let verify = Verify::new(tag, mac);
+        let verify = Verifier::new(tag, mac);
         VerifyStream::new(self, verify)
     }
 }
@@ -46,7 +46,7 @@ where
 {
     #[pin]
     stream: S,
-    compute: Option<Compute>,
+    compute: Option<Computer>,
     _phantom: PhantomData<D>,
 }
 
@@ -55,7 +55,7 @@ where
     S: Stream<Item = D>,
     D: AsRef<[u8]>,
 {
-    pub fn new(stream: S, compute: Compute) -> Self {
+    pub fn new(stream: S, compute: Computer) -> Self {
         let compute = Some(compute);
         Self {
             stream,
@@ -103,7 +103,7 @@ where
 {
     #[pin]
     stream: S,
-    verifier: Option<Verify<T>>,
+    verifier: Option<Verifier<T>>,
     _phantom: PhantomData<D>,
 }
 impl<S, D, T> VerifyStream<S, D, T>
@@ -112,7 +112,7 @@ where
     D: AsRef<[u8]>,
     T: AsRef<Tag> + Send + Sync,
 {
-    pub fn new(stream: S, verify: Verify<T>) -> Self {
+    pub fn new(stream: S, verify: Verifier<T>) -> Self {
         let verifier = Some(verify);
         Self {
             stream,
@@ -257,18 +257,12 @@ mod tests {
         let mac =
             crate::mac::Mac::new_with_external_key(&key, Algorithm::Sha256, None, None).unwrap();
 
-        let id = mac.primary_key().id;
-
         let stream_data = stream::iter(hex_data);
         let computed = stream_data.compute_mac(&mac).await;
         let expected =
             hex::decode("72fd211411c56848ccc90eafd19269a7fa1c3067d5bce20836575d786f828f4e")
                 .unwrap();
-        println!(
-            "expected: {}72fd211411c56848ccc90eafd19269a7fa1c3067d5bce20836575d786f828f4e",
-            hex::encode(id.to_be_bytes())
-        );
-        println!("computed: {}", hex::encode(computed.primary_tag.as_ref()));
+
         assert_eq!(&computed, &expected);
     }
 }

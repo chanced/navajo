@@ -2,22 +2,22 @@ use futures::{Stream, TryStream};
 
 use crate::error::MacVerificationError;
 
-use super::{compute::Compute, Mac, Tag, VerifyStream, VerifyTryStream};
+use super::{computer::Computer, Mac, Tag, VerifyStream, VerifyTryStream};
 
-pub struct Verify<T>
+pub struct Verifier<T>
 where
     T: AsRef<Tag>,
 {
     tag: T,
-    hasher: Compute,
+    hasher: Computer,
 }
-impl<T> Verify<T>
+impl<T> Verifier<T>
 where
     T: AsRef<Tag>,
 {
     pub(super) fn new(tag: T, mac: &Mac) -> Self {
         let _t = tag.as_ref();
-        let hasher = Compute::new(mac);
+        let hasher = Computer::new(mac);
         Self { tag, hasher }
     }
     pub fn update(&mut self, data: &[u8]) {
@@ -33,7 +33,7 @@ where
         }
     }
 }
-impl<T> Verify<T>
+impl<T> Verifier<T>
 where
     T: AsRef<Tag> + Send + Sync,
 {
@@ -55,7 +55,7 @@ where
 }
 
 #[cfg(feature = "std")]
-impl<T> std::io::Write for Verify<T>
+impl<T> std::io::Write for Verifier<T>
 where
     T: AsRef<Tag>,
 {

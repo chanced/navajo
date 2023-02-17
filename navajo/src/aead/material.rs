@@ -64,4 +64,22 @@ impl Key<Material> {
         let nonce = Nonce::new(self.algorithm().nonce_len());
         self.cipher().decrypt_in_place(nonce, aad, data)
     }
+    pub fn len(&self) -> usize {
+        self.bytes().len()
+    }
+    pub fn nonce_len(&self) -> usize {
+        self.algorithm().nonce_len()
+    }
+    pub fn tag_len(&self) -> usize {
+        self.algorithm().tag_len()
+    }
+    pub fn nonce_prefix_len(&self) -> usize {
+        self.algorithm().nonce_prefix_len()
+    }
+    pub fn online_header_len(&self) -> usize {
+        self.algorithm().online_header_len()
+    }
+    pub fn streaming_header_len(&self) -> usize {
+        self.algorithm().streaming_header_len()
+    }
 }

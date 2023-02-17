@@ -8,7 +8,7 @@ use alloc::{
 #[cfg(feature = "ring")]
 use ring;
 
-use crate::KeyInfo;
+use crate::{aead::Segment, KeyInfo};
 
 #[derive(Debug, Clone, Copy)]
 pub struct KeyNotFoundError(pub u32);
@@ -40,20 +40,59 @@ impl fmt::Display for UnspecifiedError {
 impl std::error::Error for UnspecifiedError {}
 
 #[derive(Clone, Debug)]
+pub struct SegmentLimitExceededError;
+impl core::fmt::Display for SegmentLimitExceededError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "counter limit exceeded")
+    }
+}
+#[cfg(feature = "std")]
+impl std::error::Error for SegmentLimitExceededError {}
+
+#[derive(Clone, Debug)]
 pub enum EncryptError {
     Unspecified,
-    MissingPrimaryKey,
+    SegmentLimitExceeded,
 }
 
 impl fmt::Display for EncryptError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
-            Self::MissingPrimaryKey => write!(f, "missing primary key"),
+            Self::SegmentLimitExceeded => fmt::Display::fmt(&SegmentLimitExceededError, f),
         }
     }
 }
 
+impl From<SegmentLimitExceededError> for EncryptError {
+    fn from(_: SegmentLimitExceededError) -> Self {
+        Self::SegmentLimitExceeded
+    }
+}
+
+pub enum EncryptFinalError {
+    Unspecified,
+    SegmentLimitExceeded,
+    EmptyCleartext,
+}
+impl From<EncryptError> for EncryptFinalError {
+    fn from(e: EncryptError) -> Self {
+        match e {
+            EncryptError::Unspecified => Self::Unspecified,
+            EncryptError::SegmentLimitExceeded => Self::SegmentLimitExceeded,
+        }
+    }
+}
+impl From<SegmentLimitExceededError> for EncryptFinalError {
+    fn from(_: SegmentLimitExceededError) -> Self {
+        Self::SegmentLimitExceeded
+    }
+}
+impl From<UnspecifiedError> for EncryptFinalError {
+    fn from(_: UnspecifiedError) -> Self {
+        Self::Unspecified
+    }
+}
 impl From<rust_crypto_aead::Error> for EncryptError {
     fn from(_: rust_crypto_aead::Error) -> Self {
         Self::Unspecified
@@ -75,153 +114,9 @@ impl From<ring::error::Unspecified> for EncryptError {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct SegmentLimitExceeded;
-impl core::fmt::Display for SegmentLimitExceeded {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "counter limit exceeded")
-    }
-}
-#[cfg(feature = "std")]
-impl std::error::Error for SegmentLimitExceeded {}
-
-#[derive(Debug)]
-pub enum DecryptStreamError<E> {
-    Unspecified,
-    KeyNotFound(KeyNotFoundError),
-    Malformed(MalformedError),
-    Upstream(E),
-}
-
-impl<E> fmt::Display for DecryptStreamError<E>
-where
-    E: fmt::Display,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            DecryptStreamError::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
-            DecryptStreamError::KeyNotFound(k) => write!(f, "unknown key: {k}"),
-            DecryptStreamError::Malformed(e) => write!(f, "malformed ciphertext: {e}"),
-            DecryptStreamError::Upstream(e) => fmt::Display::fmt(e, f),
-        }
-    }
-}
-#[cfg(feature = "std")]
-impl<E> std::error::Error for DecryptStreamError<E> where E: std::error::Error {}
-impl<E> From<DecryptError> for DecryptStreamError<E>
-where
-    E: Debug,
-{
-    fn from(e: DecryptError) -> Self {
-        match e {
-            DecryptError::Unspecified => Self::Unspecified,
-            DecryptError::KeyNotFound(k) => Self::KeyNotFound(k),
-            DecryptError::Malformed(e) => Self::Malformed(e),
-        }
-    }
-}
-
 impl From<rust_crypto_aead::Error> for DecryptError {
     fn from(_: rust_crypto_aead::Error) -> Self {
         Self::Unspecified
-    }
-}
-
-#[derive(Debug)]
-pub enum EncryptStreamError<E> {
-    Upstream(E),
-    Streaming(StreamingEncryptNextError),
-}
-impl<E> From<StreamingEncryptNextError> for EncryptStreamError<E> {
-    fn from(e: StreamingEncryptNextError) -> Self {
-        Self::Streaming(e)
-    }
-}
-#[derive(Debug)]
-pub enum StreamingEncryptFinalizeError {
-    Unspecified,
-    SegmentLimitExceeded,
-    EmptyCleartext,
-}
-impl From<StreamingEncryptNextError> for StreamingEncryptFinalizeError {
-    fn from(err: StreamingEncryptNextError) -> Self {
-        match err {
-            StreamingEncryptNextError::Unspecified => Self::Unspecified,
-            StreamingEncryptNextError::SegmentLimitExceeded => Self::SegmentLimitExceeded,
-        }
-    }
-}
-impl From<EncryptError> for StreamingEncryptFinalizeError {
-    fn from(err: EncryptError) -> Self {
-        match err {
-            EncryptError::Unspecified => Self::Unspecified,
-            EncryptError::MissingPrimaryKey => {
-                unreachable!("could not find primary key in a call to streaming encrypt finalize")
-            }
-        }
-    }
-}
-
-impl From<UnspecifiedError> for StreamingEncryptFinalizeError {
-    fn from(_: UnspecifiedError) -> Self {
-        Self::Unspecified
-    }
-}
-impl From<SegmentLimitExceeded> for StreamingEncryptFinalizeError {
-    fn from(_: SegmentLimitExceeded) -> Self {
-        Self::SegmentLimitExceeded
-    }
-}
-impl Display for StreamingEncryptFinalizeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
-            Self::SegmentLimitExceeded => fmt::Display::fmt(&SegmentLimitExceeded, f),
-            Self::EmptyCleartext => write!(f, "empty cleartext"),
-        }
-    }
-}
-#[cfg(feature = "std")]
-impl std::error::Error for StreamingEncryptFinalizeError {}
-
-#[derive(Debug)]
-pub enum StreamingEncryptNextError {
-    Unspecified,
-    SegmentLimitExceeded,
-}
-
-impl Display for StreamingEncryptNextError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
-            Self::SegmentLimitExceeded => fmt::Display::fmt(&SegmentLimitExceeded, f),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for StreamingEncryptNextError {}
-
-impl From<UnspecifiedError> for StreamingEncryptNextError {
-    fn from(_: UnspecifiedError) -> Self {
-        Self::Unspecified
-    }
-}
-impl From<SegmentLimitExceeded> for StreamingEncryptNextError {
-    fn from(_: SegmentLimitExceeded) -> Self {
-        Self::SegmentLimitExceeded
-    }
-}
-
-impl<E> From<UnspecifiedError> for DecryptStreamError<E> {
-    fn from(_: UnspecifiedError) -> Self {
-        Self::Unspecified
-    }
-}
-
-impl<E> From<SegmentLimitExceeded> for EncryptStreamError<E> {
-    fn from(_: SegmentLimitExceeded) -> Self {
-        Self::Streaming(StreamingEncryptNextError::SegmentLimitExceeded)
     }
 }
 
@@ -231,8 +126,7 @@ pub enum DecryptError {
     Unspecified,
     /// The keyset does not contain the key used to encrypt the ciphertext
     KeyNotFound(KeyNotFoundError),
-    /// The ciphertext is malformed. See the opaque error message for details.
-    Malformed(MalformedError),
+    SegmentLimitExceeded,
 }
 
 impl From<KeyNotFoundError> for DecryptError {
@@ -240,9 +134,15 @@ impl From<KeyNotFoundError> for DecryptError {
         Self::KeyNotFound(e)
     }
 }
+impl From<SegmentLimitExceededError> for DecryptError {
+    fn from(_: SegmentLimitExceededError) -> Self {
+        Self::SegmentLimitExceeded
+    }
+}
+
 impl From<MalformedError> for DecryptError {
     fn from(e: MalformedError) -> Self {
-        Self::Malformed(e)
+        Self::Unspecified
     }
 }
 
@@ -250,8 +150,8 @@ impl fmt::Display for DecryptError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
-            Self::Malformed(e) => fmt::Display::fmt(e, f),
             Self::KeyNotFound(e) => fmt::Display::fmt(e, f),
+            Self::SegmentLimitExceeded => fmt::Display::fmt(&SegmentLimitExceededError, f),
         }
     }
 }
@@ -273,12 +173,6 @@ impl From<ring::error::Unspecified> for DecryptError {
 
 #[derive(Debug, Clone)]
 pub struct MalformedError(Cow<'static, str>);
-
-impl<E> From<MalformedError> for DecryptStreamError<E> {
-    fn from(e: MalformedError) -> Self {
-        Self::Malformed(e)
-    }
-}
 
 impl From<&'static str> for MalformedError {
     fn from(s: &'static str) -> Self {

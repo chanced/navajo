@@ -92,8 +92,8 @@ let tag = mac.compute(b"hello world").omit_header().unwrap();
 assert_eq!(encode(tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a")
 
 // alternatively:
-let mut mac = Mac::new(Algorithm::Sha256);
+let mut mac = Mac::new(Algorithm::Sha256, None /* Option<serde_json::value::Value> */);
 let key = mac.add_external_key(&external_key, Algorithm::Sha256, None).unwrap();
 let key = mac.promote_key(key).unwrap();
-println!("{key}");
+println!("{key:?}");
 ```

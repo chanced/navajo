@@ -721,10 +721,6 @@ name = "navajo-vault"
 version = "0.0.0"
 
 [[package]]
-name = "no_std"
-version = "0.1.0"
-
-[[package]]
 name = "num_cpus"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1021,14 +1017,6 @@ name = "ryu"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b4b9743ed687d4b4bcedf9ff5eaa7398495ae14e61cba0a295704edbc7decde"
-
-[[package]]
-name = "sans-blake3"
-version = "0.1.0"
-
-[[package]]
-name = "sans-ring"
-version = "0.1.0"
 
 [[package]]
 name = "scopeguard"
@@ -1459,10 +1447,6 @@ name = "windows_x86_64_msvc"
 version = "0.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "447660ad36a13288b1db4d4248e857b510e8c3a225c822ba4fb748c0aafecffd"
-
-[[package]]
-name = "with_ring"
-version = "0.1.0"
 
 [[package]]
 name = "zeroize"

@@ -6,5 +6,4 @@ members = [
 	"navajo-vault",
 	"navajo-cli",
 	"navajo-azure",
-	"tests/*/*",
 ]

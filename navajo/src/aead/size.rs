@@ -1,5 +1,5 @@
 #[derive(Clone, Copy, Debug)]
-pub struct Size {
+pub (super) struct Size {
     pub nonce: usize,
     pub key: usize,
     pub tag: usize,

@@ -204,18 +204,18 @@ impl NonceSequence {
         }
     }
 
-    pub(crate) fn next(&mut self) -> Result<Nonce, crate::error::SegmentLimitExceeded> {
+    pub(crate) fn next(&mut self) -> Result<Nonce, crate::error::SegmentLimitExceededError> {
         if self.counter() == u32::MAX {
-            return Err(crate::error::SegmentLimitExceeded);
+            return Err(crate::error::SegmentLimitExceededError);
         }
         let nonce = self.nonce();
         self.increment();
         Ok(nonce)
     }
 
-    pub(crate) fn last(mut self) -> Result<Nonce, crate::error::SegmentLimitExceeded> {
+    pub(crate) fn last(mut self) -> Result<Nonce, crate::error::SegmentLimitExceededError> {
         if self.counter() == u32::MAX {
-            return Err(crate::error::SegmentLimitExceeded);
+            return Err(crate::error::SegmentLimitExceededError);
         }
         let len = self.len();
         self.seed_mut()[len - 1] = 1;
@@ -244,7 +244,7 @@ impl NonceSequence {
         })
     }
 
-    fn bytes(&self) -> &[u8] {
+    pub(crate) fn bytes(&self) -> &[u8] {
         self.seed()
     }
 }

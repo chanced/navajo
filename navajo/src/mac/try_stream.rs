@@ -8,7 +8,7 @@ use pin_project::pin_project;
 
 use crate::error::VerifyTryStreamError;
 
-use super::{verify::Verify, Compute, Mac, Tag};
+use super::{verifier::Verifier, Computer, Mac, Tag};
 
 const BLOCK_SIZE: usize = 256; // todo: profile this
 
@@ -28,7 +28,7 @@ pub trait TryStreamMac: TryStream {
         Self::Error: Send + Sync,
         T: AsRef<Tag> + Send + Sync,
     {
-        let verify = Verify::new(tag, mac);
+        let verify = Verifier::new(tag, mac);
         VerifyTryStream::new(self, verify)
     }
 }
@@ -48,7 +48,7 @@ where
 {
     #[pin]
     stream: S,
-    compute: Option<Compute>,
+    compute: Option<Computer>,
     _phantom: PhantomData<(D, E)>,
 }
 
@@ -57,7 +57,7 @@ where
     S: TryStream<Ok = D, Error = E>,
     D: AsRef<[u8]>,
 {
-    pub fn new(stream: S, compute: Compute) -> Self {
+    pub fn new(stream: S, compute: Computer) -> Self {
         let compute = Some(compute);
         Self {
             stream,
@@ -110,7 +110,7 @@ where
 {
     #[pin]
     stream: S,
-    verifier: Option<Verify<T>>,
+    verifier: Option<Verifier<T>>,
     _phantom: PhantomData<(T, E, D)>,
 }
 impl<S, D, E, T> VerifyTryStream<S, D, E, T>
@@ -120,7 +120,7 @@ where
     E: Send + Sync,
     T: AsRef<Tag> + Send + Sync,
 {
-    pub fn new(stream: S, verify: Verify<T>) -> Self {
+    pub fn new(stream: S, verify: Verifier<T>) -> Self {
         let verifier = Some(verify);
         Self {
             stream,
@@ -167,9 +167,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mac::Algorithm;
     use futures::stream::iter;
     use futures::StreamExt;
-
     #[cfg(feature = "std")]
     #[tokio::test]
     async fn test_mac_stream() {
@@ -262,15 +262,14 @@ mod tests {
         
         Decipher the code below to find out during what battle the Navajo Code Talkers to help gain a U.S. victory:
         
-    Tkin-Gloe-lh-A-Kha Ah-Ya-Tsinne-Tkin-Tsin-Tliti-Tse-Nill"#;
+        Tkin-Gloe-lh-A-Kha Ah-Ya-Tsinne-Tkin-Tsin-Tliti-Tse-Nill"#;
 
         let hex_data = long_str.as_bytes().chunks(16).map(|c| c.to_vec());
 
         let key = hex::decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
             .unwrap();
         let mac =
-            crate::mac::Mac::new_with_external_key(&key, crate::mac::Algorithm::Sha256, None, None)
-                .unwrap();
+            crate::mac::Mac::new_with_external_key(&key, Algorithm::Sha256, None, None).unwrap();
 
         fn to_try_stream(d: Vec<u8>) -> Result<Vec<u8>, String> {
             Ok(d)
