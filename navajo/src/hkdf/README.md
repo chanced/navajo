@@ -22,12 +22,12 @@ Crypto](https://docs.rs/hkdf/0.12.3/hkdf/) backend.
 ## Usage
 
 ```rust
-use navajo::hkdf::{Salt}
+use navajo::hkdf::{Salt, Algorithm};
 use navajo::rand;
 use hex::{encode, decode};
 
 // generate a salt
-let mut salt = Vec::with_capacity(32);
+let mut salt: Vec<u8> = Vec::with_capacity(32);
 let salt = decode("9a7bde666b56253feb44c1ec5be898af378621d4a827be4f018f04406305887c")
 	.unwrap();
 let salt = Salt::new(Algorithm::HkdfSha256, &salt[..]);
@@ -40,6 +40,8 @@ let prk = salt.extract(&ikm);
 
 // expand into output key material
 let mut okm = [0u8; 32];
+
+let info = vec![];
 prk.expand(&[&info[..]], &mut okm).unwrap();
 
 println!("{}", encode(okm));

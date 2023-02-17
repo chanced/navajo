@@ -421,7 +421,17 @@ impl<E> From<MacVerificationError> for VerifyTryStreamError<E> {
         Self::FailedVerification
     }
 }
-
+impl<D> Debug for VerifyTryStreamError<D>
+where
+    D: Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Upstream(e) => write!(f, "upstream error: {e:?}"),
+            Self::FailedVerification => write!(f, "failed verification"),
+        }
+    }
+}
 #[derive(Clone, Debug)]
 pub struct InvalidLengthError;
 

@@ -90,7 +90,7 @@ impl From<Nonce> for GenericArray<u8, U12> {
     fn from(nonce: Nonce) -> Self {
         match nonce {
             Nonce::Twelve(nonce) => GenericArray::clone_from_slice(&nonce[..]),
-            Nonce::TwentyFour(nonce) => panic!("attempted to convert a 24 byte nonce to a 12 byte nonce\nthis is a bug!\n\nplease report it to https://github.com/chanced/navajo/issues/new"),
+            Nonce::TwentyFour(_) => panic!("attempted to convert a 24 byte nonce to a 12 byte nonce\nthis is a bug!\n\nplease report it to https://github.com/chanced/navajo/issues/new"),
         }
     }
 }
@@ -98,7 +98,7 @@ impl From<Nonce> for GenericArray<u8, U24> {
     fn from(nonce: Nonce) -> Self {
         match nonce {
             Nonce::TwentyFour(nonce) => GenericArray::clone_from_slice(&nonce[..]),
-            Nonce::Twelve(nonce) => panic!("attempted to convert a 12 byte nonce to a 24 byte nonce\nthis is a bug!\n\nplease report it to https://github.com/chanced/navajo/issues/new"),
+            Nonce::Twelve(_) => panic!("attempted to convert a 12 byte nonce to a 24 byte nonce\nthis is a bug!\n\nplease report it to https://github.com/chanced/navajo/issues/new"),
         }
     }
 }
@@ -108,7 +108,7 @@ impl From<Nonce> for ring::aead::Nonce {
     fn from(nonce: Nonce) -> Self {
         match nonce {
             Nonce::Twelve(nonce) => ring::aead::Nonce::assume_unique_for_key(nonce),
-            Nonce::TwentyFour(nonce) => unreachable!("ring does not support 24 byte nonces\nthis is a bug!\n\nplease report it to https://github.com/chanced/navajo/issues/new"),
+            Nonce::TwentyFour(_) => unreachable!("ring does not support 24 byte nonces\nthis is a bug!\n\nplease report it to https://github.com/chanced/navajo/issues/new"),
         }
     }
 }

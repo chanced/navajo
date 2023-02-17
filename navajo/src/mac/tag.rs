@@ -103,7 +103,7 @@ impl Tag {
     ///
     ///
     /// ## Example
-    pub fn truncate(&self, len: usize) -> Result<Self, TruncationError> {
+    pub fn truncate_to(&self, len: usize) -> Result<Self, TruncationError> {
         if len == 0 {
             return Ok(self.remove_truncation());
         }

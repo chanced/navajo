@@ -180,7 +180,7 @@ impl Mac {
     /// let mac = Mac::new_with_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
     /// let tag = mac.compute(b"hello world").omit_header().unwrap();
     ///
-    /// assert_eq!(encode(tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a")
+    /// assert_eq!(encode(tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a");
     /// ```
     pub fn new_with_external_key(
         key: &[u8],
@@ -205,7 +205,7 @@ impl Mac {
     /// let mac = Mac::new_with_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
     /// let tag = mac.compute(b"hello world").omit_header().unwrap();
     ///
-    /// assert_eq!(encode(tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a")
+    /// assert_eq!(encode(tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a");
     /// ```
     pub fn compute(&self, data: &[u8]) -> Tag {
         let mut compute = Computer::new(self);
@@ -342,7 +342,7 @@ impl Mac {
     /// ```rust
     /// use navajo::mac::{Mac, Algorithm};
     /// use futures::{ StreamExt, stream };
-    /// use hex::{encode};
+    /// use hex::{encode, decode};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -351,7 +351,7 @@ impl Mac {
     ///     let mac = Mac::new_with_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
     ///     let tag = mac.compute(b"hello world").omit_header().unwrap();
     ///     assert_eq!(encode(&tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a");
-    ///     let data = vec![b"hello", b"world"];
+    ///     let data = vec![&b"hello"[..], &b" "[..], &b"world"[..]];
     ///     let stream = stream::iter(data);
     ///     let tag = mac.verify_stream(tag, stream).await.unwrap();
     ///     println!("tag: {}", hex::encode(&tag))
@@ -370,7 +370,7 @@ impl Mac {
     ///
     /// # Examples
     /// ```rust
-    /// use navajo::mac::{Mac, Algorithm};
+    /// use navajo::mac::{Mac, Algorithm};car
     /// use futures::{ StreamExt, stream };
     /// use hex::{decode, encode};
     /// fn to_try_stream<T>(d: T) -> Result<T, ()> { Ok(d) }
