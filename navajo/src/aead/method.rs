@@ -43,6 +43,9 @@ impl Method {
             }
         }
     }
+    pub fn to_be_bytes(self) -> [u8; 1] {
+        [u8::from(self)]
+    }
     pub(super) const LEN: usize = 1;
 }
 
@@ -74,6 +77,7 @@ impl From<Method> for usize {
         u8::from(method) as usize
     }
 }
+
 impl TryFrom<u8> for Method {
     type Error = MalformedError;
 

@@ -43,13 +43,26 @@ where
         }
     }
     pub fn algorithm(&self) -> Option<Algorithm> {
-        self.cipher.as_ref().map(|c| c.algorithm())
+        self.key.as_ref().map(|c| c.algorithm())
     }
-    pub fn update(&mut self, ciphertext: &[u8]) {
+    pub fn update(
+        &mut self,
+        additional_data: &[u8],
+        ciphertext: &[u8],
+    ) -> Result<Option<Vec<B>>, DecryptError> {
         self.buf.extend_from_slice(ciphertext);
+        let mut results = vec![];
+        while let Some(segment) = self.next(additional_data)? {
+            results.push(segment);
+        }
+        if results.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(results))
+        }
     }
 
-    pub fn next(&mut self, aad: &[u8]) -> Result<Option<B>, DecryptError> {
+    fn next(&mut self, aad: &[u8]) -> Result<Option<B>, DecryptError> {
         if self.buf.is_empty() {
             return Ok(None);
         }
@@ -59,7 +72,7 @@ where
         if self.cipher.is_none() {
             return Ok(None);
         }
-        todo!()
+        Ok(None)
     }
 
     fn header_is_complete(&self) -> bool {
@@ -220,4 +233,38 @@ where
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+    #[test]
+    fn test_parsing_header() {
+        let method = Method::Online;
+        let aead = Aead::new(Algorithm::Aes128Gcm, None);
+        let key_id = aead.primary_key().id;
+        let mut nonce = vec![0u8; aead.primary_key().algorithm.nonce_len()];
+        crate::rand::fill(&mut nonce);
+        let buf = [
+            &method.to_be_bytes()[..],
+            &key_id.to_be_bytes()[..],
+            &nonce[..],
+        ]
+        .concat();
+        let mut dec = Decrypt::new(&aead, buf);
+        dec.next(&[]).unwrap();
+        assert_eq!(dec.method, Some(method));
+        assert_eq!(dec.key_id, Some(key_id));
+        assert!(dec.nonce.is_some());
+
+        let n = dec.nonce.as_ref().unwrap();
+        match n {
+            NonceOrNonceSequence::Nonce(n) => {
+                assert_eq!(n.bytes(), &nonce[..]);
+            }
+            NonceOrNonceSequence::NonceSequence(_) => {
+                panic!("expected nonce, got nonce sequence");
+            }
+        }
+        assert!(dec.cipher.is_some());
+        assert!(dec.key.is_some());
+        assert!(dec.buf.is_empty());
+    }
+}

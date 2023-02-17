@@ -12,7 +12,14 @@ pub(crate) enum NonceOrNonceSequence {
     Nonce(Nonce),
     NonceSequence(NonceSequence),
 }
-
+impl NonceOrNonceSequence {
+    pub(crate) fn bytes(&self) -> &[u8] {
+        match self {
+            Self::Nonce(nonce) => nonce.bytes(),
+            Self::NonceSequence(nonce_sequence) => nonce_sequence.bytes(),
+        }
+    }
+}
 pub(crate) enum Nonce {
     Twelve([u8; 12]),
     /// Used for XChaCha20Poly1305. Given that all others are 12 bytes, this is
@@ -43,6 +50,12 @@ impl Nonce {
             12 => Ok(Self::Twelve(slice.try_into().map_err(|_| InvalidLength)?)),
             24 => Ok(Self::TwentyFour(Box::new(slice.try_into().map_err(|_| InvalidLength)?))),
             _ => unreachable!("NonceSequence must be 12 or 24 bytes\nthis is a bug!\n\nplease report it to https://github.com/chanced/navajo/issues/new"),
+        }
+    }
+    pub(crate) fn bytes(&self) -> &[u8] {
+        match self {
+            Self::Twelve(nonce) => &nonce[..],
+            Self::TwentyFour(nonce) => &nonce[..],
         }
     }
 }
@@ -229,6 +242,10 @@ impl NonceSequence {
                 Nonce::TwentyFour(nonce.to_owned())
             }
         })
+    }
+
+    fn bytes(&self) -> &[u8] {
+        self.seed()
     }
 }
 
