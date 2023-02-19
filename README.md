@@ -1,18 +1,14 @@
-# navajo
+# Navajo
 
-navajo provides cryptographic and key management APIs built upon the outstanding
-[RustCrypto](https://github.com/RustCrypto) suite, optionally
-[_ring_](https://github.com/briansmith/ring), and other [amazing crates](#dependencies).
+Navajo is a library for Rust that provides secure and easy to use cryptographic APIs.
 
-## ⚠️ This crate is not ready for use
-
-It has been published to cargo for name reservation.
+Future
 
 ## Dependencies
 
 ## Credit
 
-navajo is inspired by and modeled after Google's [tink
+Navajo is inspired by and modeled after Google's [tink
 project](https://github.com/google/tink). The two projects are not wire
 compatible.
 

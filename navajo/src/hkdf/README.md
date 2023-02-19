@@ -2,22 +2,22 @@
 
 ## Algorithm Support
 
-navajo currently offers HDKF in Sha2 & Sha3 with either
+Navajo currently provides HDKF in Sha2 & Sha3 with either
 [ring](https://docs.rs/ring/0.16.20/ring/index.html) or [Rust
 Crypto](https://docs.rs/hkdf/0.12.3/hkdf/) backend.
 
-| Hashing Algorithm | Crates                                                                                                                 | Feature             | Enabled |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------- | :-----: |
-| **Sha256**        | [_ring_](https://crates.io/crates/hma) OR [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2) | `"sha2"` + `"hkdf"` |   ✔️    |
-| **Sha384**        | [_ring_](https://crates.io/crates/hma) OR [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2) | `"sha2"` + `"hkdf"` |   ✔️    |
-| **Sha512**        | [_ring_](https://crates.io/crates/hma) OR [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2) | `"sha2"` +`"hkdf"`  |   ✔️    |
-| **Sha224**        | [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2)                                           | `"sha2"` + `"hkdf"` |   ✔️    |
-| **Sha512/256**    | [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2)                                           | `"sha2"` + `"hkdf"` |   ✔️    |
-| **Sha512/224**    | [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2)                                           | `"sha2"` + `"hkdf"` |   ✔️    |
-| **Sha3 256**      | [hmac](https://crates.io/crates/hmac), [sha3](https://crates.io/crates/sha3)                                           | `"sha3"` + `"hkdf"` |   ✔️    |
-| **Sha3 224**      | [hmac](https://crates.io/crates/hmac), [sha3](https://crates.io/crates/sha3)                                           | `"sha3"` + `"hkdf"` |   ✔️    |
-| **Sha3 384**      | [hmac](https://crates.io/crates/hmac), [sha3](https://crates.io/crates/sha3)                                           | `"sha3"` + `"hkdf"` |   ✔️    |
-| **Sha3 512**      | [hmac](https://crates.io/crates/hmac), [sha3](https://crates.io/crates/sha3)                                           | `"sha3"` + `"hkdf"` |   ✔️    |
+| Hashing Algorithm | Crates                                                                                                                 | Feature             | Enabled by default |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------- | :----------------: |
+| **Sha256**        | [_ring_](https://crates.io/crates/hma) OR [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2) | `"sha2"` + `"hkdf"` |         ✔️         |
+| **Sha384**        | [_ring_](https://crates.io/crates/hma) OR [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2) | `"sha2"` + `"hkdf"` |         ✔️         |
+| **Sha512**        | [_ring_](https://crates.io/crates/hma) OR [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2) | `"sha2"` + `"hkdf"` |         ✔️         |
+| **Sha224**        | [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2)                                           | `"sha2"` + `"hkdf"` |         ✔️         |
+| **Sha512/256**    | [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2)                                           | `"sha2"` + `"hkdf"` |         ✔️         |
+| **Sha512/224**    | [hmac](https://crates.io/crates/hmac), [sha2](https://crates.io/crates/sha2)                                           | `"sha2"` + `"hkdf"` |         ✔️         |
+| **Sha3 256**      | [hmac](https://crates.io/crates/hmac), [sha3](https://crates.io/crates/sha3)                                           | `"sha3"` + `"hkdf"` |         ✔️         |
+| **Sha3 224**      | [hmac](https://crates.io/crates/hmac), [sha3](https://crates.io/crates/sha3)                                           | `"sha3"` + `"hkdf"` |         ✔️         |
+| **Sha3 384**      | [hmac](https://crates.io/crates/hmac), [sha3](https://crates.io/crates/sha3)                                           | `"sha3"` + `"hkdf"` |         ✔️         |
+| **Sha3 512**      | [hmac](https://crates.io/crates/hmac), [sha3](https://crates.io/crates/sha3)                                           | `"sha3"` + `"hkdf"` |         ✔️         |
 
 ## Usage
 

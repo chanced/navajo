@@ -34,7 +34,7 @@ pub use key_info::AeadKeyInfo;
 pub use method::Method;
 pub use segment::Segment;
 pub use stream::{AeadStream, DecryptStream, EncryptStream};
-// pub use try_stream::{AeadTryStream, TryDecryptStream, TryEncryptStream};
+pub use try_stream::{AeadTryStream, DecryptTryStream, EncryptTryStream};
 
 // use cipher::{ciphers, ring_ciphers, Cipher};
 
@@ -56,7 +56,7 @@ impl Aead {
     }
     /// Returns [`AeadKeyInfo`] for the primary key.
     pub fn primary_key(&self) -> AeadKeyInfo {
-        self.keyring.primary_key().into()
+        self.keyring.primary().into()
     }
 
     /// Returns a [`Vec`] containing [`AeadKeyInfo`] for each key in this

@@ -21,8 +21,8 @@ use super::{
     Algorithm, Method, Segment,
 };
 /// Used internally to encrypt data. Exposed as a public type for edge-cases
-/// where the [`Aead`] methods [`encrypt`](`Aead::encrypt`),
-/// [`encrypt_stream`](`Aead::encrypt_stream`),
+/// where the [`Aead`] methods [`encrypt_in_place`](`Aead::encrypt_in_place`),
+/// [`encrypt`](`Aead::encrypt`), [`encrypt_stream`](`Aead::encrypt_stream`),
 /// [`encrypt_try_stream`](`Aead::encrypt_try_stream`) and
 /// [`encrypt_writer`](`Aead::encrypt_writer`) are not sufficient.
 ///
@@ -48,8 +48,6 @@ where
     cipher: Option<Cipher>,
     #[zeroize(skip)]
     segments: VecDeque<B>,
-    #[zeroize(skip)]
-    pub(super) nonce: Option<Nonce>,
 }
 
 impl<B> Encryptor<B>
@@ -57,7 +55,7 @@ where
     B: Buffer,
 {
     pub fn new(aead: &Aead, segment: Option<Segment>, buf: B) -> Self {
-        let key = aead.keyring.primary_key().clone();
+        let key = aead.keyring.primary().clone();
         Self {
             key,
             segment,
@@ -65,7 +63,6 @@ where
             nonce_seq: None,
             cipher: None,
             segments: VecDeque::new(),
-            nonce: None,
         }
     }
 
@@ -148,10 +145,7 @@ where
     }
 
     fn finalize_one_shot(mut self, aad: &[u8]) -> Result<IntoIter<B>, EncryptError> {
-        let nonce = self
-            .nonce
-            .clone()
-            .unwrap_or(Nonce::new(self.algorithm().nonce_len()));
+        let nonce = Nonce::new(self.algorithm().nonce_len());
         let header = self.header(None, &nonce, &[]);
         let cipher = Cipher::new(self.algorithm(), self.key.bytes());
         let mut buf = mem::take(&mut self.buf.0);
@@ -235,7 +229,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        aead::{nonce::Nonce, segment::FOUR_KB, Algorithm, Method, Segment},
+        aead::{segment::FOUR_KB, Algorithm, Method, Segment},
         keyring::KEY_ID_LEN,
         Aead,
     };
@@ -245,7 +239,7 @@ mod tests {
     #[test]
     fn test_one_shot_adds_header() {
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
-        let key = aead.keyring.primary_key();
+        let key = aead.keyring.primary();
         let mut buf = vec![0u8; 100];
         crate::rand::fill(&mut buf);
         let encryptor = Encryptor::new(&aead, None, buf);
@@ -275,7 +269,7 @@ mod tests {
     #[test]
     fn test_streaming_adds_header() {
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
-        let key = aead.keyring.primary_key();
+        let key = aead.keyring.primary();
         let mut buf = vec![0u8; 65536];
         crate::rand::fill(&mut buf);
         let encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), buf);
@@ -298,47 +292,61 @@ mod tests {
     #[test]
     fn test_online() {
         let aead = Aead::new(Algorithm::Aes256Gcm, None);
-        let unbound_key = ring::aead::UnboundKey::new(
-            &ring::aead::AES_256_GCM,
-            aead.keyring.primary_key().material().bytes(),
-        )
-        .unwrap();
-        let ring_key = ring::aead::LessSafeKey::new(unbound_key);
 
-        let nonce = Nonce::new_from_slice(
-            12,
-            &[127, 167, 243, 154, 198, 60, 245, 217, 172, 30, 129, 114],
-        )
-        .unwrap();
-
-        let mut msg = b"hello world.".to_vec();
-        ring_key
-            .seal_in_place_append_tag(
-                nonce.clone().into(),
-                ring::aead::Aad::from(b"additional data"),
-                &mut msg,
-            )
-            .unwrap();
-        println!("ring: {msg:?}");
+        let msg = b"hello world.".to_vec();
 
         let data = b"hello world.".to_vec();
-        let mut enc = Encryptor::new(&aead, None, data);
-        let header = enc.header(None, &nonce, &[]);
-        println!("nonce: {:?}", &nonce);
-        println!("header: {header:?}");
-
-        enc.nonce = Some(nonce.clone());
-
+        let enc = Encryptor::new(&aead, None, data);
         let ciphertext = enc.finalize(b"additional data").unwrap().next().unwrap();
-        println!("cipher: {ciphertext:?}");
 
-        assert_eq!(ciphertext[Algorithm::Aes256Gcm.online_header_len()..], msg);
+        assert_ne!(ciphertext[Algorithm::Aes256Gcm.online_header_len()..], msg);
         assert_eq!(ciphertext[0], Method::Online);
         assert_eq!(
             ciphertext[1..5],
-            aead.keyring.primary_key().id().to_be_bytes()[..]
+            aead.keyring.primary().id().to_be_bytes()[..]
         );
+    }
 
-        assert_eq!(&ciphertext[5..17], nonce.bytes());
+    #[test]
+    fn test_chunked_segment() {
+        let mut data = vec![0u8; 5556];
+        crate::rand::fill(&mut data);
+        let chunks = data.chunks(122).map(Vec::from);
+        let algorithm = Algorithm::Aes256Gcm;
+        let aead = Aead::new(algorithm, None);
+        let key = aead.keyring.primary();
+        let key_id = key.id();
+        let key_material = key.material().bytes();
+
+        let mut encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), vec![]);
+        let mut ciphertext_chunks: Vec<Vec<u8>> = vec![];
+        let additional_data = b"additional data";
+
+        chunks.for_each(|chunk| {
+            encryptor.update(additional_data, &chunk).unwrap();
+            if let Some(result) = encryptor.next() {
+                ciphertext_chunks.push(result);
+            }
+        });
+        assert_eq!(encryptor.counter(), 1);
+        let nonce_prefix = encryptor.nonce_seq.as_ref().unwrap().prefix().to_vec();
+        ciphertext_chunks.extend(encryptor.finalize(additional_data).unwrap());
+
+        assert_eq!(ciphertext_chunks.len(), 2);
+        assert_eq!(ciphertext_chunks[0].len(), 4096);
+        assert_eq!(
+            ciphertext_chunks[0][0],
+            Method::StreamingHmacSha256(Segment::FourKilobytes)
+        );
+        assert_eq!(ciphertext_chunks[0][1..5], key_id.to_be_bytes()[..]);
+        assert_ne!(
+            &ciphertext_chunks[0][5..5 + algorithm.key_len()],
+            key_material
+        );
+        assert_eq!(
+            &ciphertext_chunks[0]
+                [5 + key_material.len()..5 + key_material.len() + nonce_prefix.len()],
+            nonce_prefix
+        );
     }
 }

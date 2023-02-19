@@ -146,7 +146,7 @@ where
         id: impl Into<u32>,
     ) -> Result<Key<M>, RemoveKeyError<M::Algorithm>> {
         let id = id.into();
-        let primary_key = self.primary_key();
+        let primary_key = self.primary();
         if primary_key.id() == id {
             return Err(primary_key.info().into());
         }
@@ -199,7 +199,7 @@ where
         self.get_mut(id).map(|key| key.update_meta(meta))
     }
 
-    pub(crate) fn primary_key(&self) -> &Key<M> {
+    pub(crate) fn primary(&self) -> &Key<M> {
         // Safety: if this fails to locate the primary key, the keyring is in a
         // bad state. This would be a bug that needs to be resolved immediately.
         //
@@ -541,7 +541,7 @@ mod tests {
         let material = Material::new(Algorithm::Pancakes);
         let mut keyring = Keyring::new(material, Origin::Generated, Some("test".into()));
         let first_id = {
-            let first = keyring.primary_key();
+            let first = keyring.primary();
             let first_id = first.id();
             assert_eq!(first.status(), Status::Primary);
             assert_eq!(first.meta_as_ref(), Some("test".into()).as_ref());
@@ -567,7 +567,7 @@ mod tests {
             keyring.promote(second.id()).unwrap();
         }
         {
-            let primary = keyring.primary_key();
+            let primary = keyring.primary();
             assert_eq!(primary.status(), Status::Primary);
             assert_eq!(primary.id(), second_id);
         }

@@ -254,7 +254,7 @@ impl Mac {
     ///     println!("tag: {}", hex::encode(&tag));
     /// }
     /// ```
-    pub fn compute_try_stream<S, D>(&self, try_stream: S) -> ComputeTryStream<S>
+    pub fn compute_try_stream<S>(&self, try_stream: S) -> ComputeTryStream<S>
     where
         S: TryStream,
         S::Ok: AsRef<[u8]>,
@@ -419,7 +419,7 @@ impl Mac {
     }
     /// Returns [`MacKeyInfo`] for the primary key.
     pub fn primary_key(&self) -> MacKeyInfo {
-        self.keyring.primary_key().into()
+        self.keyring.primary().into()
     }
     /// Returns a [`Vec`] containing a [`MacKeyInfo`] for each key in this keyring.
     pub fn keys(&self) -> Vec<MacKeyInfo> {

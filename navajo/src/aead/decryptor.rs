@@ -186,6 +186,7 @@ where
                 self.move_cursor(idx);
                 Ok(true)
             } else {
+                self.move_cursor(idx);
                 Ok(false)
             };
         }
@@ -308,7 +309,7 @@ mod tests {
     fn test_parsing_online_header() {
         let method = Method::Online;
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
-        let key = aead.keyring.primary_key();
+        let key = aead.keyring.primary();
         let key_id = key.id();
         let mut nonce = vec![0u8; key.nonce_len()];
         crate::rand::fill(&mut nonce);
@@ -417,44 +418,77 @@ mod tests {
         }
         assert_eq!(result.concat(), data);
     }
-    #[cfg(feature = "ring")]
     #[test]
     fn test_online() {
         let aead = Aead::new(Algorithm::Aes256Gcm, None);
-        let unbound_key = ring::aead::UnboundKey::new(
-            &ring::aead::AES_256_GCM,
-            aead.keyring.primary_key().material().bytes(),
-        )
-        .unwrap();
-        let ring_key = ring::aead::LessSafeKey::new(unbound_key);
 
-        let nonce = Nonce::new_from_slice(
-            12,
-            &[127, 167, 243, 154, 198, 60, 245, 217, 172, 30, 129, 114],
-        )
-        .unwrap();
-
-        let mut msg = b"hello world".to_vec();
-        ring_key
-            .seal_in_place_append_tag(
-                nonce.clone().into(),
-                ring::aead::Aad::from(b"additional data"),
-                &mut msg,
-            )
-            .unwrap();
-
-        let mut enc = Encryptor::new(&aead, None, b"hello world".to_vec());
-        enc.nonce = Some(nonce.clone());
+        let enc = Encryptor::new(&aead, None, b"hello world".to_vec());
+        // enc.nonce = Some(nonce.clone());
         let ciphertext = enc.finalize(b"additional data").unwrap().next().unwrap();
-        assert_eq!(ciphertext[Algorithm::Aes256Gcm.online_header_len()..], msg);
         let aad = b"additional data";
         let mut dec = Decryptor::new(&aead, ciphertext);
         assert!(dec.parse_header(aad).unwrap());
         assert_eq!(dec.method, Some(Method::Online));
         assert_eq!(dec.key_id, Some(aead.primary_key().id));
-        assert_eq!(dec.nonce, Some(NonceOrNonceSequence::Nonce(nonce)));
-
         let result = dec.finalize(aad).unwrap().next().unwrap();
         assert_eq!(result, b"hello world");
+    }
+    #[test]
+    fn test_with_aad_roundtrip() {
+        let mut data = vec![0u8; 5556];
+        crate::rand::fill(&mut data);
+        let chunks = data.chunks(122).map(Vec::from);
+        let algorithm = Algorithm::Aes256Gcm;
+        let aead = Aead::new(algorithm, None);
+        let key = aead.keyring.primary();
+        let mut encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), vec![]);
+        let mut ciphertext_chunks: Vec<Vec<u8>> = vec![];
+        let additional_data = b"additional data";
+
+        chunks.for_each(|chunk| {
+            encryptor.update(additional_data, &chunk).unwrap();
+            if let Some(result) = encryptor.next() {
+                ciphertext_chunks.push(result);
+            }
+        });
+
+        ciphertext_chunks.extend(encryptor.finalize(additional_data).unwrap());
+        assert_eq!(ciphertext_chunks.len(), 2);
+        assert_eq!(ciphertext_chunks[0].len(), 4096);
+
+        let ciphertext = ciphertext_chunks.concat();
+        assert_eq!(
+            ciphertext[0],
+            Method::StreamingHmacSha256(Segment::FourKilobytes)
+        );
+
+        let key_id = u32::from_be_bytes(ciphertext[1..5].try_into().unwrap());
+        assert_eq!(key_id, key.id());
+        assert_eq!(key_id.to_be_bytes(), &key_id.to_be_bytes()[..]);
+
+        let mut cleartext_chunks = vec![];
+        let mut decryptor = Decryptor::new(&aead, ciphertext_chunks.concat());
+        if let Some(result) = decryptor.next(additional_data).unwrap() {
+            cleartext_chunks.push(result);
+        }
+        for chunk in decryptor.finalize(additional_data).unwrap() {
+            cleartext_chunks.push(chunk);
+        }
+
+        let mut decryptor = Decryptor::new(&aead, vec![]);
+        let mut cleartext_chunks = vec![];
+
+        for chunk in ciphertext_chunks.concat().chunks(40) {
+            decryptor.update(chunk);
+
+            if let Some(result) = decryptor.next(additional_data).unwrap() {
+                cleartext_chunks.push(result);
+            }
+        }
+        for chunk in decryptor.finalize(additional_data).unwrap() {
+            cleartext_chunks.push(chunk);
+        }
+        let cleartext = cleartext_chunks.concat();
+        assert_eq!(cleartext, data);
     }
 }

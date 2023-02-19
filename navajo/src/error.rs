@@ -8,7 +8,7 @@ use alloc::{
 #[cfg(feature = "ring")]
 use ring;
 
-use crate::{aead::Segment, KeyInfo};
+use crate::KeyInfo;
 
 #[derive(Debug, Clone, Copy)]
 pub struct KeyNotFoundError(pub u32);
@@ -66,7 +66,7 @@ impl fmt::Display for EncryptError {
     }
 }
 impl From<aes_gcm::Error> for EncryptError {
-    fn from(e: aes_gcm::Error) -> Self {
+    fn from(_: aes_gcm::Error) -> Self {
         Self::Unspecified
     }
 }
@@ -76,6 +76,42 @@ impl From<SegmentLimitExceededError> for EncryptError {
         Self::SegmentLimitExceeded
     }
 }
+
+pub enum EncryptTryStreamError<E> {
+    Encrypt(EncryptError),
+    Upstream(E),
+}
+
+impl<E> Debug for EncryptTryStreamError<E>
+where
+    E: Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Encrypt(e) => write!(f, "EncryptError({:?})", e),
+            Self::Upstream(e) => write!(f, "Upstream({:?})", e),
+        }
+    }
+}
+impl<E> From<EncryptError> for EncryptTryStreamError<E> {
+    fn from(e: EncryptError) -> Self {
+        Self::Encrypt(e)
+    }
+}
+impl<E> core::fmt::Display for EncryptTryStreamError<E>
+where
+    E: core::fmt::Display,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Encrypt(e) => core::fmt::Display::fmt(e, f),
+            Self::Upstream(e) => core::fmt::Display::fmt(e, f),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl<E> std::error::Error for EncryptTryStreamError<E> where E: std::error::Error {}
 
 #[cfg(feature = "std")]
 impl std::error::Error for EncryptError {}
@@ -88,12 +124,6 @@ impl From<UnspecifiedError> for EncryptError {
 #[cfg(feature = "ring")]
 impl From<ring::error::Unspecified> for EncryptError {
     fn from(_: ring::error::Unspecified) -> Self {
-        Self::Unspecified
-    }
-}
-
-impl From<rust_crypto_aead::Error> for DecryptError {
-    fn from(_: rust_crypto_aead::Error) -> Self {
         Self::Unspecified
     }
 }
@@ -120,18 +150,23 @@ impl From<SegmentLimitExceededError> for DecryptError {
 }
 
 impl From<MalformedError> for DecryptError {
-    fn from(e: MalformedError) -> Self {
+    fn from(_: MalformedError) -> Self {
         Self::Unspecified
     }
 }
 
+impl From<rust_crypto_aead::Error> for DecryptError {
+    fn from(_: rust_crypto_aead::Error) -> Self {
+        Self::Unspecified
+    }
+}
 impl fmt::Display for DecryptError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
             Self::KeyNotFound(e) => fmt::Display::fmt(e, f),
             Self::SegmentLimitExceeded => fmt::Display::fmt(&SegmentLimitExceededError, f),
-            Self::EmptyCiphertext => write!(f, "ciphertext is empty")
+            Self::EmptyCiphertext => write!(f, "ciphertext is empty"),
         }
     }
 }
@@ -143,13 +178,48 @@ impl From<UnspecifiedError> for DecryptError {
         Self::Unspecified
     }
 }
-
 #[cfg(feature = "ring")]
 impl From<ring::error::Unspecified> for DecryptError {
     fn from(_: ring::error::Unspecified) -> Self {
         Self::Unspecified
     }
 }
+
+pub enum DecryptTryStreamError<E> {
+    Decrypt(DecryptError),
+    Upstream(E),
+}
+
+impl<E> Debug for DecryptTryStreamError<E>
+where
+    E: Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Decrypt(e) => write!(f, "DecryptError({:?})", e),
+            Self::Upstream(e) => write!(f, "Upstream({:?})", e),
+        }
+    }
+}
+impl<E> From<DecryptError> for DecryptTryStreamError<E> {
+    fn from(e: DecryptError) -> Self {
+        Self::Decrypt(e)
+    }
+}
+impl<E> core::fmt::Display for DecryptTryStreamError<E>
+where
+    E: core::fmt::Display,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Decrypt(e) => core::fmt::Display::fmt(e, f),
+            Self::Upstream(e) => core::fmt::Display::fmt(e, f),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl<E> std::error::Error for DecryptTryStreamError<E> where E: std::error::Error {}
 
 #[derive(Debug, Clone)]
 pub struct MalformedError(Cow<'static, str>);
