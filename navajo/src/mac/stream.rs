@@ -1,7 +1,4 @@
-use core::{
-    marker::PhantomData,
-    task::Poll::{self, *},
-};
+use core::task::Poll::{self, *};
 
 use futures::{Future, Stream};
 use pin_project::pin_project;
@@ -10,10 +7,8 @@ use crate::error::MacVerificationError;
 
 use super::{verifier::Verifier, Computer, Mac, Tag};
 
-const BLOCK_SIZE: usize = 256; // todo: profile this
-
-pub trait StreamMac: Stream {
-    fn compute_mac(self, mac: &Mac) -> ComputeStream<Self, Self::Item>
+pub trait MacStream: Stream {
+    fn compute_mac(self, mac: &Mac) -> ComputeStream<Self>
     where
         Self: Sized,
         Self::Item: AsRef<[u8]>,
@@ -21,7 +16,7 @@ pub trait StreamMac: Stream {
         ComputeStream::new(self, mac.into())
     }
 
-    fn verify_mac<T>(self, tag: T, mac: &Mac) -> VerifyStream<Self, Self::Item, T>
+    fn verify_mac<T>(self, tag: T, mac: &Mac) -> VerifyStream<Self, T>
     where
         Self: Sized,
         Self::Item: AsRef<[u8]>,
@@ -31,7 +26,7 @@ pub trait StreamMac: Stream {
         VerifyStream::new(self, verify)
     }
 }
-impl<T> StreamMac for T
+impl<T> MacStream for T
 where
     T: Stream,
     T::Item: AsRef<[u8]>,
@@ -39,36 +34,31 @@ where
 }
 
 #[pin_project]
-pub struct ComputeStream<S, D>
+pub struct ComputeStream<S>
 where
-    S: Stream<Item = D>,
-    D: AsRef<[u8]>,
+    S: Stream,
+    S::Item: AsRef<[u8]>,
 {
     #[pin]
     stream: S,
     compute: Option<Computer>,
-    _phantom: PhantomData<D>,
 }
 
-impl<S, D> ComputeStream<S, D>
+impl<S, D> ComputeStream<S>
 where
     S: Stream<Item = D>,
-    D: AsRef<[u8]>,
+    S::Item: AsRef<[u8]>,
 {
     pub fn new(stream: S, compute: Computer) -> Self {
         let compute = Some(compute);
-        Self {
-            stream,
-            compute,
-            _phantom: PhantomData,
-        }
+        Self { stream, compute }
     }
 }
 
-impl<S, D> Future for ComputeStream<S, D>
+impl<S> Future for ComputeStream<S>
 where
-    S: Stream<Item = D>,
-    D: AsRef<[u8]>,
+    S: Stream,
+    S::Item: AsRef<[u8]>,
 {
     type Output = Tag;
 
@@ -95,37 +85,32 @@ where
 }
 
 #[pin_project]
-pub struct VerifyStream<S, D, T>
+pub struct VerifyStream<S, T>
 where
-    S: Stream<Item = D>,
-    D: AsRef<[u8]>,
+    S: Stream,
+    S::Item: AsRef<[u8]>,
     T: AsRef<Tag> + Send + Sync,
 {
     #[pin]
     stream: S,
     verifier: Option<Verifier<T>>,
-    _phantom: PhantomData<D>,
 }
-impl<S, D, T> VerifyStream<S, D, T>
+impl<S, T> VerifyStream<S, T>
 where
-    S: Stream<Item = D>,
-    D: AsRef<[u8]>,
+    S: Stream,
+    S::Item: AsRef<[u8]>,
     T: AsRef<Tag> + Send + Sync,
 {
     pub fn new(stream: S, verify: Verifier<T>) -> Self {
         let verifier = Some(verify);
-        Self {
-            stream,
-            verifier,
-            _phantom: PhantomData,
-        }
+        Self { stream, verifier }
     }
 }
 
-impl<S, D, T> Future for VerifyStream<S, D, T>
+impl<S, T> Future for VerifyStream<S, T>
 where
-    S: Stream<Item = D>,
-    D: AsRef<[u8]>,
+    S: Stream,
+    S::Item: AsRef<[u8]>,
     T: AsRef<Tag> + Send + Sync,
 {
     type Output = Result<Tag, MacVerificationError>;
@@ -154,7 +139,7 @@ where
 mod tests {
     use super::*;
     use crate::mac::Algorithm;
-    use futures::{stream, StreamExt};
+    use futures::stream;
 
     #[cfg(feature = "std")]
     #[tokio::test]

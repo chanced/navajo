@@ -1,4 +1,9 @@
-use super::size::{AES_128_GCM, AES_256_GCM, CHACHA20_POLY1305, XCHACHA20_POLY1305};
+use crate::keyring::KEY_ID_LEN;
+
+use super::{
+    size::{AES_128_GCM, AES_256_GCM, CHACHA20_POLY1305, XCHACHA20_POLY1305},
+    Method,
+};
 use alloc::string::String;
 use serde::{Deserialize, Serialize};
 
@@ -41,13 +46,10 @@ impl Algorithm {
         self.size().nonce - 4 - 1
     }
     pub fn online_header_len(&self) -> usize {
-        self.nonce_len() + self.key_len()
-    }
-    pub fn streaming_nonce_prefix_len(&self) -> usize {
-        self.nonce_len() - 5
+        Method::LEN + KEY_ID_LEN + self.nonce_len()
     }
     pub fn streaming_header_len(&self) -> usize {
-        self.online_header_len() + self.streaming_nonce_prefix_len() + self.key_len()
+        Method::LEN + KEY_ID_LEN + self.nonce_prefix_len() + self.key_len()
     }
 }
 

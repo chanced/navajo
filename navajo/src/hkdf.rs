@@ -11,17 +11,6 @@ pub use salt::Salt;
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn deleteme() {
-        use crate::rand;
-        use hex::{decode, encode};
-        let mut ikm = [0u8; 32];
-
-        rand::fill(&mut ikm);
-        let mut salt = [0u8; 32];
-        rand::fill(&mut salt);
-        println!("{}\n{}", encode(ikm), encode(salt));
-    }
 
     #[test]
     fn test_rust_crypto() {

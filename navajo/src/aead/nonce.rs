@@ -8,6 +8,7 @@ use typenum::{U12, U24};
 
 use crate::error::UnspecifiedError;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum NonceOrNonceSequence {
     Nonce(Nonce),
     NonceSequence(NonceSequence),
@@ -20,6 +21,7 @@ impl NonceOrNonceSequence {
         }
     }
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Nonce {
     Twelve([u8; 12]),
     /// Used for XChaCha20Poly1305. Given that all others are 12 bytes, this is
@@ -112,7 +114,7 @@ impl From<Nonce> for ring::aead::Nonce {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum NonceSequence {
     Twelve(u32, [u8; 12]),
     TwentyFour(u32, Box<[u8; 24]>),

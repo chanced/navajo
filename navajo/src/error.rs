@@ -53,6 +53,7 @@ impl std::error::Error for SegmentLimitExceededError {}
 pub enum EncryptError {
     Unspecified,
     SegmentLimitExceeded,
+    EmptyCleartext,
 }
 
 impl fmt::Display for EncryptError {
@@ -60,42 +61,19 @@ impl fmt::Display for EncryptError {
         match self {
             Self::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
             Self::SegmentLimitExceeded => fmt::Display::fmt(&SegmentLimitExceededError, f),
+            Self::EmptyCleartext => write!(f, "cleartext is empty"),
         }
+    }
+}
+impl From<aes_gcm::Error> for EncryptError {
+    fn from(e: aes_gcm::Error) -> Self {
+        Self::Unspecified
     }
 }
 
 impl From<SegmentLimitExceededError> for EncryptError {
     fn from(_: SegmentLimitExceededError) -> Self {
         Self::SegmentLimitExceeded
-    }
-}
-
-pub enum EncryptFinalError {
-    Unspecified,
-    SegmentLimitExceeded,
-    EmptyCleartext,
-}
-impl From<EncryptError> for EncryptFinalError {
-    fn from(e: EncryptError) -> Self {
-        match e {
-            EncryptError::Unspecified => Self::Unspecified,
-            EncryptError::SegmentLimitExceeded => Self::SegmentLimitExceeded,
-        }
-    }
-}
-impl From<SegmentLimitExceededError> for EncryptFinalError {
-    fn from(_: SegmentLimitExceededError) -> Self {
-        Self::SegmentLimitExceeded
-    }
-}
-impl From<UnspecifiedError> for EncryptFinalError {
-    fn from(_: UnspecifiedError) -> Self {
-        Self::Unspecified
-    }
-}
-impl From<rust_crypto_aead::Error> for EncryptError {
-    fn from(_: rust_crypto_aead::Error) -> Self {
-        Self::Unspecified
     }
 }
 
@@ -127,6 +105,7 @@ pub enum DecryptError {
     /// The keyset does not contain the key used to encrypt the ciphertext
     KeyNotFound(KeyNotFoundError),
     SegmentLimitExceeded,
+    EmptyCiphertext,
 }
 
 impl From<KeyNotFoundError> for DecryptError {
@@ -152,6 +131,7 @@ impl fmt::Display for DecryptError {
             Self::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
             Self::KeyNotFound(e) => fmt::Display::fmt(e, f),
             Self::SegmentLimitExceeded => fmt::Display::fmt(&SegmentLimitExceededError, f),
+            Self::EmptyCiphertext => write!(f, "ciphertext is empty")
         }
     }
 }

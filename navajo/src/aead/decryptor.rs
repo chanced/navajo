@@ -1,7 +1,6 @@
-use ring::error::Unspecified;
+use alloc::vec::IntoIter;
 
 use super::{
-    algorithm,
     nonce::{Nonce, NonceSequence},
     Material,
 };
@@ -9,14 +8,16 @@ use crate::{
     error::DecryptError,
     hkdf::{self, Salt},
     key::Key,
-    keyring::KEY_ID_LEN,
     Buffer,
 };
 
-use super::{cipher::Cipher, nonce::NonceOrNonceSequence, Aead, Algorithm, Method, Segment};
+use super::{cipher::Cipher, nonce::NonceOrNonceSequence, Aead, Algorithm, Method};
 
-pub struct Decryptor<B> {
-    aead: Aead,
+pub struct Decryptor<K, B>
+where
+    K: AsRef<Aead>,
+{
+    aead: K,
     buf: B,
     key_id: Option<u32>,
     key: Option<Key<Material>>,
@@ -25,13 +26,14 @@ pub struct Decryptor<B> {
     method: Option<Method>,
 }
 
-impl<B> Decryptor<B>
+impl<K, B> Decryptor<K, B>
 where
+    K: AsRef<Aead>,
     B: Buffer,
 {
-    pub fn new(aead: &Aead, buf: B) -> Self {
+    pub fn new(aead: K, buf: B) -> Self {
         Self {
-            aead: aead.clone(),
+            aead,
             buf,
             key: None,
             key_id: None,
@@ -47,7 +49,7 @@ where
         self.buf.extend_from_slice(ciphertext);
     }
 
-    fn next(&mut self, additional_data: &[u8]) -> Result<Option<B>, DecryptError> {
+    pub fn next(&mut self, additional_data: &[u8]) -> Result<Option<B>, DecryptError> {
         if self.buf.is_empty() {
             return Ok(None);
         }
@@ -74,36 +76,64 @@ where
             .unwrap()
             .decrypt_in_place(nonce, additional_data, &mut data)?;
 
-        return Ok(Some(data));
+        Ok(Some(data))
     }
+    pub fn finalize(mut self, additional_data: &[u8]) -> Result<IntoIter<B>, DecryptError> {
+        if !self.header_is_complete() {
+            self.parse_header(additional_data)?;
+        }
+        let method = self.method.ok_or(DecryptError::EmptyCiphertext)?;
+        if method.is_online() {
+            let cipher = self.cipher.ok_or(DecryptError::Unspecified)?;
+            let nonce = match self.nonce.ok_or(DecryptError::Unspecified)? {
+                NonceOrNonceSequence::Nonce(nonce) => Ok(nonce),
+                NonceOrNonceSequence::NonceSequence(_) => Err(DecryptError::Unspecified),
+            }?;
+            cipher.decrypt_in_place(nonce, additional_data, &mut self.buf)?;
+            Ok(vec![self.buf].into_iter())
+        } else {
+            let mut segments = Vec::new();
+            while let Some(segment) = self.next(additional_data)? {
+                segments.push(segment);
+            }
+            let cipher = self.cipher.ok_or(DecryptError::Unspecified)?;
+            let nonce_seq = match self.nonce.ok_or(DecryptError::Unspecified)? {
+                NonceOrNonceSequence::NonceSequence(seq) => Ok(seq),
+                NonceOrNonceSequence::Nonce(_) => Err(DecryptError::Unspecified),
+            }?;
+            cipher.decrypt_in_place(nonce_seq.last()?, additional_data, &mut self.buf)?;
+            segments.push(self.buf);
+            Ok(segments.into_iter())
+        }
+    }
+
     fn extract_segment(&mut self, end: usize) -> B {
         let mut buf = self.buf.split_off(end);
         core::mem::swap(&mut self.buf, &mut buf);
         buf
     }
     fn next_segment_end(&self) -> Option<usize> {
-        self.method
-            .map(|method| match method {
-                Method::Online => None,
-                Method::StreamingHmacSha256(segment) => {
-                    let algorithm = self.algorithm()?;
-                    if self.counter() == 0 {
-                        let last = segment - algorithm.streaming_nonce_prefix_len();
-                        if self.buf.len() < last {
-                            None
-                        } else {
-                            Some(last)
-                        }
-                    } else if self.buf.len() > segment {
-                        // inetntionally checking for > instead of >= to allow
-                        // for the last segment to be finalized
-                        Some(segment.into())
-                    } else {
+        self.method.and_then(|method| match method {
+            Method::Online => None,
+            Method::StreamingHmacSha256(segment) => {
+                let algorithm = self.algorithm()?;
+                if self.counter() == 0 {
+                    let last = segment - algorithm.streaming_header_len();
+
+                    if self.buf.len() < last {
                         None
+                    } else {
+                        Some(last)
                     }
+                } else if self.buf.len() > segment {
+                    // inetntionally checking for > instead of >= to allow
+                    // for the last segment to be finalized
+                    Some(segment.into())
+                } else {
+                    None
                 }
-            })
-            .flatten()
+            }
+        })
     }
 
     fn header_is_complete(&self) -> bool {
@@ -135,7 +165,7 @@ where
         if self.key_id.is_none() {
             if let Some((i, key_id)) = self.parse_key_id(idx) {
                 idx = i;
-                self.key = Some(self.aead.keyring.get(key_id)?.clone());
+                self.key = Some(self.aead.as_ref().keyring.get(key_id)?.clone());
             } else {
                 self.move_cursor(idx);
                 return Ok(false);
@@ -267,7 +297,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::rand;
+
+    use crate::{
+        aead::{Encryptor, Segment},
+        rand,
+    };
 
     use super::*;
     #[test]
@@ -304,7 +338,7 @@ mod tests {
     }
     #[test]
     fn test_parsing_streaming_header() {
-        let method = Method::StreamingHmacSha256(Segment::FourMegaBytes);
+        let method = Method::StreamingHmacSha256(Segment::FourMegabytes);
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
         let key_id = aead.primary_key().id;
         let mut seed = vec![0u8; aead.primary_key().algorithm.key_len()];
@@ -318,7 +352,7 @@ mod tests {
             &nonce[..],
         ]
         .concat();
-        let mut dec = Decryptor::new(&aead, buf);
+        let mut dec = Decryptor::new(aead, buf);
 
         dec.next(&[]).unwrap();
         assert_eq!(dec.method, Some(method));
@@ -340,7 +374,87 @@ mod tests {
         }
         assert!(dec.cipher.is_some());
         assert!(dec.key.is_some());
-        println!("{:?}", dec.buf);
         assert!(dec.buf.is_empty());
+    }
+
+    #[test]
+    fn test_one_shot() {
+        let aead = Aead::new(Algorithm::Aes128Gcm, None);
+        let mut data = vec![0u8; 1024];
+        rand::fill(&mut data);
+        let encryptor = Encryptor::new(&aead, None, data.clone());
+        let ciphertext = encryptor.finalize(&[]).unwrap().next().unwrap();
+        let decryptor = Decryptor::new(&aead, ciphertext);
+        let result = decryptor.finalize(&[]).unwrap().next().unwrap();
+        assert_eq!(result, data);
+    }
+    #[test]
+    fn test_streaming() {
+        let algorithm = Algorithm::Aes128Gcm;
+        let aead = Aead::new(Algorithm::Aes128Gcm, None);
+        let mut data = vec![0u8; 65536];
+        rand::fill(&mut data);
+        let encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), data.clone());
+        let enc_seg: Vec<Vec<u8>> = encryptor.finalize(&[]).unwrap().collect();
+        let ciphertext = enc_seg.concat();
+        let decryptor = Decryptor::new(&aead, ciphertext);
+        let result: Vec<Vec<u8>> = decryptor.finalize(&[]).unwrap().collect();
+        assert_eq!(result.len(), 17);
+        let mut remaining: usize = 65536;
+        for (i, r) in result.iter().enumerate() {
+            if i == 0 {
+                assert_eq!(
+                    r.len(),
+                    4096 - algorithm.streaming_header_len() - algorithm.tag_len()
+                );
+                remaining -= r.len();
+            } else if i < result.len() - 1 {
+                assert_eq!(r.len(), 4096 - algorithm.tag_len());
+                remaining -= r.len();
+            } else {
+                assert_eq!(r.len(), remaining);
+            }
+        }
+        assert_eq!(result.concat(), data);
+    }
+    #[cfg(feature = "ring")]
+    #[test]
+    fn test_online() {
+        let aead = Aead::new(Algorithm::Aes256Gcm, None);
+        let unbound_key = ring::aead::UnboundKey::new(
+            &ring::aead::AES_256_GCM,
+            aead.keyring.primary_key().material().bytes(),
+        )
+        .unwrap();
+        let ring_key = ring::aead::LessSafeKey::new(unbound_key);
+
+        let nonce = Nonce::new_from_slice(
+            12,
+            &[127, 167, 243, 154, 198, 60, 245, 217, 172, 30, 129, 114],
+        )
+        .unwrap();
+
+        let mut msg = b"hello world".to_vec();
+        ring_key
+            .seal_in_place_append_tag(
+                nonce.clone().into(),
+                ring::aead::Aad::from(b"additional data"),
+                &mut msg,
+            )
+            .unwrap();
+
+        let mut enc = Encryptor::new(&aead, None, b"hello world".to_vec());
+        enc.nonce = Some(nonce.clone());
+        let ciphertext = enc.finalize(b"additional data").unwrap().next().unwrap();
+        assert_eq!(ciphertext[Algorithm::Aes256Gcm.online_header_len()..], msg);
+        let aad = b"additional data";
+        let mut dec = Decryptor::new(&aead, ciphertext);
+        assert!(dec.parse_header(aad).unwrap());
+        assert_eq!(dec.method, Some(Method::Online));
+        assert_eq!(dec.key_id, Some(aead.primary_key().id));
+        assert_eq!(dec.nonce, Some(NonceOrNonceSequence::Nonce(nonce)));
+
+        let result = dec.finalize(aad).unwrap().next().unwrap();
+        assert_eq!(result, b"hello world");
     }
 }

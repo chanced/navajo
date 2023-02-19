@@ -16,8 +16,8 @@ pub use algorithm::Algorithm;
 pub use computer::Computer;
 use futures::{Stream, TryStream};
 pub use key_info::MacKeyInfo;
-pub use stream::{ComputeStream, StreamMac, VerifyStream};
-pub use try_stream::{ComputeTryStream, TryStreamMac, VerifyTryStream};
+pub use stream::{ComputeStream, MacStream, VerifyStream};
+pub use try_stream::{ComputeTryStream, MacTryStream, VerifyTryStream};
 
 pub use tag::Tag;
 pub use verifier::Verifier;
@@ -229,10 +229,10 @@ impl Mac {
     ///     println!("tag: {}", hex::encode(&tag))
     /// }
     /// ```
-    pub fn compute_stream<S, D>(&self, stream: S) -> ComputeStream<S, D>
+    pub fn compute_stream<S>(&self, stream: S) -> ComputeStream<S>
     where
-        S: Stream<Item = D>,
-        D: AsRef<[u8]>,
+        S: Stream,
+        S::Item: AsRef<[u8]>,
     {
         let compute = Computer::new(self);
         ComputeStream::new(stream, compute)
@@ -254,10 +254,11 @@ impl Mac {
     ///     println!("tag: {}", hex::encode(&tag));
     /// }
     /// ```
-    pub fn compute_try_stream<S, D>(&self, try_stream: S) -> ComputeTryStream<S, D, S::Error>
+    pub fn compute_try_stream<S, D>(&self, try_stream: S) -> ComputeTryStream<S>
     where
-        S: TryStream<Ok = D>,
-        D: AsRef<[u8]>,
+        S: TryStream,
+        S::Ok: AsRef<[u8]>,
+        S::Error: Send + Sync,
     {
         let compute = Computer::new(self);
         ComputeTryStream::new(try_stream, compute)
@@ -357,11 +358,11 @@ impl Mac {
     ///     println!("tag: {}", hex::encode(&tag))
     /// }
     /// ```
-    pub fn verify_stream<T, S, D>(&self, tag: T, stream: S) -> VerifyStream<S, D, T>
+    pub fn verify_stream<T, S>(&self, tag: T, stream: S) -> VerifyStream<S, T>
     where
         T: AsRef<Tag> + Send + Sync,
-        S: Stream<Item = D>,
-        D: AsRef<[u8]>,
+        S: Stream,
+        S::Item: AsRef<[u8]>,
     {
         let verify = Verifier::new(tag, self);
         VerifyStream::new(stream, verify)
@@ -370,7 +371,7 @@ impl Mac {
     ///
     /// # Examples
     /// ```rust
-    /// use navajo::mac::{Mac, Algorithm};car
+    /// use navajo::mac::{Mac, Algorithm};
     /// use futures::{ StreamExt, stream };
     /// use hex::{decode, encode};
     /// fn to_try_stream<T>(d: T) -> Result<T, ()> { Ok(d) }
@@ -388,12 +389,12 @@ impl Mac {
     ///     assert!(mac.verify_try_stream(tag, stream).await.is_ok());
     /// }
     /// ```
-    pub fn verify_try_stream<T, S, E, D>(&self, tag: T, stream: S) -> VerifyTryStream<S, D, E, T>
+    pub fn verify_try_stream<S, T>(&self, tag: T, stream: S) -> VerifyTryStream<S, T>
     where
         T: AsRef<Tag> + Send + Sync,
-        S: TryStream<Ok = D, Error = E>,
-        D: AsRef<[u8]>,
-        E: Send + Sync,
+        S: TryStream,
+        S::Ok: AsRef<[u8]>,
+        S::Error: Send + Sync,
     {
         let verify = Verifier::new(tag, self);
         VerifyTryStream::new(stream, verify)

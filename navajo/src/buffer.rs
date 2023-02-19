@@ -15,6 +15,29 @@ pub trait Buffer: AsRef<[u8]> + AsMut<[u8]> + for<'a> Extend<&'a u8> + Default {
     fn extend_from_slice(&mut self, other: &[u8]) {
         self.extend(other.iter())
     }
+    fn prepend_slice(&mut self, slice: &[u8]) {
+        let original_len = self.as_ref().len();
+        let slice_len = slice.len();
+        if original_len > slice_len && !slice.is_empty() {
+            let shifted = self.as_ref()[original_len - slice_len..].to_vec();
+            self.extend_from_slice(&shifted);
+            let data = self.as_mut();
+            #[allow(clippy::needless_range_loop)]
+            for i in (0..original_len).rev() {
+                data[i + slice_len] = data[i];
+                if i < slice_len {
+                    data[i] = slice[i];
+                }
+            }
+        } else if original_len != 0 && slice_len != 0 {
+            let buf = core::mem::take(self);
+            self.extend_from_slice(slice);
+            self.extend_from_slice(buf.as_ref());
+        } else if !slice.is_empty() {
+            // data is empty
+            self.extend_from_slice(slice);
+        }
+    }
 }
 
 impl Buffer for Vec<u8> {
@@ -33,6 +56,9 @@ impl Buffer for Vec<u8> {
     }
     fn is_empty(&self) -> bool {
         Vec::is_empty(self)
+    }
+    fn prepend_slice(&mut self, slice: &[u8]) {
+        self.splice(0..0, slice.iter().cloned());
     }
 }
 #[cfg(feature = "bytes")]
@@ -157,41 +183,111 @@ where
     }
 }
 
-pub(crate) fn prepend_to_buffer<B: Buffer>(data: &mut B, header: &[u8]) {
-    let original_len = data.as_ref().len();
-    let header_len = header.len();
-    let shifted = data.as_ref()[original_len - header_len..].to_vec();
-    data.extend(shifted.iter());
-    // shifts the data to the right by header len
-    let data = data.as_mut();
-    #[allow(clippy::needless_range_loop)]
-    for i in (0..original_len - header_len).rev() {
-        data[i + header_len] = data[i];
-        if i < header_len {
-            data[i] = header[i];
-        }
-    }
-}
 #[cfg(test)]
 mod tests {
-    use alloc::vec;
 
     use crate::Buffer;
+    use alloc::vec;
 
-    use super::prepend_to_buffer;
     fn split_off<B: Buffer>(b: &mut B) -> B {
         b.split_off(3)
     }
-    #[test]
-    fn test_prepend_header() {
-        let header = [0, 1, 2, 3, 4];
-        let mut data = vec![10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
 
-        prepend_to_buffer(&mut data, &header);
+    #[test]
+    fn test_vec_prepend_to_empty_buffer() {
+        let header = [0, 1, 2, 3, 4];
+        let mut buffer = vec![];
+        buffer.prepend_slice(&header);
+        assert_eq!(buffer, vec![0, 1, 2, 3, 4])
+    }
+    #[test]
+    fn test_vec_prepend_to_slice_smaller_buffer() {
+        let header = [0, 1, 2, 3, 4];
+        let mut buffer = vec![5, 6];
+        buffer.prepend_slice(&header);
+        assert_eq!(buffer, vec![0, 1, 2, 3, 4, 5, 6])
+    }
+
+    #[test]
+    fn test_vec_prepend_slice_to_slice() {
+        let header = [0, 1, 2, 3, 4];
+        let mut buffer = vec![10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
+
+        buffer.prepend_slice(&header);
         assert_eq!(
-            data,
+            buffer,
             vec![0, 1, 2, 3, 4, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
         )
+    }
+
+    #[test]
+    fn test_vec_prepend_slice_explicit() {
+        let origin = vec![
+            189, 153, 80, 212, 148, 148, 20, 211, 140, 92, 32, 93, 14, 78, 196, 250, 7, 212, 137,
+            232, 64, 80, 93, 246, 1, 210, 251, 250,
+        ];
+        let mut buffer = origin.clone();
+        let header = vec![
+            0, 184, 245, 226, 191, 127, 167, 243, 154, 198, 60, 245, 217, 172, 30, 129, 114,
+        ];
+        buffer.prepend_slice(&header);
+        assert_eq!([header, origin].concat(), buffer);
+    }
+
+    #[cfg(feature = "bytes")]
+    #[test]
+    fn test_bytes_mut_prepend_to_empty_buffer() {
+        use bytes::BytesMut;
+
+        let header = [0, 1, 2, 3, 4];
+        let buffer: Vec<u8> = vec![];
+        let mut buffer = BytesMut::from(&buffer[..]);
+        buffer.prepend_slice(&header);
+        assert_eq!(buffer, vec![0, 1, 2, 3, 4])
+    }
+    #[cfg(feature = "bytes")]
+    #[test]
+    fn test_bytes_mut_prepend_to_slice_smaller_buffer() {
+        use bytes::BytesMut;
+
+        let header = [0, 1, 2, 3, 4];
+        let buffer: Vec<u8> = vec![5, 6];
+        let mut buffer = BytesMut::from(&buffer[..]);
+        buffer.prepend_slice(&header);
+        assert_eq!(buffer, vec![0, 1, 2, 3, 4, 5, 6])
+    }
+
+    #[cfg(feature = "bytes")]
+    #[test]
+    fn test_bytes_mut_prepend_slice_to_slice() {
+        use bytes::BytesMut;
+
+        let header = [0, 1, 2, 3, 4];
+        let buffer: Vec<u8> = vec![10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
+        let mut buffer = BytesMut::from(&buffer[..]);
+
+        buffer.prepend_slice(&header);
+        assert_eq!(
+            buffer,
+            vec![0, 1, 2, 3, 4, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
+        )
+    }
+
+    #[cfg(feature = "bytes")]
+    #[test]
+    fn test_bytes_mut_prepend_slice_explicit() {
+        use bytes::BytesMut;
+
+        let origin: Vec<u8> = vec![
+            189, 153, 80, 212, 148, 148, 20, 211, 140, 92, 32, 93, 14, 78, 196, 250, 7, 212, 137,
+            232, 64, 80, 93, 246, 1, 210, 251, 250,
+        ];
+        let mut buffer = BytesMut::from(&origin[..]);
+        let header: Vec<u8> = vec![
+            0, 184, 245, 226, 191, 127, 167, 243, 154, 198, 60, 245, 217, 172, 30, 129, 114,
+        ];
+        buffer.prepend_slice(&header);
+        assert_eq!([header, origin].concat(), buffer);
     }
 
     #[test]

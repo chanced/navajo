@@ -37,14 +37,14 @@ impl<T> Verifier<T>
 where
     T: AsRef<Tag> + Send + Sync,
 {
-    pub fn stream<S, D>(self, stream: S) -> VerifyStream<S, D, T>
+    pub fn stream<S>(self, stream: S) -> VerifyStream<S, T>
     where
-        D: AsRef<[u8]>,
-        S: Stream<Item = D>,
+        S: Stream,
+        S::Item: AsRef<[u8]>,
     {
         VerifyStream::new(stream, self)
     }
-    pub fn try_stream<S, D, E>(self, stream: S) -> VerifyTryStream<S, S::Ok, S::Error, T>
+    pub fn try_stream<S, D, E>(self, stream: S) -> VerifyTryStream<S, T>
     where
         D: AsRef<[u8]>,
         E: Send + Sync,

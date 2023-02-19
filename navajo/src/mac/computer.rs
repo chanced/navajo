@@ -62,15 +62,15 @@ impl Computer {
         Tag::new(self.contexts.into_iter().map(|ctx| ctx.finalize()))
     }
 
-    pub fn stream<S, D>(self, stream: S) -> ComputeStream<S, S::Item>
+    pub fn stream<S>(self, stream: S) -> ComputeStream<S>
     where
-        D: AsRef<[u8]>,
-        S: Stream<Item = D>,
+        S: Stream,
+        S::Item: AsRef<[u8]>,
     {
         ComputeStream::new(stream, self)
     }
 
-    pub fn try_stream<S, D, E>(self, stream: S) -> ComputeTryStream<S, S::Ok, S::Error>
+    pub fn try_stream<S, D, E>(self, stream: S) -> ComputeTryStream<S>
     where
         D: AsRef<[u8]>,
         E: Send + Sync,

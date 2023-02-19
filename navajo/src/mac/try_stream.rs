@@ -10,18 +10,17 @@ use crate::error::VerifyTryStreamError;
 
 use super::{verifier::Verifier, Computer, Mac, Tag};
 
-const BLOCK_SIZE: usize = 256; // todo: profile this
-
-pub trait TryStreamMac: TryStream {
-    fn compute_mac(self, mac: &Mac) -> ComputeTryStream<Self, Self::Ok, Self::Error>
+pub trait MacTryStream: TryStream {
+    fn compute_mac(self, mac: &Mac) -> ComputeTryStream<Self>
     where
         Self: Sized,
         Self::Ok: AsRef<[u8]>,
+        Self::Error: Send + Sync,
     {
         ComputeTryStream::new(self, mac.into())
     }
 
-    fn verify_mac<T>(self, tag: T, mac: &Mac) -> VerifyTryStream<Self, Self::Ok, Self::Error, T>
+    fn verify_mac<T>(self, tag: T, mac: &Mac) -> VerifyTryStream<Self, T>
     where
         Self: Sized,
         Self::Ok: AsRef<[u8]>,
@@ -33,7 +32,7 @@ pub trait TryStreamMac: TryStream {
     }
 }
 
-impl<T> TryStreamMac for T
+impl<T> MacTryStream for T
 where
     T: TryStream,
     T::Ok: AsRef<[u8]>,
@@ -41,44 +40,41 @@ where
 }
 
 #[pin_project]
-pub struct ComputeTryStream<S, D, E>
+pub struct ComputeTryStream<S>
 where
-    S: TryStream<Ok = D, Error = E>,
-    D: AsRef<[u8]>,
+    S: TryStream,
+    S::Ok: AsRef<[u8]>,
+    S::Error: Send + Sync,
 {
     #[pin]
     stream: S,
     compute: Option<Computer>,
-    _phantom: PhantomData<(D, E)>,
 }
 
-impl<S, D, E> ComputeTryStream<S, D, E>
+impl<S> ComputeTryStream<S>
 where
-    S: TryStream<Ok = D, Error = E>,
-    D: AsRef<[u8]>,
+    S: TryStream,
+    S::Ok: AsRef<[u8]>,
+    S::Error: Send + Sync,
 {
     pub fn new(stream: S, compute: Computer) -> Self {
         let compute = Some(compute);
-        Self {
-            stream,
-            compute,
-            _phantom: PhantomData,
-        }
+        Self { stream, compute }
     }
 }
 
-impl<S, D, E> Future for ComputeTryStream<S, D, E>
+impl<S> Future for ComputeTryStream<S>
 where
-    S: TryStream<Ok = D, Error = E>,
-    D: AsRef<[u8]>,
+    S: TryStream,
+    S::Ok: AsRef<[u8]>,
+    S::Error: Send + Sync,
 {
-    type Output = Result<Tag, E>;
+    type Output = Result<Tag, S::Error>;
     fn poll(
         self: core::pin::Pin<&mut Self>,
         cx: &mut core::task::Context<'_>,
     ) -> Poll<Self::Output> {
         let mut this = self.project();
-
         let mut compute = this.compute.take().unwrap();
         loop {
             match this.stream.as_mut().try_poll_next(cx) {
@@ -101,23 +97,23 @@ where
 }
 
 #[pin_project]
-pub struct VerifyTryStream<S, D, E, T>
+pub struct VerifyTryStream<S, T>
 where
-    S: TryStream<Ok = D, Error = E>,
-    D: AsRef<[u8]>,
+    S: TryStream,
+    S::Ok: AsRef<[u8]>,
+    S::Error: Send + Sync,
     T: AsRef<Tag> + Send + Sync,
-    E: Send + Sync,
 {
     #[pin]
     stream: S,
     verifier: Option<Verifier<T>>,
-    _phantom: PhantomData<(T, E, D)>,
+    _phantom: PhantomData<T>,
 }
-impl<S, D, E, T> VerifyTryStream<S, D, E, T>
+impl<S, T> VerifyTryStream<S, T>
 where
-    S: TryStream<Ok = D, Error = E>,
-    D: AsRef<[u8]>,
-    E: Send + Sync,
+    S: TryStream,
+    S::Ok: AsRef<[u8]>,
+    S::Error: Send + Sync,
     T: AsRef<Tag> + Send + Sync,
 {
     pub fn new(stream: S, verify: Verifier<T>) -> Self {
@@ -130,14 +126,14 @@ where
     }
 }
 
-impl<S, D, E, T> Future for VerifyTryStream<S, D, E, T>
+impl<S, T> Future for VerifyTryStream<S, T>
 where
-    S: TryStream<Ok = D, Error = E>,
-    D: AsRef<[u8]>,
+    S: TryStream,
+    S::Ok: AsRef<[u8]>,
+    S::Error: Send + Sync,
     T: AsRef<Tag> + Send + Sync,
-    E: Send + Sync,
 {
-    type Output = Result<Tag, VerifyTryStreamError<E>>;
+    type Output = Result<Tag, VerifyTryStreamError<S::Error>>;
     fn poll(
         self: core::pin::Pin<&mut Self>,
         cx: &mut core::task::Context<'_>,

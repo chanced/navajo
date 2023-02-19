@@ -3,7 +3,6 @@ mod cipher;
 mod ciphertext_info;
 mod decryptor;
 mod encryptor;
-mod header;
 mod key_info;
 mod material;
 mod method;
@@ -11,27 +10,32 @@ mod nonce;
 mod seed;
 mod segment;
 mod size;
+mod stream;
+mod try_stream;
 mod writer;
+
 use alloc::vec::Vec;
-pub use key_info::AeadKeyInfo;
+use core::mem;
 use material::Material;
 use size::Size;
 use zeroize::ZeroizeOnDrop;
 
 use crate::{
-    error::{KeyNotFoundError, RemoveKeyError},
-    key::{Key, KeyMaterial},
+    error::{EncryptError, KeyNotFoundError, RemoveKeyError},
     keyring::Keyring,
     Buffer,
 };
+
 pub use algorithm::Algorithm;
 pub use ciphertext_info::CiphertextInfo;
-
 pub use decryptor::Decryptor;
-
 pub use encryptor::Encryptor;
+pub use key_info::AeadKeyInfo;
 pub use method::Method;
 pub use segment::Segment;
+pub use stream::{AeadStream, DecryptStream, EncryptStream};
+// pub use try_stream::{AeadTryStream, TryDecryptStream, TryEncryptStream};
+
 // use cipher::{ciphers, ring_ciphers, Cipher};
 
 #[derive(Clone, Debug, ZeroizeOnDrop)]
@@ -55,10 +59,6 @@ impl Aead {
         self.keyring.primary_key().into()
     }
 
-    // fn primary_key_material(&self) -> &Key<Material> {
-    //     self.keyring.primary_key()
-    // }
-
     /// Returns a [`Vec`] containing [`AeadKeyInfo`] for each key in this
     /// keyring.
     pub fn keys(&self) -> Vec<AeadKeyInfo> {
@@ -67,10 +67,52 @@ impl Aead {
 
     pub fn encrypt_in_place<B: Buffer>(
         &self,
+        additional_data: &[u8],
         data: &mut B,
-        aad: &[u8],
-    ) -> Result<(), crate::error::EncryptError> {
-        self.keyring.primary_key().encrypt_in_place(data, aad)
+    ) -> Result<(), EncryptError> {
+        let encryptor = Encryptor::new(self, None, mem::take(data));
+        let result = encryptor
+            .finalize(additional_data)?
+            .next()
+            .ok_or(EncryptError::Unspecified)?;
+        *data = result;
+        Ok(())
+    }
+
+    pub fn decrypt_in_place<B: Buffer>(
+        &self,
+        additional_data: &[u8],
+        data: &mut B,
+    ) -> Result<(), crate::error::DecryptError> {
+        let decryptor = Decryptor::new(self, mem::take(data));
+        let result = decryptor
+            .finalize(additional_data)?
+            .next()
+            .ok_or(crate::error::DecryptError::Unspecified)?;
+        *data = result;
+        Ok(())
+    }
+    pub fn encrypt(&self, additional_data: &[u8], data: &[u8]) -> Result<Vec<u8>, EncryptError> {
+        let data = data.to_vec();
+        let encryptor = Encryptor::new(self, None, data);
+        let mut result = Vec::new();
+        for segment in encryptor.finalize(additional_data)? {
+            result.extend_from_slice(&segment);
+        }
+        Ok(result)
+    }
+    pub fn decrypt(
+        &self,
+        additional_data: &[u8],
+        data: &[u8],
+    ) -> Result<Vec<u8>, crate::error::DecryptError> {
+        let data = data.to_vec();
+        let decryptor = Decryptor::new(self, data);
+        let mut result = Vec::new();
+        for segment in decryptor.finalize(additional_data)? {
+            result.extend_from_slice(&segment);
+        }
+        Ok(result)
     }
 
     pub fn promote_key(
@@ -104,5 +146,46 @@ impl Aead {
         meta: Option<serde_json::Value>,
     ) -> Result<AeadKeyInfo, KeyNotFoundError> {
         self.keyring.update_meta(key_id, meta).map(AeadKeyInfo::new)
+    }
+}
+impl AsRef<Aead> for Aead {
+    fn as_ref(&self) -> &Aead {
+        self
+    }
+}
+
+impl AsMut<Aead> for Aead {
+    fn as_mut(&mut self) -> &mut Aead {
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encrypt_in_place() {
+        let aead = Aead::new(Algorithm::Aes256Gcm, None);
+        let mut data = b"hello world".to_vec();
+        aead.encrypt_in_place(b"additional data", &mut data)
+            .unwrap();
+        assert_ne!(data, b"hello world");
+        assert!(!data.is_empty());
+    }
+    #[test]
+    fn test_decrypt_in_place() {
+        let aead = Aead::new(Algorithm::Aes256Gcm, None);
+        let mut data = b"hello world".to_vec();
+        aead.encrypt_in_place(b"additional data", &mut data)
+            .unwrap();
+        let aead = Aead::new(Algorithm::Aes256Gcm, None);
+        let mut data = b"hello world".to_vec();
+        aead.encrypt_in_place(b"additional data", &mut data)
+            .unwrap();
+        assert_ne!(data, b"hello world");
+        aead.decrypt_in_place(b"additional data", &mut data)
+            .unwrap();
+        assert_eq!(data, b"hello world");
     }
 }

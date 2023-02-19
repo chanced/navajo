@@ -5,7 +5,7 @@ use crate::{
     Buffer,
 };
 
-use super::{algorithm, Algorithm};
+use super::Algorithm;
 
 #[allow(clippy::large_enum_variant)]
 pub(super) enum Cipher {
@@ -143,7 +143,7 @@ impl RingCipher {
     {
         let aad = ring::aead::Aad::from(aad);
         self.key.open_in_place(nonce.into(), aad, data.as_mut())?;
-        data.truncate(self.key.algorithm().tag_len());
+        data.truncate(data.len() - self.key.algorithm().tag_len());
         Ok(())
     }
 }
@@ -255,10 +255,10 @@ impl RustCryptoCipher {
             #[cfg(not(feature = "ring"))]
             Self::Aes128Gcm(_) => Algorithm::Aes128Gcm,
             #[cfg(not(feature = "ring"))]
-            Self::Aes256Gcm(aes) => Algorithm::Aes256Gcm,
+            Self::Aes256Gcm(_) => Algorithm::Aes256Gcm,
             #[cfg(not(feature = "ring"))]
-            Self::ChaCha20Poly1305(chacha) => Algorithm::ChaCha20Poly1305,
-            Self::XChaCha20Poly1305(cipher) => Algorithm::XChaCha20Poly1305,
+            Self::ChaCha20Poly1305(_) => Algorithm::ChaCha20Poly1305,
+            Self::XChaCha20Poly1305(_) => Algorithm::XChaCha20Poly1305,
         }
     }
 }

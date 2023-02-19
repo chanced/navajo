@@ -7,8 +7,8 @@ use alloc::{
 use zeroize::ZeroizeOnDrop;
 
 use crate::{
-    buffer::{prepend_to_buffer, BufferZeroizer},
-    error::{EncryptError, EncryptFinalError, UnspecifiedError},
+    buffer::BufferZeroizer,
+    error::{EncryptError, UnspecifiedError},
     hkdf,
     key::Key,
     rand, sensitive, Aead, Buffer,
@@ -20,12 +20,19 @@ use super::{
     nonce::{Nonce, NonceSequence},
     Algorithm, Method, Segment,
 };
-
-/// Encrypts data using STREAM as desribed in [Online Authenticated-Encryption
-/// and its Nonce-Reuse Misuse-Resistance](https://eprint.iacr.org/2015/189.pdf)
-/// if the finalized output is less than the specified `Segment` size.
-/// Otherwise, it will encrypt data using AEAD as described in [RFC
-/// 5116](https://tools.ietf.org/html/rfc5116) with a 5 byte header prepended.
+/// Used internally to encrypt data. Exposed as a public type for edge-cases
+/// where the [`Aead`] methods [`encrypt`](`Aead::encrypt`),
+/// [`encrypt_stream`](`Aead::encrypt_stream`),
+/// [`encrypt_try_stream`](`Aead::encrypt_try_stream`) and
+/// [`encrypt_writer`](`Aead::encrypt_writer`) are not sufficient.
+///
+/// Encrypts data using either STREAM as desribed in [Online
+/// Authenticated-Encryption and its Nonce-Reuse
+/// Misuse-Resistance](https://eprint.iacr.org/2015/189.pdf) if the finalized
+/// output is less than the specified `Segment` size or AEAD as described in
+/// [RFC 5116](https://tools.ietf.org/html/rfc5116) with a 5 byte header
+/// prepended.
+///
 #[derive(ZeroizeOnDrop, Debug)]
 pub struct Encryptor<B>
 where
@@ -41,13 +48,15 @@ where
     cipher: Option<Cipher>,
     #[zeroize(skip)]
     segments: VecDeque<B>,
+    #[zeroize(skip)]
+    pub(super) nonce: Option<Nonce>,
 }
 
 impl<B> Encryptor<B>
 where
     B: Buffer,
 {
-    pub fn new(buf: B, segment: Option<Segment>, aead: &Aead) -> Self {
+    pub fn new(aead: &Aead, segment: Option<Segment>, buf: B) -> Self {
         let key = aead.keyring.primary_key().clone();
         Self {
             key,
@@ -56,6 +65,7 @@ where
             nonce_seq: None,
             cipher: None,
             segments: VecDeque::new(),
+            nonce: None,
         }
     }
 
@@ -94,7 +104,7 @@ where
                 let cipher = self.cipher.take().ok_or(EncryptError::Unspecified)?;
                 cipher.encrypt_in_place(nonce, aad, &mut buf)?;
                 if let Some(header) = header {
-                    prepend_to_buffer(&mut buf, &header);
+                    buf.prepend_slice(&header);
                 }
 
                 self.cipher = Some(cipher);
@@ -109,20 +119,18 @@ where
     ///
     /// Finalize **must** be called or the remaining segments will **not** be encrypted.
     #[must_use = "finalize must be called"]
-    pub fn finalize(mut self, aad: &[u8]) -> Result<IntoIter<B>, EncryptFinalError> {
+    pub fn finalize(mut self, aad: &[u8]) -> Result<IntoIter<B>, EncryptError> {
         if self.counter() == 0 {
             let buf_len = self.buffered_len();
             if buf_len == 0 {
-                return Err(EncryptFinalError::EmptyCleartext);
+                return Err(EncryptError::EmptyCleartext);
             }
-
             if self.segment.is_none() {
                 return self.finalize_one_shot(aad);
             }
-
             if let Some(segment) = self.segment {
                 if buf_len
-                    <= self.algorithm().online_header_len() + self.algorithm().tag_len() + segment
+                    <= segment - (self.algorithm().online_header_len() + self.algorithm().tag_len())
                 {
                     return self.finalize_one_shot(aad);
                 }
@@ -134,15 +142,23 @@ where
         self.last(aad)
     }
 
-    fn finalize_one_shot(mut self, aad: &[u8]) -> Result<IntoIter<B>, EncryptFinalError> {
-        let nonce = Nonce::new(self.algorithm().nonce_len());
+    #[allow(clippy::should_implement_trait)]
+    pub fn next(&mut self) -> Option<B> {
+        self.segments.pop_front()
+    }
+
+    fn finalize_one_shot(mut self, aad: &[u8]) -> Result<IntoIter<B>, EncryptError> {
+        let nonce = self
+            .nonce
+            .clone()
+            .unwrap_or(Nonce::new(self.algorithm().nonce_len()));
         let header = self.header(None, &nonce, &[]);
         let cipher = Cipher::new(self.algorithm(), self.key.bytes());
         let mut buf = mem::take(&mut self.buf.0);
         cipher
             .encrypt_in_place(nonce, aad, &mut buf)
             .map_err(|_| EncryptError::Unspecified)?;
-        prepend_to_buffer(&mut self.buf, &header);
+        buf.prepend_slice(&header);
         self.segments.push_front(buf);
         let segments = mem::take(&mut self.segments);
         Ok(segments.into_iter())
@@ -200,7 +216,7 @@ where
         (salt_bytes, sensitive::Bytes::from(derived_key))
     }
 
-    fn last(mut self, aad: &[u8]) -> Result<IntoIter<B>, EncryptFinalError> {
+    fn last(mut self, aad: &[u8]) -> Result<IntoIter<B>, EncryptError> {
         let cipher = self.cipher.take().ok_or(EncryptError::Unspecified)?;
         if self.buffered_len() == 0 {
             let segments = mem::take(&mut self.segments);
@@ -216,15 +232,113 @@ where
     }
 }
 
-impl<B> Iterator for Encryptor<B>
-where
-    B: Buffer,
-{
-    type Item = B;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.segments.pop_front()
+#[cfg(test)]
+mod tests {
+    use crate::{
+        aead::{nonce::Nonce, segment::FOUR_KB, Algorithm, Method, Segment},
+        keyring::KEY_ID_LEN,
+        Aead,
+    };
+
+    use super::Encryptor;
+
+    #[test]
+    fn test_one_shot_adds_header() {
+        let aead = Aead::new(Algorithm::Aes128Gcm, None);
+        let key = aead.keyring.primary_key();
+        let mut buf = vec![0u8; 100];
+        crate::rand::fill(&mut buf);
+        let encryptor = Encryptor::new(&aead, None, buf);
+        let result = encryptor.finalize(&[]).unwrap().next().unwrap();
+        assert!(result.len() > 100);
+        assert_eq!(result[0], Method::Online);
+        assert_eq!(result[1..5], key.id().to_be_bytes()[..]);
+    }
+
+    #[test]
+    fn test_streaming_buffer_size() {
+        let algorithm = Algorithm::Aes128Gcm;
+        let aead = Aead::new(algorithm, None);
+        let mut buf = vec![0u8; 65536];
+        crate::rand::fill(&mut buf);
+        let encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), buf);
+
+        let expected = FOUR_KB
+            - Method::LEN
+            - KEY_ID_LEN
+            - algorithm.nonce_prefix_len()
+            - algorithm.key_len()
+            - algorithm.tag_len();
+        assert_eq!(Some(0..expected), encryptor.next_segment_rng());
+    }
+
+    #[test]
+    fn test_streaming_adds_header() {
+        let aead = Aead::new(Algorithm::Aes128Gcm, None);
+        let key = aead.keyring.primary_key();
+        let mut buf = vec![0u8; 65536];
+        crate::rand::fill(&mut buf);
+        let encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), buf);
+        let result: Vec<Vec<u8>> = encryptor.finalize(&[]).unwrap().collect();
+        assert!(result.len() == 17);
+        assert_eq!(
+            result[0][0],
+            Method::StreamingHmacSha256(Segment::FourKilobytes)
+        );
+        for (i, r) in result.iter().enumerate() {
+            if i < result.len() - 1 {
+                assert_eq!(r.len(), 4096);
+            } else {
+                // assert_eq!(r.len(), 4096 + 16);
+            }
+        }
+        assert_eq!(result[0][1..5], key.id().to_be_bytes()[..]);
+        // assert_eq!(result[0], Method::Online);
+    }
+    #[test]
+    fn test_online() {
+        let aead = Aead::new(Algorithm::Aes256Gcm, None);
+        let unbound_key = ring::aead::UnboundKey::new(
+            &ring::aead::AES_256_GCM,
+            aead.keyring.primary_key().material().bytes(),
+        )
+        .unwrap();
+        let ring_key = ring::aead::LessSafeKey::new(unbound_key);
+
+        let nonce = Nonce::new_from_slice(
+            12,
+            &[127, 167, 243, 154, 198, 60, 245, 217, 172, 30, 129, 114],
+        )
+        .unwrap();
+
+        let mut msg = b"hello world.".to_vec();
+        ring_key
+            .seal_in_place_append_tag(
+                nonce.clone().into(),
+                ring::aead::Aad::from(b"additional data"),
+                &mut msg,
+            )
+            .unwrap();
+        println!("ring: {msg:?}");
+
+        let data = b"hello world.".to_vec();
+        let mut enc = Encryptor::new(&aead, None, data);
+        let header = enc.header(None, &nonce, &[]);
+        println!("nonce: {:?}", &nonce);
+        println!("header: {header:?}");
+
+        enc.nonce = Some(nonce.clone());
+
+        let ciphertext = enc.finalize(b"additional data").unwrap().next().unwrap();
+        println!("cipher: {ciphertext:?}");
+
+        assert_eq!(ciphertext[Algorithm::Aes256Gcm.online_header_len()..], msg);
+        assert_eq!(ciphertext[0], Method::Online);
+        assert_eq!(
+            ciphertext[1..5],
+            aead.keyring.primary_key().id().to_be_bytes()[..]
+        );
+
+        assert_eq!(&ciphertext[5..17], nonce.bytes());
     }
 }
-
-#[cfg(test)]
-mod tests {}
