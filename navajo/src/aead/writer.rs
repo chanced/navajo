@@ -1,8 +1,10 @@
+use std::io::Write;
+
 use super::{Buffer, Encryptor};
 #[cfg(feature = "std")]
-pub struct WriteAead<W, B>
+pub struct EncryptWriter<W, B>
 where
-    W: std::io::Write,
+    W: Write,
     B: Buffer,
 {
     encryptor: Encryptor<B>,

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use super::Size;
 
-/// Ad
+/// AEAD Algorithms
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum Algorithm {
@@ -85,27 +85,3 @@ impl TryFrom<u8> for Algorithm {
         }
     }
 }
-
-// impl Algorithm {
-
-//     /// The length of the tag in bytes
-//     pub fn tag_len(&self) -> usize {
-//         self.ring().tag_len()
-//     }
-//     /// The length of the key in bytes
-//     pub fn key_len(&self) -> usize {
-//         self.ring().key_len()
-//     }
-
-//     fn ring(&self) -> &'static ring::aead::Algorithm {
-//         match self {
-//             Algorithm::ChaCha20Poly1305 => &ring::aead::CHACHA20_POLY1305,
-//             Algorithm::Aes128Gcm => &ring::aead::AES_128_GCM,
-//             Algorithm::Aes256Gcm => &ring::aead::AES_256_GCM,
-//         }
-//     }
-
-//     pub(super) fn load_key(&self, key: &[u8]) -> Result<LessSafeKey, ring::error::Unspecified> {
-//         UnboundKey::new(self.ring(), key).map(LessSafeKey::new)
-//     }
-// }

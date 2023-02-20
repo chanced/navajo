@@ -86,14 +86,14 @@ impl Tag {
     ///
     /// Note that the truncation will be applied to entire output. The header of
     /// the `Tag` is 4 bytes. Unless the header is to be omitted (by calling
-    /// [`omit_header`]), the bare minimum the `Tag` must be is 12 bytes. If the
-    /// omit header flag is set, the minimum length is 8 bytes.
+    /// [`omit_header`]), the bare minimum the `Tag` must be is 14 bytes. If the
+    /// omit header flag is set, the minimum length is 10 bytes.
     ///
     /// A value of `0` will remove the truncation, effectively calling
     /// [`remove_truncation`].
     ///
     /// # Errors
-    /// - If `len` is less than 13 and greater than 0, and [`omit_header`] is
+    /// - If `len` is less than 14 and greater than 0, and [`omit_header`] is
     ///   `false`, [`TruncationError::MinLengthNotMet`] will be returned.
     /// - If `len` is greater than the length of the primary tag, a
     ///  [`TruncationError::MinLengthNotMet`] will be returned.
@@ -107,10 +107,10 @@ impl Tag {
         if len == 0 {
             return Ok(self.remove_truncation());
         }
-        if len < 8 {
+        if len < 10 {
             return Err(TruncationError::MinLengthNotMet);
         }
-        if !self.omit_header && len < 12 {
+        if !self.omit_header && len < 14 {
             return Err(TruncationError::MinLengthNotMet);
         }
         if len > self.primary_tag.len() {
@@ -193,9 +193,6 @@ impl Tag {
             truncate_to: None,
             omit_header: false,
         }
-    }
-    pub(super) fn tag_count(&self) -> usize {
-        self.entries.len()
     }
 
     #[allow(clippy::len_without_is_empty)]

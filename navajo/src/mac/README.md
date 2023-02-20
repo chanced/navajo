@@ -1,22 +1,5 @@
 # Message Authentication Code ([HMAC](https://www.rfc-editor.org/rfc/rfc2104) & [CMAC](https://www.rfc-editor.org/rfc/rfc4493))
 
-| Primitive | Hashing algorithm | Backend crate(s)                                                                                                       | Feature Flags       | Enabled by default |
-| :-------: | ----------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------- | :----------------: |
-|   HMAC    | **BLAKE3**        | [blake3](https://crates.io/crates/blake3)                                                                              | `"mac"`, `"blake3"` |         ✔️         |
-|   HMAC    | **Sha256**        | [_ring_](https://crates.io/crates/hma) OR [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac) | `"mac"`, `"sha2"`   |         ✔️         |
-|   HMAC    | **Sha384**        | [_ring_](https://crates.io/crates/hma) OR [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac) | `"mac"`, `"sha2"`   |         ✔️         |
-|   HMAC    | **Sha512**        | [_ring_](https://crates.io/crates/hma) OR [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac) | `"mac"`, `"sha2"`   |         ✔️         |
-|   HMAC    | **Sha224**        | [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha2"`   |         ✔️         |
-|   HMAC    | **Sha512/256**    | [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha2"`   |         ✔️         |
-|   HMAC    | **Sha512/224**    | [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha2"`   |         ✔️         |
-|   HMAC    | **Sha3 256**      | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha3"`   |         ✔️         |
-|   HMAC    | **Sha3 224**      | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha3"`   |         ✔️         |
-|   HMAC    | **Sha3 384**      | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha3"`   |         ✔️         |
-|   HMAC    | **Sha3 512**      | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha3"`   |         ✔️         |
-|   CMAC    | **AES 128**       | [aes](https://crates.io/crates/aes), [cmac](https://crates.io/crates/cmac)                                             | `"mac"`, `"aes"`    |         ✔️         |
-|   CMAC    | **AES 128**       | [aes](https://crates.io/crates/aes), [cmac](https://crates.io/crates/cmac)                                             | `"mac"`, `"aes"`    |         ✔️         |
-|   CMAC    | **AES 256**       | [aes](https://crates.io/crates/aes), [cmac](https://crates.io/crates/cmac)                                             | `"mac"`, `"aes"`    |         ✔️         |
-
 ### Basic usage
 
 ```rust
@@ -86,11 +69,11 @@ async fn main() {
 ```rust
 use navajo::mac::{Mac, Algorithm};
 use hex::{decode, encode};
-
-
  let external_key = decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
     .unwrap();
+
 let mac = Mac::new_with_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
+
 let tag = mac.compute(b"hello world").omit_header().unwrap();
 assert_eq!(encode(tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a");
 
@@ -105,3 +88,20 @@ let key = mac.add_external_key(
 let key = mac.promote_key(key).unwrap();
 println!("{key:?}");
 ```
+
+| Primitive | Algorithm  | Backend crate(s)                                                                                                       | Feature Flags       | Enabled by default |
+| :-------: | ---------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------- | :----------------: |
+|   HMAC    | BLAKE3     | [blake3](https://crates.io/crates/blake3)                                                                              | `"mac"`, `"blake3"` |         ✔️         |
+|   HMAC    | Sha256     | [_ring_](https://crates.io/crates/hma) OR [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac) | `"mac"`, `"sha2"`   |         ✔️         |
+|   HMAC    | Sha384     | [_ring_](https://crates.io/crates/hma) OR [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac) | `"mac"`, `"sha2"`   |         ✔️         |
+|   HMAC    | Sha512     | [_ring_](https://crates.io/crates/hma) OR [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac) | `"mac"`, `"sha2"`   |         ✔️         |
+|   HMAC    | Sha224     | [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha2"`   |         ✔️         |
+|   HMAC    | Sha512/256 | [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha2"`   |         ✔️         |
+|   HMAC    | Sha512/224 | [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha2"`   |         ✔️         |
+|   HMAC    | Sha3 256   | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha3"`   |         ✔️         |
+|   HMAC    | Sha3 224   | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha3"`   |         ✔️         |
+|   HMAC    | Sha3 384   | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha3"`   |         ✔️         |
+|   HMAC    | Sha3 512   | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"mac"`, `"sha3"`   |         ✔️         |
+|   CMAC    | AES 128    | [aes](https://crates.io/crates/aes), [cmac](https://crates.io/crates/cmac)                                             | `"mac"`, `"aes"`    |         ✔️         |
+|   CMAC    | AES 128    | [aes](https://crates.io/crates/aes), [cmac](https://crates.io/crates/cmac)                                             | `"mac"`, `"aes"`    |         ✔️         |
+|   CMAC    | AES 256    | [aes](https://crates.io/crates/aes), [cmac](https://crates.io/crates/cmac)                                             | `"mac"`, `"aes"`    |         ✔️         |

@@ -7,24 +7,23 @@ mod key_info;
 mod material;
 mod method;
 mod nonce;
+
 mod seed;
 mod segment;
 mod size;
 mod stream;
 mod try_stream;
-mod writer;
-
-use alloc::vec::Vec;
-use core::mem;
-use material::Material;
-use size::Size;
-use zeroize::ZeroizeOnDrop;
 
 use crate::{
     error::{EncryptError, KeyNotFoundError, RemoveKeyError},
     keyring::Keyring,
     Buffer,
 };
+use alloc::vec::Vec;
+use core::mem;
+use material::Material;
+use size::Size;
+use zeroize::ZeroizeOnDrop;
 
 pub use algorithm::Algorithm;
 pub use ciphertext_info::CiphertextInfo;
@@ -35,6 +34,14 @@ pub use method::Method;
 pub use segment::Segment;
 pub use stream::{AeadStream, DecryptStream, EncryptStream};
 pub use try_stream::{AeadTryStream, DecryptTryStream, EncryptTryStream};
+cfg_if::cfg_if! {
+    if #[cfg(feature = "std")] {
+        mod reader;
+        mod writer;
+        pub use reader::DecryptReader;
+        pub use writer::EncryptWriter;
+    }
+}
 
 // use cipher::{ciphers, ring_ciphers, Cipher};
 

@@ -49,6 +49,13 @@ where
         self.buf.extend_from_slice(ciphertext);
     }
 
+    pub fn method(&self) -> Option<Method> {
+        self.method
+    }
+    pub fn key_id(&self) -> Option<u32> {
+        self.key_id
+    }
+
     pub fn next(&mut self, additional_data: &[u8]) -> Result<Option<B>, DecryptError> {
         if self.buf.is_empty() {
             return Ok(None);
@@ -136,7 +143,7 @@ where
         })
     }
 
-    fn header_is_complete(&self) -> bool {
+    pub fn header_is_complete(&self) -> bool {
         if self.key_id.is_none() {
             return false;
         }
@@ -150,7 +157,7 @@ where
         }
     }
 
-    fn parse_header(&mut self, aad: &[u8]) -> Result<bool, DecryptError> {
+    pub fn parse_header(&mut self, aad: &[u8]) -> Result<bool, DecryptError> {
         let mut idx = 0;
         let method: Method;
         if let Some(parsed_method) = self.method {
