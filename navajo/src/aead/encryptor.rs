@@ -147,7 +147,7 @@ where
     fn finalize_one_shot(mut self, aad: &[u8]) -> Result<IntoIter<B>, EncryptError> {
         let nonce = Nonce::new(self.algorithm().nonce_len());
         let header = self.header(None, &nonce, &[]);
-        let cipher = Cipher::new(self.algorithm(), self.key.bytes());
+        let cipher = self.key.cipher();
         let mut buf = mem::take(&mut self.buf.0);
         cipher
             .encrypt_in_place(nonce, aad, &mut buf)

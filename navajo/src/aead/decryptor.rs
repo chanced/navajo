@@ -45,8 +45,16 @@ where
     pub fn algorithm(&self) -> Option<Algorithm> {
         self.key.as_ref().map(|c| c.algorithm())
     }
-    pub fn update(&mut self, ciphertext: &[u8]) {
+    pub fn update(
+        &mut self,
+        additional_data: &[u8],
+        ciphertext: &[u8],
+    ) -> Result<(), DecryptError> {
         self.buf.extend_from_slice(ciphertext);
+        if !self.header_is_complete() {
+            self.parse_header(additional_data)?;
+        }
+        Ok(())
     }
 
     pub fn method(&self) -> Option<Method> {
@@ -157,7 +165,7 @@ where
         }
     }
 
-    pub fn parse_header(&mut self, aad: &[u8]) -> Result<bool, DecryptError> {
+    fn parse_header(&mut self, additional_data: &[u8]) -> Result<bool, DecryptError> {
         let mut idx = 0;
         let method: Method;
         if let Some(parsed_method) = self.method {
@@ -180,7 +188,7 @@ where
         }
         let key = self.key.clone().unwrap();
         if self.cipher.is_none() {
-            if let Some(i) = self.parse_cipher(idx, &key, method, aad) {
+            if let Some(i) = self.parse_cipher(idx, &key, method, additional_data) {
                 idx = i;
             } else {
                 self.move_cursor(idx);
@@ -269,7 +277,7 @@ where
         let algorithm = self.algorithm().unwrap();
         match method {
             Method::Online => {
-                self.cipher = Some(Cipher::new(algorithm, key.bytes()));
+                self.cipher = Some(key.cipher());
                 Some(idx)
             }
             Method::StreamingHmacSha256(_) => {
@@ -486,7 +494,7 @@ mod tests {
         let mut cleartext_chunks = vec![];
 
         for chunk in ciphertext_chunks.concat().chunks(40) {
-            decryptor.update(chunk);
+            decryptor.update(additional_data, chunk).unwrap();
 
             if let Some(result) = decryptor.next(additional_data).unwrap() {
                 cleartext_chunks.push(result);

@@ -2,7 +2,6 @@ use alloc::vec;
 
 use zeroize::ZeroizeOnDrop;
 
-use super::size::{AES_128_GCM, AES_256_GCM, CHACHA20_POLY1305, XCHACHA20_POLY1305};
 use super::Algorithm;
 use super::{cipher::Cipher, nonce::Nonce};
 use crate::{
@@ -48,22 +47,7 @@ impl Key<Material> {
     pub(super) fn cipher(&self) -> Cipher {
         self.material().cipher()
     }
-    pub fn encrypt_in_place<B: Buffer>(
-        &self,
-        data: &mut B,
-        aad: &[u8],
-    ) -> Result<(), crate::error::EncryptError> {
-        let nonce = Nonce::new(self.algorithm().nonce_len());
-        self.cipher().encrypt_in_place(nonce, aad, data)
-    }
-    pub fn decrypt_in_place<B: Buffer>(
-        &self,
-        data: &mut B,
-        aad: &[u8],
-    ) -> Result<(), crate::error::DecryptError> {
-        let nonce = Nonce::new(self.algorithm().nonce_len());
-        self.cipher().decrypt_in_place(nonce, aad, data)
-    }
+
     pub fn len(&self) -> usize {
         self.bytes().len()
     }

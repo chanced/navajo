@@ -12,25 +12,25 @@ pub trait Kms {
     fn encrypt(
         &self,
         plaintext: &[u8],
-        associated_data: &[u8],
+        additional_data: &[u8],
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::EncryptError>> + Send + '_>>;
 
     fn decrypt(
         &self,
         ciphertext: &[u8],
-        associated_data: &[u8],
+        additional_data: &[u8],
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::DecryptError>> + Send + '_>>;
 
     fn encrypt_sync(
         &self,
         plaintext: &[u8],
-        associated_data: &[u8],
+        additional_data: &[u8],
     ) -> Result<Vec<u8>, Self::EncryptError>;
 
     fn decrypt_sync(
         &self,
         ciphertext: &[u8],
-        associated_data: &[u8],
+        additional_data: &[u8],
     ) -> Result<Vec<u8>, Self::DecryptError>;
 }
 
@@ -45,33 +45,33 @@ where
     fn encrypt(
         &self,
         plaintext: &[u8],
-        associated_data: &[u8],
+        additional_data: &[u8],
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::EncryptError>> + Send + '_>> {
-        (*self).encrypt(plaintext, associated_data)
+        (*self).encrypt(plaintext, additional_data)
     }
 
     fn decrypt(
         &self,
         ciphertext: &[u8],
-        associated_data: &[u8],
+        additional_data: &[u8],
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::DecryptError>> + Send + '_>> {
-        (*self).decrypt(ciphertext, associated_data)
+        (*self).decrypt(ciphertext, additional_data)
     }
 
     fn encrypt_sync(
         &self,
         plaintext: &[u8],
-        associated_data: &[u8],
+        additional_data: &[u8],
     ) -> Result<Vec<u8>, Self::EncryptError> {
-        (*self).encrypt_sync(plaintext, associated_data)
+        (*self).encrypt_sync(plaintext, additional_data)
     }
 
     fn decrypt_sync(
         &self,
         ciphertext: &[u8],
-        associated_data: &[u8],
+        additional_data: &[u8],
     ) -> Result<Vec<u8>, Self::DecryptError> {
-        (*self).decrypt_sync(ciphertext, associated_data)
+        (*self).decrypt_sync(ciphertext, additional_data)
     }
 }
 
@@ -109,13 +109,13 @@ impl Kms for InMemory {
     fn encrypt(
         &self,
         plaintext: &[u8],
-        associated_data: &[u8],
+        additional_data: &[u8],
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::EncryptError>> + Send + '_>> {
         let plaintext = plaintext.to_vec();
         let nonce = self.nonce;
         let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
         let cipher = ChaCha20Poly1305::new(&self.key.into());
-        let aad = associated_data.to_vec();
+        let aad = additional_data.to_vec();
         Box::pin(async move {
             let ciphertext = cipher.encrypt(
                 &nonce,
@@ -131,13 +131,13 @@ impl Kms for InMemory {
     fn decrypt(
         &self,
         ciphertext: &[u8],
-        associated_data: &[u8],
+        additional_data: &[u8],
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::DecryptError>> + Send + '_>> {
         let ciphertext = ciphertext.to_vec();
         let nonce = self.nonce;
         let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
         let cipher = ChaCha20Poly1305::new(&self.key.into());
-        let aad = associated_data.to_vec();
+        let aad = additional_data.to_vec();
         Box::pin(async move {
             let plaintext = cipher.decrypt(
                 &nonce,
@@ -153,13 +153,13 @@ impl Kms for InMemory {
     fn encrypt_sync(
         &self,
         plaintext: &[u8],
-        associated_data: &[u8],
+        additional_data: &[u8],
     ) -> Result<Vec<u8>, Self::EncryptError> {
         let plaintext = plaintext.to_vec();
         let nonce = self.nonce;
         let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
         let cipher = ChaCha20Poly1305::new(&self.key.into());
-        let aad = associated_data.to_vec();
+        let aad = additional_data.to_vec();
         let ciphertext = cipher.encrypt(
             &nonce,
             Payload {
@@ -173,13 +173,13 @@ impl Kms for InMemory {
     fn decrypt_sync(
         &self,
         ciphertext: &[u8],
-        associated_data: &[u8],
+        additional_data: &[u8],
     ) -> Result<Vec<u8>, Self::DecryptError> {
         let ciphertext = ciphertext.to_vec();
         let nonce = self.nonce;
         let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
         let cipher = ChaCha20Poly1305::new(&self.key.into());
-        let aad = associated_data.to_vec();
+        let aad = additional_data.to_vec();
         let plaintext = cipher.decrypt(
             &nonce,
             Payload {

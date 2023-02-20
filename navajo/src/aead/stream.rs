@@ -209,7 +209,7 @@ where
             match this.stream.as_mut().poll_next(cx) {
                 Ready(data) => match data {
                     Some(data) => {
-                        decryptor.update(data.as_ref());
+                        decryptor.update(this.additional_data.as_ref(), data.as_ref())?;
                         let result = decryptor.next(this.additional_data.as_ref());
                         match result {
                             Err(e) => {

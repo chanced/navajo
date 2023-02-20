@@ -77,6 +77,13 @@ impl From<SegmentLimitExceededError> for EncryptError {
     }
 }
 
+#[cfg(feature = "std")]
+impl From<EncryptError> for std::io::Error {
+    fn from(e: EncryptError) -> Self {
+        Self::new(std::io::ErrorKind::Other, e)
+    }
+}
+
 pub enum EncryptTryStreamError<E> {
     Encrypt(EncryptError),
     Upstream(E),
@@ -88,8 +95,8 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Encrypt(e) => write!(f, "EncryptError({:?})", e),
-            Self::Upstream(e) => write!(f, "Upstream({:?})", e),
+            Self::Encrypt(e) => write!(f, "EncryptError({e:?})"),
+            Self::Upstream(e) => write!(f, "Upstream({e:?})"),
         }
     }
 }
@@ -125,6 +132,13 @@ impl From<UnspecifiedError> for EncryptError {
 impl From<ring::error::Unspecified> for EncryptError {
     fn from(_: ring::error::Unspecified) -> Self {
         Self::Unspecified
+    }
+}
+
+#[cfg(feature = "std")]
+impl From<DecryptError> for std::io::Error {
+    fn from(e: DecryptError) -> Self {
+        Self::new(std::io::ErrorKind::Other, e)
     }
 }
 
@@ -196,8 +210,8 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Decrypt(e) => write!(f, "DecryptError({:?})", e),
-            Self::Upstream(e) => write!(f, "Upstream({:?})", e),
+            Self::Decrypt(e) => write!(f, "DecryptError({e:?})"),
+            Self::Upstream(e) => write!(f, "Upstream({e:?})"),
         }
     }
 }

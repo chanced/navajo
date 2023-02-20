@@ -1,14 +1,11 @@
 use core::task::Poll::{Pending, Ready};
 
 use alloc::collections::VecDeque;
-use futures::{
-    stream::{Fuse, FusedStream},
-    Stream, StreamExt, TryStream,
-};
+use futures::{stream::FusedStream, Stream, TryStream};
 use pin_project::pin_project;
 
 use crate::{
-    error::{DecryptError, DecryptTryStreamError, EncryptTryStreamError},
+    error::{DecryptTryStreamError, EncryptTryStreamError},
     Aead,
 };
 
@@ -228,7 +225,7 @@ where
                 Ready(resp) => match resp {
                     Some(result) => match result {
                         Ok(data) => {
-                            decryptor.update(data.as_ref());
+                            decryptor.update(this.additional_data.as_ref(), data.as_ref())?;
                             match decryptor.next(this.additional_data.as_ref()) {
                                 Err(e) => {
                                     *this.done = true;
@@ -271,7 +268,7 @@ where
 mod tests {
     use super::*;
     use crate::aead::Algorithm;
-    use futures::{stream, TryStreamExt};
+    use futures::{stream, StreamExt, TryStreamExt};
 
     fn to_try_stream(d: Vec<u8>) -> Result<Vec<u8>, String> {
         Ok(d)

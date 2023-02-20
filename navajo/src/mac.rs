@@ -39,7 +39,7 @@ pub struct Mac {
 
 impl Mac {
     /// Opens a [`Mac`] keyring from the given `data` and validates the
-    /// authenticity with `associated_data` by means of the [`Kms`].
+    /// authenticity with `additional_data` by means of the [`Kms`].
     ///
     /// # Errors
     /// Errors if the keyring could not be opened by the or the authenticity
@@ -62,16 +62,16 @@ impl Mac {
     ///     assert_eq!(mac.primary_key(), primary_key);
     /// }
     /// ```
-    pub async fn open<K>(data: &[u8], associated_data: &[u8], kms: K) -> Result<Self, OpenError>
+    pub async fn open<K>(data: &[u8], additional_data: &[u8], kms: K) -> Result<Self, OpenError>
     where
         K: Kms,
     {
-        let keyring = Keyring::<Material>::open(data, associated_data, kms).await?;
+        let keyring = Keyring::<Material>::open(data, additional_data, kms).await?;
         Ok(Self { keyring })
     }
 
     /// Opens a [`Mac`] keyring from the given `data` and validates the
-    /// authenticity with `associated_data` by means of the [`Kms`] using
+    /// authenticity with `additional_data` by means of the [`Kms`] using
     /// blocking APIs.
     ///
     /// # Errors
@@ -92,14 +92,14 @@ impl Mac {
     /// let mac = Mac::open_sync(&data, &[], &kms).unwrap();
     /// assert_eq!(mac.primary_key(), primary_key);
     /// ```
-    pub fn open_sync<K>(data: &[u8], associated_data: &[u8], kms: K) -> Result<Self, OpenError>
+    pub fn open_sync<K>(data: &[u8], additional_data: &[u8], kms: K) -> Result<Self, OpenError>
     where
         K: Kms,
     {
-        let keyring = Keyring::<Material>::open_sync(data, associated_data, kms)?;
+        let keyring = Keyring::<Material>::open_sync(data, additional_data, kms)?;
         Ok(Self { keyring })
     }
-    /// Seals a [`Mac`] keyring and tags it with `associated_data` for future
+    /// Seals a [`Mac`] keyring and tags it with `additional_data` for future
     /// authenticationby means of the [`Kms`].
     ///
     /// # Errors
@@ -122,13 +122,13 @@ impl Mac {
     ///     assert_eq!(mac.primary_key(), primary_key);
     /// }
     /// ```
-    pub async fn seal<K>(mac: &Self, associated_data: &[u8], kms: K) -> Result<Vec<u8>, SealError>
+    pub async fn seal<K>(mac: &Self, additional_data: &[u8], kms: K) -> Result<Vec<u8>, SealError>
     where
         K: Kms,
     {
-        Keyring::seal(mac.keyring(), associated_data, kms).await
+        Keyring::seal(mac.keyring(), additional_data, kms).await
     }
-    /// Seals a [`Mac`] keyring and tags it with `associated_data` for future
+    /// Seals a [`Mac`] keyring and tags it with `additional_data` for future
     /// authenticationby means of the [`Kms`].
     ///
     /// # Errors
@@ -148,11 +148,11 @@ impl Mac {
     /// let mac = Mac::open_sync(&data, &[], &kms).unwrap();
     /// assert_eq!(mac.primary_key(), primary_key);
     /// ```
-    pub fn seal_sync<K>(mac: &Self, associated_data: &[u8], kms: K) -> Result<Vec<u8>, SealError>
+    pub fn seal_sync<K>(mac: &Self, additional_data: &[u8], kms: K) -> Result<Vec<u8>, SealError>
     where
         K: Kms,
     {
-        Keyring::seal_sync(mac.keyring(), associated_data, kms)
+        Keyring::seal_sync(mac.keyring(), additional_data, kms)
     }
 
     /// Create a new MAC keyring by generating a key for the given [`Algorithm`]

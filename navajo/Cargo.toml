@@ -14,10 +14,6 @@ description = "cryptographic APIs"
 [dependencies.futures]
 version = "0.3"
 
-# time
-[dependencies.time]
-version = "0.3"
-
 # pin-project
 [dependencies.pin-project]
 version = "1.0"
@@ -32,12 +28,6 @@ version = "1.6"
 version = "1.5"
 features = ["alloc", "zeroize_derive", "serde"]
 
-# hex -- TODO: may be able to remove this.
-[dependencies.hex]
-version = "0.4"
-default-features = false
-features = ["serde", "alloc"]
-
 # paste
 [dependencies.paste]
 version = "1.0"
@@ -50,7 +40,6 @@ version = "0.13"
 [dependencies.random]
 package = "rand"
 version = "0.8"
-
 
 # serde
 [dependencies.serde]
@@ -94,7 +83,7 @@ version = "0.1.6"
 [dependencies.chacha20poly1305]
 version = "*"
 
-# hmac -- TODO: remove this. hmac is provided in each impl
+# hmac 
 [dependencies.hmac]
 version = "0.12"
 optional = true
@@ -169,10 +158,6 @@ version = "2.4"
 [dependencies.digest]
 version = "0.10"
 
-# dbl
-[dependencies.dbl]
-version = "0.3"
-
 # blake3
 [dependencies.blake3]
 version = "1.3"
@@ -192,6 +177,12 @@ version = "0.12"
 # -------------------------
 #    Test dependencies
 # -------------------------
+
+[dev-dependencies.hex]
+version = "0.4"
+default-features = false
+features = ["serde", "alloc"]
+
 
 # tokio
 [dev-dependencies.tokio]

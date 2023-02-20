@@ -224,27 +224,27 @@ impl NonceSequence {
         Ok(self.nonce())
     }
 
-    pub(crate) fn prefix_len(&self) -> usize {
-        match self {
-            NonceSequence::Twelve(_, _) => 12 - 5,
-            NonceSequence::TwentyFour(_, _) => 24 - 5,
-        }
-    }
-    pub(crate) fn try_into_nonce(&mut self) -> Result<Nonce, UnspecifiedError> {
-        if self.counter() > 0 {
-            return Err(UnspecifiedError);
-        }
-        Ok(match self {
-            NonceSequence::Twelve(_, nonce) => {
-                crate::rand::fill(&mut nonce[12 - 5..]);
-                Nonce::Twelve(*nonce)
-            }
-            NonceSequence::TwentyFour(_, nonce) => {
-                crate::rand::fill(&mut nonce[24 - 5..]);
-                Nonce::TwentyFour(nonce.to_owned())
-            }
-        })
-    }
+    // pub(crate) fn prefix_len(&self) -> usize {
+    //     match self {
+    //         NonceSequence::Twelve(_, _) => 12 - 5,
+    //         NonceSequence::TwentyFour(_, _) => 24 - 5,
+    //     }
+    // }
+    // pub(crate) fn try_into_nonce(&mut self) -> Result<Nonce, UnspecifiedError> {
+    //     if self.counter() > 0 {
+    //         return Err(UnspecifiedError);
+    //     }
+    //     Ok(match self {
+    //         NonceSequence::Twelve(_, nonce) => {
+    //             crate::rand::fill(&mut nonce[12 - 5..]);
+    //             Nonce::Twelve(*nonce)
+    //         }
+    //         NonceSequence::TwentyFour(_, nonce) => {
+    //             crate::rand::fill(&mut nonce[24 - 5..]);
+    //             Nonce::TwentyFour(nonce.to_owned())
+    //         }
+    //     })
+    // }
 
     pub(crate) fn bytes(&self) -> &[u8] {
         self.seed()
