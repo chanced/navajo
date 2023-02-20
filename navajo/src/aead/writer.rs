@@ -22,7 +22,7 @@ where
     encryptor: Encryptor<Vec<u8>>,
     writer: W,
     aad: D,
-    buffer: VecDeque<u8>,
+    counter: usize,
 }
 impl<W, D> EncryptWriter<W, D>
 where
@@ -39,7 +39,7 @@ where
             encryptor,
             writer,
             aad: additional_data,
-            buffer: VecDeque::with_capacity(segment.into()),
+            counter: 0,
         }
     }
 }
@@ -48,9 +48,18 @@ where
     W: Write,
     D: AsRef<[u8]>,
 {
-    pub fn finalize(mut self) -> Result<W, std::io::Error> {
-        self.encryptor.finalize(self.aad.as_ref())?;
-        Ok(self.writer)
+    pub fn finalize(self) -> Result<(usize, W), std::io::Error> {
+        let EncryptWriter {
+            encryptor,
+            mut writer,
+            mut counter,
+            aad,
+        } = self;
+        let ciphertext: Vec<u8> = encryptor.finalize(aad.as_ref())?.flatten().collect();
+        writer.write_all(&ciphertext)?;
+        counter += ciphertext.len();
+        writer.flush()?;
+        Ok((counter, writer))
     }
 }
 impl<W, D> Write for EncryptWriter<W, D>
@@ -59,16 +68,12 @@ where
     D: AsRef<[u8]>,
 {
     fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
-        todo!()
-        // self.encryptor.update(self.aad.as_ref(), buf)?;
-        // if let Some(buf) = self.encryptor.next() {
-        //     self.writer.write_all(&buf)?;
-        // }
-        // let r = self.encryptor.next().map(|buf| {
-        //     self.writer.write_all(&buf)?;
-        //     Ok(buf.len())
-        // });
-        // self.writer.write(buf)
+        self.encryptor.update(self.aad.as_ref(), buf)?;
+        if let Some(ciphertext) = self.encryptor.next() {
+            self.writer.write_all(&ciphertext)?;
+            self.counter += ciphertext.len();
+        }
+        Ok(buf.len())
     }
 
     fn flush(&mut self) -> Result<(), std::io::Error> {
