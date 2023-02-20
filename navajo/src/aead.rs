@@ -112,15 +112,15 @@ impl Aead {
     #[cfg(feature = "std")]
     pub fn encrypt_writer<F, W, D>(
         &self,
+        writer: W,
         additional_data: D,
         segment: Segment,
-        writer: W,
         f: F,
     ) -> Result<(usize, W), std::io::Error>
     where
+        F: FnOnce(&mut EncryptWriter<W, D>) -> Result<(), std::io::Error>,
         W: std::io::Write,
         D: AsRef<[u8]>,
-        F: FnOnce(&mut EncryptWriter<W, D>) -> Result<(), std::io::Error>,
     {
         let mut writer = EncryptWriter::new(writer, segment, additional_data, self);
         f(&mut writer)?;
