@@ -155,6 +155,37 @@ impl Aead {
         Ok(result)
     }
 
+    pub fn decrypt_steram<S, D>(&self, stream: S, additional_data: D) -> DecryptStream<S, Aead, D>
+    where
+        S: Stream,
+        S::Item: AsRef<[u8]>,
+        D: AsRef<[u8]> + Send + Sync,
+    {
+        DecryptStream::new(stream, self.clone(), additional_data)
+    }
+
+    pub fn decrypt_try_steram<S, D>(
+        &self,
+        stream: S,
+        additional_data: D,
+    ) -> DecryptTryStream<S, Aead, D>
+    where
+        S: TryStream,
+        S::Ok: AsRef<[u8]>,
+        S::Error: Send + Sync,
+        D: AsRef<[u8]> + Send + Sync,
+    {
+        DecryptTryStream::new(stream, self.clone(), additional_data)
+    }
+
+    pub fn decrypt_reader<R, D>(&self, reader: R, additional_data: D) -> DecryptReader<R, D, &Aead>
+    where
+        R: std::io::Read,
+        D: AsRef<[u8]>,
+    {
+        DecryptReader::new(reader, additional_data, self)
+    }
+
     /// Returns a [`Vec`] containing [`AeadKeyInfo`] for each key in this
     /// keyring.
     pub fn keys(&self) -> Vec<AeadKeyInfo> {
