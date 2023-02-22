@@ -1,22 +1,22 @@
-#![doc = include_str!("./daead/README.md")]
-
 mod algorithm;
 mod material;
+mod signer;
+mod verifier;
 
 pub use algorithm::Algorithm;
 pub(crate) use material::Material;
+pub use signer::Signer;
+pub use verifier::Verifier;
 
-use serde_json::Value;
 use zeroize::ZeroizeOnDrop;
 
-use crate::{key::KeyMaterial, keyring::Keyring, sensitive};
+use crate::keyring::Keyring;
 
 #[derive(Clone, Debug, ZeroizeOnDrop)]
-pub struct Daead {
+pub struct Signature {
     keyring: Keyring<Material>,
 }
-
-impl Daead {
+impl Signature {
     pub(crate) fn keyring(&self) -> &Keyring<Material> {
         &self.keyring
     }

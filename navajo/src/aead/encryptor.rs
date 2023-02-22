@@ -66,9 +66,9 @@ where
         }
     }
 
-    pub fn update(&mut self, additional_data: &[u8], data: &[u8]) -> Result<(), EncryptError> {
+    pub fn update(&mut self, associated_data: &[u8], data: &[u8]) -> Result<(), EncryptError> {
         self.buf.extend_from_slice(data);
-        while let Some(buf) = self.try_encrypt_seg(additional_data)? {
+        while let Some(buf) = self.try_encrypt_seg(associated_data)? {
             self.segments.push_back(buf);
         }
         Ok(())
@@ -320,17 +320,17 @@ mod tests {
 
         let mut encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), vec![]);
         let mut ciphertext_chunks: Vec<Vec<u8>> = vec![];
-        let additional_data = b"additional data";
+        let associated_data = b"additional data";
 
         chunks.for_each(|chunk| {
-            encryptor.update(additional_data, &chunk).unwrap();
+            encryptor.update(associated_data, &chunk).unwrap();
             if let Some(result) = encryptor.next() {
                 ciphertext_chunks.push(result);
             }
         });
         assert_eq!(encryptor.counter(), 1);
         let nonce_prefix = encryptor.nonce_seq.as_ref().unwrap().prefix().to_vec();
-        ciphertext_chunks.extend(encryptor.finalize(additional_data).unwrap());
+        ciphertext_chunks.extend(encryptor.finalize(associated_data).unwrap());
 
         assert_eq!(ciphertext_chunks.len(), 2);
         assert_eq!(ciphertext_chunks[0].len(), 4096);

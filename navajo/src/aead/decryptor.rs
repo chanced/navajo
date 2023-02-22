@@ -47,12 +47,12 @@ where
     }
     pub fn update(
         &mut self,
-        additional_data: &[u8],
+        associated_data: &[u8],
         ciphertext: &[u8],
     ) -> Result<(), DecryptError> {
         self.buf.extend_from_slice(ciphertext);
         if !self.header_is_complete() {
-            self.parse_header(additional_data)?;
+            self.parse_header(associated_data)?;
         }
         Ok(())
     }
@@ -64,12 +64,12 @@ where
         self.key_id
     }
 
-    pub fn next(&mut self, additional_data: &[u8]) -> Result<Option<B>, DecryptError> {
+    pub fn next(&mut self, associated_data: &[u8]) -> Result<Option<B>, DecryptError> {
         if self.buf.is_empty() {
             return Ok(None);
         }
         if !self.header_is_complete() {
-            self.parse_header(additional_data)?;
+            self.parse_header(associated_data)?;
         }
         if self.cipher.is_none() {
             return Ok(None);
@@ -89,13 +89,13 @@ where
         self.cipher
             .as_ref()
             .unwrap()
-            .decrypt_in_place(nonce, additional_data, &mut data)?;
+            .decrypt_in_place(nonce, associated_data, &mut data)?;
 
         Ok(Some(data))
     }
-    pub fn finalize(mut self, additional_data: &[u8]) -> Result<IntoIter<B>, DecryptError> {
+    pub fn finalize(mut self, associated_data: &[u8]) -> Result<IntoIter<B>, DecryptError> {
         if !self.header_is_complete() {
-            self.parse_header(additional_data)?;
+            self.parse_header(associated_data)?;
         }
         let method = self.method.ok_or(DecryptError::EmptyCiphertext)?;
         if method.is_online() {
@@ -104,11 +104,11 @@ where
                 NonceOrNonceSequence::Nonce(nonce) => Ok(nonce),
                 NonceOrNonceSequence::NonceSequence(_) => Err(DecryptError::Unspecified),
             }?;
-            cipher.decrypt_in_place(nonce, additional_data, &mut self.buf)?;
+            cipher.decrypt_in_place(nonce, associated_data, &mut self.buf)?;
             Ok(vec![self.buf].into_iter())
         } else {
             let mut segments = Vec::new();
-            while let Some(segment) = self.next(additional_data)? {
+            while let Some(segment) = self.next(associated_data)? {
                 segments.push(segment);
             }
             let cipher = self.cipher.ok_or(DecryptError::Unspecified)?;
@@ -116,7 +116,7 @@ where
                 NonceOrNonceSequence::NonceSequence(seq) => Ok(seq),
                 NonceOrNonceSequence::Nonce(_) => Err(DecryptError::Unspecified),
             }?;
-            cipher.decrypt_in_place(nonce_seq.last()?, additional_data, &mut self.buf)?;
+            cipher.decrypt_in_place(nonce_seq.last()?, associated_data, &mut self.buf)?;
             segments.push(self.buf);
             Ok(segments.into_iter())
         }
@@ -165,7 +165,7 @@ where
         }
     }
 
-    fn parse_header(&mut self, additional_data: &[u8]) -> Result<bool, DecryptError> {
+    fn parse_header(&mut self, associated_data: &[u8]) -> Result<bool, DecryptError> {
         let mut idx = 0;
         let method: Method;
         if let Some(parsed_method) = self.method {
@@ -188,7 +188,7 @@ where
         }
         let key = self.key.clone().unwrap();
         if self.cipher.is_none() {
-            if let Some(i) = self.parse_cipher(idx, &key, method, additional_data) {
+            if let Some(i) = self.parse_cipher(idx, &key, method, associated_data) {
                 idx = i;
             } else {
                 self.move_cursor(idx);
@@ -458,16 +458,16 @@ mod tests {
         let key = aead.keyring.primary();
         let mut encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), vec![]);
         let mut ciphertext_chunks: Vec<Vec<u8>> = vec![];
-        let additional_data = b"additional data";
+        let associated_data = b"additional data";
 
         chunks.for_each(|chunk| {
-            encryptor.update(additional_data, &chunk).unwrap();
+            encryptor.update(associated_data, &chunk).unwrap();
             if let Some(result) = encryptor.next() {
                 ciphertext_chunks.push(result);
             }
         });
 
-        ciphertext_chunks.extend(encryptor.finalize(additional_data).unwrap());
+        ciphertext_chunks.extend(encryptor.finalize(associated_data).unwrap());
         assert_eq!(ciphertext_chunks.len(), 2);
         assert_eq!(ciphertext_chunks[0].len(), 4096);
 
@@ -483,10 +483,10 @@ mod tests {
 
         let mut cleartext_chunks = vec![];
         let mut decryptor = Decryptor::new(&aead, ciphertext_chunks.concat());
-        if let Some(result) = decryptor.next(additional_data).unwrap() {
+        if let Some(result) = decryptor.next(associated_data).unwrap() {
             cleartext_chunks.push(result);
         }
-        for chunk in decryptor.finalize(additional_data).unwrap() {
+        for chunk in decryptor.finalize(associated_data).unwrap() {
             cleartext_chunks.push(chunk);
         }
 
@@ -494,13 +494,13 @@ mod tests {
         let mut cleartext_chunks = vec![];
 
         for chunk in ciphertext_chunks.concat().chunks(40) {
-            decryptor.update(additional_data, chunk).unwrap();
+            decryptor.update(associated_data, chunk).unwrap();
 
-            if let Some(result) = decryptor.next(additional_data).unwrap() {
+            if let Some(result) = decryptor.next(associated_data).unwrap() {
                 cleartext_chunks.push(result);
             }
         }
-        for chunk in decryptor.finalize(additional_data).unwrap() {
+        for chunk in decryptor.finalize(associated_data).unwrap() {
             cleartext_chunks.push(chunk);
         }
         let cleartext = cleartext_chunks.concat();

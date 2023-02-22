@@ -10,7 +10,6 @@ pub use salt::Salt;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn test_rust_crypto() {

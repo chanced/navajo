@@ -11,7 +11,6 @@ use super::Size;
 
 /// AEAD Algorithms
 #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Copy, Debug)]
-#[repr(u8)]
 pub enum Algorithm {
     /// https://datatracker.ietf.org/doc/html/rfc8439
     ChaCha20Poly1305,

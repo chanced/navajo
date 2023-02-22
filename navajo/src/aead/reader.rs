@@ -25,11 +25,11 @@ where
     D: AsRef<[u8]>,
     K: AsRef<Aead>,
 {
-    pub fn new(reader: R, additional_data: D, key: K) -> Self {
+    pub fn new(reader: R, associated_data: D, key: K) -> Self {
         Self {
             reader,
             _marker: PhantomData,
-            aad: additional_data,
+            aad: associated_data,
             deserializer: Some(Decryptor::new(key, Vec::new())),
             buffer: VecDeque::new(),
         }

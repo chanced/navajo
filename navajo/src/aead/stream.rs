@@ -15,23 +15,23 @@ use crate::{
 use super::{Decryptor, Encryptor, Segment};
 
 pub trait AeadStream: Stream {
-    fn encrypt<T, D>(self, segment: Segment, additional_data: D, aead: T) -> EncryptStream<Self, D>
+    fn encrypt<T, D>(self, segment: Segment, associated_data: D, aead: T) -> EncryptStream<Self, D>
     where
         Self: Sized,
         Self::Item: AsRef<[u8]>,
         T: AsRef<Aead>,
         D: AsRef<[u8]> + Send + Sync,
     {
-        EncryptStream::new(self, segment, additional_data, aead)
+        EncryptStream::new(self, segment, associated_data, aead)
     }
-    fn decrypt<K, D>(self, additional_data: D, aead: K) -> DecryptStream<Self, K, D>
+    fn decrypt<K, D>(self, associated_data: D, aead: K) -> DecryptStream<Self, K, D>
     where
         Self: Sized,
         Self::Item: AsRef<[u8]>,
         K: AsRef<Aead> + Send + Sync,
         D: AsRef<[u8]> + Send + Sync,
     {
-        DecryptStream::new(self, aead, additional_data)
+        DecryptStream::new(self, aead, associated_data)
     }
 }
 impl<T> AeadStream for T
@@ -50,7 +50,7 @@ where
     stream: Fuse<S>,
     encryptor: Option<Encryptor<Vec<u8>>>,
     queue: VecDeque<Vec<u8>>,
-    additional_data: D,
+    associated_data: D,
     done: bool,
 }
 
@@ -59,7 +59,7 @@ where
     S: Stream + Sized,
     D: AsRef<[u8]> + Send + Sync,
 {
-    pub fn new<K>(stream: S, segment: Segment, additional_data: D, aead: K) -> Self
+    pub fn new<K>(stream: S, segment: Segment, associated_data: D, aead: K) -> Self
     where
         K: AsRef<Aead>,
     {
@@ -68,7 +68,7 @@ where
             stream: stream.fuse(),
             encryptor: Some(encryptor),
             queue: VecDeque::new(),
-            additional_data,
+            associated_data,
             done: false,
         }
     }
@@ -115,7 +115,7 @@ where
             match this.stream.as_mut().poll_next(cx) {
                 Ready(data) => match data {
                     Some(data) => {
-                        let result = encryptor.update(this.additional_data.as_ref(), data.as_ref());
+                        let result = encryptor.update(this.associated_data.as_ref(), data.as_ref());
                         match result {
                             Err(e) => {
                                 *this.done = true;
@@ -130,7 +130,7 @@ where
                         }
                     }
                     None => {
-                        let result = encryptor.finalize(this.additional_data.as_ref());
+                        let result = encryptor.finalize(this.associated_data.as_ref());
                         match result {
                             Err(e) => {
                                 *this.done = true;
@@ -157,7 +157,7 @@ where
     stream: Fuse<S>,
     decryptor: Option<Decryptor<K, Vec<u8>>>,
     queue: VecDeque<Vec<u8>>,
-    additional_data: D,
+    associated_data: D,
     done: bool,
 }
 
@@ -167,10 +167,10 @@ where
     K: AsRef<Aead> + Send + Sync,
     D: AsRef<[u8]> + Send + Sync,
 {
-    pub fn new(stream: S, aead: K, additional_data: D) -> Self {
+    pub fn new(stream: S, aead: K, associated_data: D) -> Self {
         let decryptor = Decryptor::new(aead, vec![]);
         Self {
-            additional_data,
+            associated_data,
             stream: stream.fuse(),
             decryptor: Some(decryptor),
             queue: VecDeque::new(),
@@ -209,8 +209,8 @@ where
             match this.stream.as_mut().poll_next(cx) {
                 Ready(data) => match data {
                     Some(data) => {
-                        decryptor.update(this.additional_data.as_ref(), data.as_ref())?;
-                        let result = decryptor.next(this.additional_data.as_ref());
+                        decryptor.update(this.associated_data.as_ref(), data.as_ref())?;
+                        let result = decryptor.next(this.associated_data.as_ref());
                         match result {
                             Err(e) => {
                                 *this.done = true;
@@ -226,7 +226,7 @@ where
                         }
                     }
                     None => {
-                        let result = decryptor.finalize(this.additional_data.as_ref());
+                        let result = decryptor.finalize(this.associated_data.as_ref());
                         match result {
                             Err(e) => {
                                 *this.done = true;

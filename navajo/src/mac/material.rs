@@ -7,7 +7,7 @@ use crate::{error::InvalidKeyLength, sensitive::Bytes, Key};
 use super::Algorithm;
 
 #[derive(Clone, ZeroizeOnDrop, Debug, Deserialize, Serialize)]
-pub(super) struct Material {
+pub(crate) struct Material {
     #[zeroize(skip)]
     pub(super) algorithm: Algorithm,
     pub(super) bytes: Bytes,

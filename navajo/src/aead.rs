@@ -1,3 +1,4 @@
+#![doc = include_str!("./aead/README.md")]
 mod algorithm;
 mod cipher;
 mod ciphertext_info;
@@ -22,7 +23,9 @@ use crate::{
 use alloc::vec::Vec;
 use core::mem;
 use futures::{Stream, TryStream};
-use material::Material;
+pub(crate) use material::Material;
+use serde_json::Value;
+
 use size::Size;
 use zeroize::ZeroizeOnDrop;
 
@@ -51,30 +54,33 @@ pub struct Aead {
     keyring: Keyring<Material>,
 }
 impl Aead {
-    pub fn new(algorithm: Algorithm, meta: Option<serde_json::Value>) -> Aead {
+    pub fn new(algorithm: Algorithm, meta: Option<Value>) -> Aead {
         Self {
             keyring: Keyring::new(Material::new(algorithm), crate::Origin::Generated, meta),
         }
     }
 
+    pub(crate) fn from_keyring(keyring: Keyring<Material>) -> Self {
+        Self { keyring }
+    }
     pub fn encrypt_in_place<B: Buffer>(
         &self,
-        additional_data: &[u8],
+        associated_data: &[u8],
         data: &mut B,
     ) -> Result<(), EncryptError> {
         let encryptor = Encryptor::new(self, None, mem::take(data));
         let result = encryptor
-            .finalize(additional_data)?
+            .finalize(associated_data)?
             .next()
             .ok_or(EncryptError::Unspecified)?;
         *data = result;
         Ok(())
     }
 
-    pub fn encrypt(&self, additional_data: &[u8], data: &[u8]) -> Result<Vec<u8>, EncryptError> {
+    pub fn encrypt(&self, associated_data: &[u8], data: &[u8]) -> Result<Vec<u8>, EncryptError> {
         let encryptor = Encryptor::new(self, None, data.to_vec());
         let result = encryptor
-            .finalize(additional_data)?
+            .finalize(associated_data)?
             .next()
             .ok_or(EncryptError::Unspecified)?;
         Ok(result)
@@ -84,21 +90,21 @@ impl Aead {
         &self,
         stream: S,
         segment: Segment,
-        additional_data: D,
+        associated_data: D,
     ) -> EncryptStream<S, D>
     where
         S: Stream,
         S::Item: AsRef<[u8]>,
         D: AsRef<[u8]> + Send + Sync,
     {
-        EncryptStream::new(stream, segment, additional_data, self)
+        EncryptStream::new(stream, segment, associated_data, self)
     }
 
     pub fn encrypt_try_stream<S, D>(
         &self,
         stream: S,
         segment: Segment,
-        additional_data: D,
+        associated_data: D,
     ) -> EncryptTryStream<S, D>
     where
         S: TryStream,
@@ -106,14 +112,14 @@ impl Aead {
         S::Error: Send + Sync,
         D: AsRef<[u8]> + Send + Sync,
     {
-        EncryptTryStream::new(stream, segment, additional_data, self)
+        EncryptTryStream::new(stream, segment, associated_data, self)
     }
 
     #[cfg(feature = "std")]
     pub fn encrypt_writer<F, W, D>(
         &self,
         writer: W,
-        additional_data: D,
+        associated_data: D,
         segment: Segment,
         f: F,
     ) -> Result<(usize, W), std::io::Error>
@@ -122,19 +128,19 @@ impl Aead {
         W: std::io::Write,
         D: AsRef<[u8]>,
     {
-        let mut writer = EncryptWriter::new(writer, segment, additional_data, self);
+        let mut writer = EncryptWriter::new(writer, segment, associated_data, self);
         f(&mut writer)?;
         writer.finalize()
     }
 
     pub fn decrypt_in_place<B: Buffer>(
         &self,
-        additional_data: &[u8],
+        associated_data: &[u8],
         data: &mut B,
     ) -> Result<(), crate::error::DecryptError> {
         let decryptor = Decryptor::new(self, mem::take(data));
         let result = decryptor
-            .finalize(additional_data)?
+            .finalize(associated_data)?
             .next()
             .ok_or(crate::error::DecryptError::Unspecified)?;
         *data = result;
@@ -143,31 +149,31 @@ impl Aead {
 
     pub fn decrypt(
         &self,
-        additional_data: &[u8],
+        associated_data: &[u8],
         data: &[u8],
     ) -> Result<Vec<u8>, crate::error::DecryptError> {
         let data = data.to_vec();
         let decryptor = Decryptor::new(self, data);
         let mut result = Vec::new();
-        for segment in decryptor.finalize(additional_data)? {
+        for segment in decryptor.finalize(associated_data)? {
             result.extend_from_slice(&segment);
         }
         Ok(result)
     }
 
-    pub fn decrypt_steram<S, D>(&self, stream: S, additional_data: D) -> DecryptStream<S, Aead, D>
+    pub fn decrypt_steram<S, D>(&self, stream: S, associated_data: D) -> DecryptStream<S, Aead, D>
     where
         S: Stream,
         S::Item: AsRef<[u8]>,
         D: AsRef<[u8]> + Send + Sync,
     {
-        DecryptStream::new(stream, self.clone(), additional_data)
+        DecryptStream::new(stream, self.clone(), associated_data)
     }
 
     pub fn decrypt_try_steram<S, D>(
         &self,
         stream: S,
-        additional_data: D,
+        associated_data: D,
     ) -> DecryptTryStream<S, Aead, D>
     where
         S: TryStream,
@@ -175,15 +181,15 @@ impl Aead {
         S::Error: Send + Sync,
         D: AsRef<[u8]> + Send + Sync,
     {
-        DecryptTryStream::new(stream, self.clone(), additional_data)
+        DecryptTryStream::new(stream, self.clone(), associated_data)
     }
 
-    pub fn decrypt_reader<R, D>(&self, reader: R, additional_data: D) -> DecryptReader<R, D, &Aead>
+    pub fn decrypt_reader<R, D>(&self, reader: R, associated_data: D) -> DecryptReader<R, D, &Aead>
     where
         R: std::io::Read,
         D: AsRef<[u8]>,
     {
-        DecryptReader::new(reader, additional_data, self)
+        DecryptReader::new(reader, associated_data, self)
     }
 
     /// Returns a [`Vec`] containing [`AeadKeyInfo`] for each key in this
@@ -192,7 +198,7 @@ impl Aead {
         self.keyring.keys().iter().map(AeadKeyInfo::new).collect()
     }
 
-    pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<serde_json::Value>) -> &mut Self {
+    pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<Value>) -> &mut Self {
         self.keyring
             .add(Material::new(algorithm), crate::Origin::Generated, meta);
         self
@@ -231,9 +237,13 @@ impl Aead {
     pub fn update_key_meta(
         &mut self,
         key_id: impl Into<u32>,
-        meta: Option<serde_json::Value>,
+        meta: Option<Value>,
     ) -> Result<AeadKeyInfo, KeyNotFoundError> {
         self.keyring.update_meta(key_id, meta).map(AeadKeyInfo::new)
+    }
+
+    pub(crate) fn keyring(&self) -> &Keyring<Material> {
+        &self.keyring
     }
 }
 impl AsRef<Aead> for Aead {
@@ -286,8 +296,8 @@ mod tests {
         let aad = b"additional data";
         let aead = Aead::new(Algorithm::Aes256Gcm, None);
         let msg = b"hello world".to_vec();
-        aead.encrypt_writer(aad, Segment::FourKilobytes, &mut writer, |writer| {
-            writer.write_all(&msg)
+        aead.encrypt_writer(&mut writer, aad, Segment::FourKilobytes, |w| {
+            w.write_all(&msg)
         })
         .unwrap();
 

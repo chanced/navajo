@@ -29,7 +29,7 @@ where
     W: Write,
     D: AsRef<[u8]>,
 {
-    pub fn new(writer: W, segment: Segment, additional_data: D, aead: impl AsRef<Aead>) -> Self {
+    pub fn new(writer: W, segment: Segment, associated_data: D, aead: impl AsRef<Aead>) -> Self {
         let encryptor = Encryptor::new(
             aead.as_ref(),
             Some(segment),
@@ -38,7 +38,7 @@ where
         Self {
             encryptor,
             writer,
-            aad: additional_data,
+            aad: associated_data,
             counter: 0,
         }
     }

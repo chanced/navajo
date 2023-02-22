@@ -4,44 +4,51 @@
 
 extern crate alloc;
 
-mod keyring;
-pub(crate) use keyring::Keyring;
-
-mod key;
-pub(crate) use key::{Key, KeyMaterial};
-
 pub mod aead;
 pub use aead::Aead;
-
-pub mod error;
-
-mod id;
-
-pub mod rand;
-pub use rand::Random;
-
-mod timestamp;
-
-pub mod hkdf;
-
-pub mod mac;
-pub use mac::Mac;
-
-pub mod constant_time;
-
-pub mod kms;
-pub use kms::Kms;
-
-mod origin;
-pub use origin::Origin;
-
-mod status;
-pub use status::Status;
-
-mod key_info;
-pub use key_info::KeyInfo;
 
 mod buffer;
 pub use buffer::Buffer;
 
+pub mod constant_time;
+
+pub mod daead;
+pub use daead::Daead;
+
+pub mod envelope;
+pub use envelope::{Cleartext, Envelope};
+
+pub mod error;
+pub mod hkdf;
+
+mod id;
+
+mod key;
+pub(crate) use key::{Key, KeyMaterial};
+
+mod key_info;
+pub use key_info::KeyInfo;
+
+mod keyring;
+pub(crate) use keyring::Keyring;
+
+pub mod mac;
+pub use mac::Mac;
+
+mod origin;
+pub use origin::Origin;
+
+pub mod primitive;
+
+pub mod rand;
+pub use rand::Random;
+
 mod sensitive;
+
+mod status;
+pub use status::Status;
+
+pub mod sig;
+pub use sig::{Signature, Signer, Verifier};
+
+mod timestamp;

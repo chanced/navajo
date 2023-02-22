@@ -7,6 +7,10 @@ license = "MIT OR Apache-2.0"
 authors = ["Chance Dinkins"]
 description = "cryptographic APIs"
 
+# -------------------------
+#      Dependencies
+# -------------------------
+
 #cfg-if
 [dependencies.cfg-if]
 
@@ -51,11 +55,7 @@ features = ["alloc", "derive", "rc"]
 [dependencies.serde_json]
 version = "1.0"
 default-features = false
-features = ["alloc"]
-
-# serde_bytes
-[dependencies.serde_bytes]
-version = "0.11"
+features = ["alloc", "raw_value"]
 
 # ring
 [dependencies.ring]

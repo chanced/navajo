@@ -3,7 +3,7 @@ use ring::rand::{SecureRandom as _, SystemRandom};
 
 use random::{rngs::OsRng, CryptoRng, RngCore};
 
-pub(crate) fn fill(dst: &mut [u8]) {
+pub fn fill(dst: &mut [u8]) {
     Random::fill(dst)
 }
 
@@ -24,6 +24,12 @@ impl Random {
             OsRng.fill_bytes(dst);
         });
         OsRng.fill_bytes(dst);
+    }
+}
+
+impl Default for Random {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

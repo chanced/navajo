@@ -16,39 +16,44 @@ pub use algorithm::Algorithm;
 pub use computer::Computer;
 use futures::{Stream, TryStream};
 pub use key_info::MacKeyInfo;
+use serde_json::Value;
 pub use stream::{ComputeStream, MacStream, VerifyStream};
 pub use try_stream::{ComputeTryStream, MacTryStream, VerifyTryStream};
 
 pub use tag::Tag;
 pub use verifier::Verifier;
+use zeroize::ZeroizeOnDrop;
 
 use crate::error::{
     InvalidKeyLength, KeyNotFoundError, MacVerificationError, OpenError, RemoveKeyError, SealError,
 };
-use crate::{Keyring, Kms, Origin};
+use crate::primitive::Primitive;
+use crate::{Envelope, Keyring, Origin};
 use alloc::vec::Vec;
 use context::*;
-use material::*;
+pub(crate) use material::Material;
+use material::{rust_crypto_key, rust_crypto_keys, CryptoKey};
 use output::Output;
 use output::{rust_crypto_internal_tag, rust_crypto_internal_tags};
 
 /// Message Authentication Code Keyring (HMAC & CMAC)
+#[derive(Clone, Debug, ZeroizeOnDrop)]
 pub struct Mac {
     keyring: Keyring<Material>,
 }
 
 impl Mac {
     /// Opens a [`Mac`] keyring from the given `data` and validates the
-    /// authenticity with `additional_data` by means of the [`Kms`].
+    /// authenticity with `associated_data` by means of the [`Envelope`].
     ///
     /// # Errors
     /// Errors if the keyring could not be opened by the or the authenticity
-    /// could not be verified by the [`Kms`] using futures.
+    /// could not be verified by the [`Envelope`] using futures.
     ///
     /// # Example
     /// ```rust
     /// use navajo::mac::{ Mac, Algorithm };
-    /// use navajo::kms::InMemory;
+    /// use navajo::envelope::InMemory;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -56,59 +61,71 @@ impl Mac {
     ///     let primary_key = mac.primary_key();
     ///     // in a real application, you would use a real key management service.
     ///     // InMemory is only suitable for testing.
-    ///     let kms = InMemory::default();
-    ///     let data = Mac::seal(&mac, &[], &kms).await.unwrap();
-    ///     let mac = Mac::open(&data, &[], &kms).await.unwrap();
+    ///     let in_mem = InMemory::default();
+    ///     let data = Mac::seal(&mac, &[], &in_mem).await.unwrap();
+    ///     let mac = Mac::open(&[], &data, &in_mem).await.unwrap();
     ///     assert_eq!(mac.primary_key(), primary_key);
     /// }
     /// ```
-    pub async fn open<K>(data: &[u8], additional_data: &[u8], kms: K) -> Result<Self, OpenError>
+    pub async fn open<E>(
+        associated_data: &[u8],
+        data: &[u8],
+        envelope: &E,
+    ) -> Result<Self, OpenError>
     where
-        K: Kms,
+        E: Envelope + 'static,
     {
-        let keyring = Keyring::<Material>::open(data, additional_data, kms).await?;
-        Ok(Self { keyring })
+        let primitive = Primitive::open(associated_data, data, envelope).await?;
+        if let Some(mac) = primitive.mac() {
+            Ok(mac)
+        } else {
+            Err(OpenError("primitive is not a mac".into()))
+        }
     }
 
     /// Opens a [`Mac`] keyring from the given `data` and validates the
-    /// authenticity with `additional_data` by means of the [`Kms`] using
+    /// authenticity with `associated_data` by means of the [`Envelope`] using
     /// blocking APIs.
     ///
     /// # Errors
     /// Errors if the keyring could not be opened by the or the authenticity
-    /// could not be verified by the [`Kms`].
+    /// could not be verified by the [`Envelope`].
     ///
     /// # Example
     /// ```rust
     /// use navajo::mac::{ Mac, Algorithm };
-    /// use navajo::kms::InMemory;
+    /// use navajo::envelope::InMemory;
     ///
     /// let mac = Mac::new(Algorithm::Sha256, None);
     /// let primary_key = mac.primary_key();
     /// // in a real application, you would use a real key management service.
     /// // InMemory is only suitable for testing.
-    /// let kms = InMemory::default();
-    /// let data = Mac::seal_sync(&mac, &[], &kms).unwrap();
-    /// let mac = Mac::open_sync(&data, &[], &kms).unwrap();
+    /// let in_mem = InMemory::default();
+    /// let data = Mac::seal_sync(&mac, &b"associated data"[..], &in_mem).unwrap();
+    /// let mac = Mac::open_sync(&data, &b"associated data"[..], &in_mem).unwrap();
     /// assert_eq!(mac.primary_key(), primary_key);
     /// ```
-    pub fn open_sync<K>(data: &[u8], additional_data: &[u8], kms: K) -> Result<Self, OpenError>
+    pub fn open_sync<E>(
+        data: &[u8],
+        associated_data: &[u8],
+        envelope: &E,
+    ) -> Result<Self, OpenError>
     where
-        K: Kms,
+        E: Envelope,
     {
-        let keyring = Keyring::<Material>::open_sync(data, additional_data, kms)?;
+        let keyring = Keyring::<Material>::open_sync(data, associated_data, envelope)?;
         Ok(Self { keyring })
     }
-    /// Seals a [`Mac`] keyring and tags it with `additional_data` for future
-    /// authenticationby means of the [`Kms`].
+    /// Seals a [`Mac`] keyring and tags it with `associated_data` for future
+    /// authenticationby means of the [`Envelope`].
     ///
     /// # Errors
-    /// Errors if the keyring could not be sealed by the [`Kms`].
+    /// Errors if the keyring could not be sealed by the [`Envelope`].
     ///
     /// # Example
     /// ```rust
     /// use navajo::mac::{ Mac, Algorithm };
-    /// use navajo::kms::InMemory;
+    /// use navajo::envelope::InMemory;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -116,43 +133,53 @@ impl Mac {
     ///     let primary_key = mac.primary_key();
     ///     // in a real application, you would use a real key management service.
     ///     // InMemory is only suitable for testing.
-    ///     let kms = InMemory::default();
-    ///     let data = Mac::seal(&mac, &[], &kms).await.unwrap();
-    ///     let mac = Mac::open(&data, &[], &kms).await.unwrap();
+    ///     let in_mem = InMemory::default();
+    ///     let data = Mac::seal(&mac, &[], &in_mem).await.unwrap();
+    ///     let mac = Mac::open(&[], &data, &in_mem).await.unwrap();
     ///     assert_eq!(mac.primary_key(), primary_key);
     /// }
     /// ```
-    pub async fn seal<K>(mac: &Self, additional_data: &[u8], kms: K) -> Result<Vec<u8>, SealError>
+    pub async fn seal<E>(
+        mac: &Self,
+        associated_data: &[u8],
+        envelope: &E,
+    ) -> Result<Vec<u8>, SealError>
     where
-        K: Kms,
+        E: Envelope + 'static,
     {
-        Keyring::seal(mac.keyring(), additional_data, kms).await
+        Primitive::Mac(mac.clone())
+            .seal(associated_data, envelope)
+            .await
     }
-    /// Seals a [`Mac`] keyring and tags it with `additional_data` for future
-    /// authenticationby means of the [`Kms`].
+    /// Seals a [`Mac`] keyring and tags it with `associated_data` for future
+    /// authenticationby means of the [`Envelope`].
     ///
     /// # Errors
-    /// Errors if the keyring could not be sealed by the [`Kms`].
+    /// Errors if the keyring could not be sealed by the [`Envelope`].
     ///
     /// # Example
     /// ```rust
     /// use navajo::mac::{ Mac, Algorithm };
-    /// use navajo::kms::InMemory;
+    /// use navajo::envelope::InMemory;
     ///
     /// let mac = Mac::new(Algorithm::Sha256, None);
     /// let primary_key = mac.primary_key();
     /// // in a real application, you would use a real key management service.
     /// // InMemory is only suitable for testing.
-    /// let kms = InMemory::default();
-    /// let data = Mac::seal_sync(&mac, &[], &kms).unwrap();
-    /// let mac = Mac::open_sync(&data, &[], &kms).unwrap();
+    /// let in_mem = InMemory::default();
+    /// let data = Mac::seal_sync(&mac, &[], &in_mem).unwrap();
+    /// let mac = Mac::open_sync(&data, &[], &in_mem).unwrap();
     /// assert_eq!(mac.primary_key(), primary_key);
     /// ```
-    pub fn seal_sync<K>(mac: &Self, additional_data: &[u8], kms: K) -> Result<Vec<u8>, SealError>
+    pub fn seal_sync<K>(
+        mac: &Self,
+        associated_data: &[u8],
+        envelope: &K,
+    ) -> Result<Vec<u8>, SealError>
     where
-        K: Kms,
+        K: Envelope,
     {
-        Keyring::seal_sync(mac.keyring(), additional_data, kms)
+        Keyring::seal_sync(mac.keyring(), associated_data, envelope)
     }
 
     /// Create a new MAC keyring by generating a key for the given [`Algorithm`]
@@ -459,8 +486,11 @@ impl Mac {
         self.keyring.update_meta(key_id, meta).map(MacKeyInfo::new)
     }
 
-    fn keyring(&self) -> &Keyring<Material> {
+    pub(crate) fn keyring(&self) -> &Keyring<Material> {
         &self.keyring
+    }
+    pub(crate) fn from_keyring(keyring: Keyring<Material>) -> Self {
+        Self { keyring }
     }
 
     fn create_key(

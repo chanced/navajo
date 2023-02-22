@@ -35,6 +35,7 @@ impl Salt {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum SaltInner {
     #[cfg(feature = "ring")]
     Ring(RingSalt),

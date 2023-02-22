@@ -1,5 +1,6 @@
 use alloc::vec;
 
+use serde::{Deserialize, Serialize};
 use zeroize::ZeroizeOnDrop;
 
 use super::Algorithm;
@@ -10,8 +11,8 @@ use crate::{
     Buffer,
 };
 
-#[derive(Clone, Debug, ZeroizeOnDrop, Eq)]
-pub(super) struct Material {
+#[derive(Clone, Debug, ZeroizeOnDrop, Eq, Serialize, Deserialize)]
+pub(crate) struct Material {
     bytes: Bytes,
     #[zeroize(skip)]
     algorithm: Algorithm,
