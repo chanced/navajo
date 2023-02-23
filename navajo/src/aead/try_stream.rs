@@ -6,36 +6,31 @@ use pin_project::pin_project;
 
 use crate::{
     error::{DecryptTryStreamError, EncryptTryStreamError},
-    Aead,
+    Aad, Aead,
 };
 
 use super::{Decryptor, Encryptor, Segment};
 
 pub trait AeadTryStream: TryStream {
-    fn encrypt<T, D>(
-        self,
-        segment: Segment,
-        associated_data: D,
-        aead: T,
-    ) -> EncryptTryStream<Self, D>
+    fn encrypt<T, A>(self, segment: Segment, aad: Aad<A>, aead: T) -> EncryptTryStream<Self, A>
     where
         Self: Sized,
         Self::Ok: AsRef<[u8]>,
         Self::Error: Send + Sync,
         T: AsRef<Aead>,
-        D: AsRef<[u8]> + Send + Sync,
+        A: AsRef<[u8]> + Send + Sync,
     {
-        EncryptTryStream::new(self, segment, associated_data, aead)
+        EncryptTryStream::new(self, segment, aad, aead)
     }
-    fn decrypt<K, D>(self, associated_data: D, aead: K) -> DecryptTryStream<Self, K, D>
+    fn decrypt<K, A>(self, aad: Aad<A>, aead: K) -> DecryptTryStream<Self, K, A>
     where
         Self: Sized,
         Self::Ok: AsRef<[u8]>,
         Self::Error: Send + Sync,
         K: AsRef<Aead> + Send + Sync,
-        D: AsRef<[u8]> + Send + Sync,
+        A: AsRef<[u8]> + Send + Sync,
     {
-        DecryptTryStream::new(self, aead, associated_data)
+        DecryptTryStream::new(self, aead, aad)
     }
 }
 impl<T> AeadTryStream for T
@@ -47,29 +42,29 @@ where
 }
 
 #[pin_project]
-pub struct EncryptTryStream<S, D>
+pub struct EncryptTryStream<S, A>
 where
     S: TryStream + Sized,
     S::Ok: AsRef<[u8]>,
     S::Error: Send + Sync,
-    D: AsRef<[u8]> + Send + Sync,
+    A: AsRef<[u8]> + Send + Sync,
 {
     #[pin]
     stream: S,
     encryptor: Option<Encryptor<Vec<u8>>>,
     queue: VecDeque<Vec<u8>>,
-    associated_data: D,
+    aad: Aad<A>,
     done: bool,
 }
 
-impl<S, D> EncryptTryStream<S, D>
+impl<S, A> EncryptTryStream<S, A>
 where
     S: TryStream + Sized,
     S::Ok: AsRef<[u8]>,
     S::Error: Send + Sync,
-    D: AsRef<[u8]> + Send + Sync,
+    A: AsRef<[u8]> + Send + Sync,
 {
-    pub fn new<K>(stream: S, segment: Segment, associated_data: D, aead: K) -> Self
+    pub fn new<K>(stream: S, segment: Segment, aad: Aad<A>, aead: K) -> Self
     where
         K: AsRef<Aead>,
     {
@@ -78,7 +73,7 @@ where
             stream,
             encryptor: Some(encryptor),
             queue: VecDeque::new(),
-            associated_data,
+            aad,
             done: false,
         }
     }
@@ -125,8 +120,7 @@ where
                 Ready(data) => match data {
                     Some(resp) => match resp {
                         Ok(data) => {
-                            let result =
-                                encryptor.update(this.associated_data.as_ref(), data.as_ref());
+                            let result = encryptor.update(Aad(this.aad.as_ref()), data.as_ref());
                             match result {
                                 Err(e) => {
                                     *this.done = true;
@@ -146,7 +140,7 @@ where
                         }
                     },
                     None => {
-                        let result = encryptor.finalize(this.associated_data.as_ref());
+                        let result = encryptor.finalize(Aad(this.aad.as_ref()));
                         match result {
                             Err(e) => {
                                 *this.done = true;
@@ -164,29 +158,30 @@ where
     }
 }
 #[pin_project]
-pub struct DecryptTryStream<S, K, D>
+pub struct DecryptTryStream<S, K, A>
 where
     S: TryStream + Sized,
     K: AsRef<Aead> + Send + Sync,
+    A: AsRef<[u8]> + Send + Sync,
 {
     #[pin]
     stream: S,
     decryptor: Option<Decryptor<K, Vec<u8>>>,
     queue: VecDeque<Vec<u8>>,
-    associated_data: D,
+    aad: Aad<A>,
     done: bool,
 }
 
-impl<S, K, D> DecryptTryStream<S, K, D>
+impl<S, K, A> DecryptTryStream<S, K, A>
 where
     S: TryStream + Sized,
     K: AsRef<Aead> + Send + Sync,
-    D: AsRef<[u8]> + Send + Sync,
+    A: AsRef<[u8]> + Send + Sync,
 {
-    pub fn new(stream: S, aead: K, associated_data: D) -> Self {
+    pub fn new(stream: S, aead: K, aad: Aad<A>) -> Self {
         let decryptor = Decryptor::new(aead, vec![]);
         Self {
-            associated_data,
+            aad,
             stream,
             decryptor: Some(decryptor),
             queue: VecDeque::new(),
@@ -225,8 +220,8 @@ where
                 Ready(resp) => match resp {
                     Some(result) => match result {
                         Ok(data) => {
-                            decryptor.update(this.associated_data.as_ref(), data.as_ref())?;
-                            match decryptor.next(this.associated_data.as_ref()) {
+                            decryptor.update(Aad(this.aad.as_ref()), data.as_ref())?;
+                            match decryptor.next(Aad(this.aad.as_ref())) {
                                 Err(e) => {
                                     *this.done = true;
                                     return Ready(Some(Err(e.into())));
@@ -246,7 +241,7 @@ where
                         }
                     },
                     None => {
-                        let result = decryptor.finalize(this.associated_data.as_ref());
+                        let result = decryptor.finalize(Aad(this.aad.as_ref()));
                         match result {
                             Err(e) => {
                                 *this.done = true;
@@ -283,12 +278,13 @@ mod tests {
         .map(to_try_stream);
 
         let aead = Aead::new(Algorithm::Aes256Gcm, None);
-        let encrypt_stream = data_stream.encrypt(Segment::FourKilobytes, vec![], aead.clone());
+        let encrypt_stream =
+            data_stream.encrypt(Segment::FourKilobytes, Aad::empty(), aead.clone());
         let ciphertext: Vec<u8> = encrypt_stream.try_concat().await.unwrap();
 
         let ciphertext_stream =
             stream::iter(ciphertext.chunks(40).map(Vec::from)).map(to_try_stream);
-        let decrypt_stream = ciphertext_stream.decrypt(vec![], aead);
+        let decrypt_stream = ciphertext_stream.decrypt(Aad::empty(), aead);
         let result = decrypt_stream.try_concat().await.unwrap();
         assert_eq!(result, b"hello world");
     }
@@ -301,7 +297,7 @@ mod tests {
         let aead = Aead::new(algorithm, None);
         let encrypt_stream = data_stream.encrypt(
             Segment::FourKilobytes,
-            Vec::from(&b"additional data"[..]),
+            Aad(Vec::from(&b"additional data"[..])),
             aead.clone(),
         );
         let result: Vec<Vec<u8>> = encrypt_stream.try_collect().await.unwrap();
@@ -312,7 +308,7 @@ mod tests {
         let ciphertext_stream =
             stream::iter(ciphertext.chunks(40).map(Vec::from)).map(to_try_stream);
         let cleartext: Vec<u8> = ciphertext_stream
-            .decrypt(Vec::from(&b"additional data"[..]), aead)
+            .decrypt(Vec::from(&b"additional data"[..]).into(), aead)
             .try_concat()
             .await
             .unwrap();

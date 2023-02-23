@@ -21,4 +21,8 @@ impl KeyMaterial for Material {
     fn algorithm(&self) -> Self::Algorithm {
         self.algorithm
     }
+
+    fn kind() -> crate::primitive::Kind {
+        crate::primitive::Kind::Daead
+    }
 }

@@ -11,7 +11,7 @@ use crate::{
     error::{EncryptError, UnspecifiedError},
     hkdf,
     key::Key,
-    rand, sensitive, Aead, Buffer,
+    rand, sensitive, Aad, Aead, Buffer,
 };
 
 use super::{
@@ -66,9 +66,13 @@ where
         }
     }
 
-    pub fn update(&mut self, associated_data: &[u8], data: &[u8]) -> Result<(), EncryptError> {
-        self.buf.extend_from_slice(data);
-        while let Some(buf) = self.try_encrypt_seg(associated_data)? {
+    pub fn update<A, C>(&mut self, aad: Aad<A>, cleartext: C) -> Result<(), EncryptError>
+    where
+        A: AsRef<[u8]>,
+        C: AsRef<[u8]>,
+    {
+        self.buf.extend_from_slice(cleartext.as_ref());
+        while let Some(buf) = self.try_encrypt_seg(aad.as_ref())? {
             self.segments.push_back(buf);
         }
         Ok(())
@@ -116,24 +120,27 @@ where
     ///
     /// Finalize **must** be called or the remaining segments will **not** be encrypted.
     #[must_use = "finalize must be called"]
-    pub fn finalize(mut self, aad: &[u8]) -> Result<IntoIter<B>, EncryptError> {
+    pub fn finalize<A>(mut self, aad: Aad<A>) -> Result<IntoIter<B>, EncryptError>
+    where
+        A: AsRef<[u8]>,
+    {
         if self.counter() == 0 {
             let buf_len = self.buffered_len();
             if buf_len == 0 {
                 return Err(EncryptError::EmptyCleartext);
             }
             if self.segment.is_none() {
-                return self.finalize_one_shot(aad);
+                return self.finalize_one_shot(aad.as_ref());
             }
             if let Some(segment) = self.segment {
                 if buf_len
                     <= segment - (self.algorithm().online_header_len() + self.algorithm().tag_len())
                 {
-                    return self.finalize_one_shot(aad);
+                    return self.finalize_one_shot(aad.as_ref());
                 }
             }
         }
-        while let Some(seg) = self.try_encrypt_seg(aad)? {
+        while let Some(seg) = self.try_encrypt_seg(aad.as_ref())? {
             self.segments.push_back(seg);
         }
         self.last(aad)
@@ -210,7 +217,10 @@ where
         (salt_bytes, sensitive::Bytes::from(derived_key))
     }
 
-    fn last(mut self, aad: &[u8]) -> Result<IntoIter<B>, EncryptError> {
+    fn last<A>(mut self, aad: Aad<A>) -> Result<IntoIter<B>, EncryptError>
+    where
+        A: AsRef<[u8]>,
+    {
         let cipher = self.cipher.take().ok_or(EncryptError::Unspecified)?;
         if self.buffered_len() == 0 {
             let segments = mem::take(&mut self.segments);
@@ -219,7 +229,7 @@ where
         let nonce_seq = self.nonce_seq.take().ok_or(UnspecifiedError)?;
         let nonce = nonce_seq.last()?;
         let mut buf = mem::take(&mut self.buf.0);
-        cipher.encrypt_in_place(nonce, aad, &mut buf)?;
+        cipher.encrypt_in_place(nonce, aad.as_ref(), &mut buf)?;
         self.segments.push_back(buf);
         let segments = mem::take(&mut self.segments);
         Ok(segments.into_iter())
@@ -231,7 +241,7 @@ mod tests {
     use crate::{
         aead::{segment::FOUR_KB, Algorithm, Method, Segment},
         keyring::KEY_ID_LEN,
-        Aead,
+        Aad, Aead,
     };
 
     use super::Encryptor;
@@ -243,7 +253,7 @@ mod tests {
         let mut buf = vec![0u8; 100];
         crate::rand::fill(&mut buf);
         let encryptor = Encryptor::new(&aead, None, buf);
-        let result = encryptor.finalize(&[]).unwrap().next().unwrap();
+        let result = encryptor.finalize(Aad([])).unwrap().next().unwrap();
         assert!(result.len() > 100);
         assert_eq!(result[0], Method::Online);
         assert_eq!(result[1..5], key.id().to_be_bytes()[..]);
@@ -273,7 +283,7 @@ mod tests {
         let mut buf = vec![0u8; 65536];
         crate::rand::fill(&mut buf);
         let encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), buf);
-        let result: Vec<Vec<u8>> = encryptor.finalize(&[]).unwrap().collect();
+        let result: Vec<Vec<u8>> = encryptor.finalize(Aad::empty()).unwrap().collect();
         assert!(result.len() == 17);
         assert_eq!(
             result[0][0],
@@ -297,7 +307,11 @@ mod tests {
 
         let data = b"hello world.".to_vec();
         let enc = Encryptor::new(&aead, None, data);
-        let ciphertext = enc.finalize(b"additional data").unwrap().next().unwrap();
+        let ciphertext = enc
+            .finalize(Aad(b"additional data"))
+            .unwrap()
+            .next()
+            .unwrap();
 
         assert_ne!(ciphertext[Algorithm::Aes256Gcm.online_header_len()..], msg);
         assert_eq!(ciphertext[0], Method::Online);
@@ -320,17 +334,17 @@ mod tests {
 
         let mut encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), vec![]);
         let mut ciphertext_chunks: Vec<Vec<u8>> = vec![];
-        let associated_data = b"additional data";
+        let aad = b"additional data";
 
         chunks.for_each(|chunk| {
-            encryptor.update(associated_data, &chunk).unwrap();
+            encryptor.update(Aad(aad), &chunk).unwrap();
             if let Some(result) = encryptor.next() {
                 ciphertext_chunks.push(result);
             }
         });
         assert_eq!(encryptor.counter(), 1);
         let nonce_prefix = encryptor.nonce_seq.as_ref().unwrap().prefix().to_vec();
-        ciphertext_chunks.extend(encryptor.finalize(associated_data).unwrap());
+        ciphertext_chunks.extend(encryptor.finalize(Aad(aad)).unwrap());
 
         assert_eq!(ciphertext_chunks.len(), 2);
         assert_eq!(ciphertext_chunks[0].len(), 4096);

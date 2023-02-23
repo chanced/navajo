@@ -19,7 +19,7 @@ const AES192_KEY_LEN: usize = 24;
 const AES256_KEY_LEN: usize = 32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[repr(u8)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum Algorithm {
     // HMAC
     #[cfg(feature = "sha2")]
@@ -160,6 +160,41 @@ impl Algorithm {
             Algorithm::Aes192 => AES192_KEY_LEN,
             #[cfg(feature = "aes")]
             Algorithm::Aes256 => AES256_KEY_LEN,
+        }
+    }
+}
+
+impl core::fmt::Display for Algorithm {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            #[cfg(feature = "sha2")]
+            Algorithm::Sha256 => write!(f, "SHA256"),
+            #[cfg(feature = "sha2")]
+            Algorithm::Sha224 => write!(f, "SHA224"),
+            #[cfg(feature = "sha2")]
+            Algorithm::Sha384 => write!(f, "SHA384"),
+            #[cfg(feature = "sha2")]
+            Algorithm::Sha512 => write!(f, "SHA512"),
+            #[cfg(feature = "sha2")]
+            Algorithm::Sha512_224 => write!(f, "SHA512_224"),
+            #[cfg(feature = "sha2")]
+            Algorithm::Sha512_256 => write!(f, "SHA512_256"),
+            #[cfg(feature = "sha3")]
+            Algorithm::Sha3_256 => write!(f, "SHA3_256"),
+            #[cfg(feature = "sha3")]
+            Algorithm::Sha3_224 => write!(f, "SHA3_224"),
+            #[cfg(feature = "sha3")]
+            Algorithm::Sha3_384 => write!(f, "SHA3_384"),
+            #[cfg(feature = "sha3")]
+            Algorithm::Sha3_512 => write!(f, "SHA3_512"),
+            #[cfg(feature = "blake3")]
+            Algorithm::Blake3 => write!(f, "BLAKE3"),
+            #[cfg(feature = "aes")]
+            Algorithm::Aes128 => write!(f, "AES128"),
+            #[cfg(feature = "aes")]
+            Algorithm::Aes192 => write!(f, "AES192"),
+            #[cfg(feature = "aes")]
+            Algorithm::Aes256 => write!(f, "AES256"),
         }
     }
 }

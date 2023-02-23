@@ -16,7 +16,6 @@ pub use algorithm::Algorithm;
 pub use computer::Computer;
 use futures::{Stream, TryStream};
 pub use key_info::MacKeyInfo;
-use serde_json::Value;
 pub use stream::{ComputeStream, MacStream, VerifyStream};
 pub use try_stream::{ComputeTryStream, MacTryStream, VerifyTryStream};
 
@@ -28,7 +27,7 @@ use crate::error::{
     InvalidKeyLength, KeyNotFoundError, MacVerificationError, OpenError, RemoveKeyError, SealError,
 };
 use crate::primitive::Primitive;
-use crate::{Envelope, Keyring, Origin};
+use crate::{Aad, Envelope, Keyring, Origin};
 use alloc::vec::Vec;
 use context::*;
 pub(crate) use material::Material;
@@ -44,7 +43,7 @@ pub struct Mac {
 
 impl Mac {
     /// Opens a [`Mac`] keyring from the given `data` and validates the
-    /// authenticity with `associated_data` by means of the [`Envelope`].
+    /// authenticity with `aad` by means of the [`Envelope`].
     ///
     /// # Errors
     /// Errors if the keyring could not be opened by the or the authenticity
@@ -52,6 +51,7 @@ impl Mac {
     ///
     /// # Example
     /// ```rust
+    /// use navajo::Aad;
     /// use navajo::mac::{ Mac, Algorithm };
     /// use navajo::envelope::InMemory;
     ///
@@ -62,20 +62,17 @@ impl Mac {
     ///     // in a real application, you would use a real key management service.
     ///     // InMemory is only suitable for testing.
     ///     let in_mem = InMemory::default();
-    ///     let data = Mac::seal(&mac, &[], &in_mem).await.unwrap();
-    ///     let mac = Mac::open(&[], &data, &in_mem).await.unwrap();
+    ///     let data = Mac::seal(&mac, Aad::empty(), &in_mem).await.unwrap();
+    ///     let mac = Mac::open(Aad::empty(), &data, &in_mem).await.unwrap();
     ///     assert_eq!(mac.primary_key(), primary_key);
     /// }
     /// ```
-    pub async fn open<E>(
-        associated_data: &[u8],
-        data: &[u8],
-        envelope: &E,
-    ) -> Result<Self, OpenError>
+    pub async fn open<A, E>(aad: Aad<A>, data: &[u8], envelope: &E) -> Result<Self, OpenError>
     where
         E: Envelope + 'static,
+        A: AsRef<[u8]> + Send + Sync,
     {
-        let primitive = Primitive::open(associated_data, data, envelope).await?;
+        let primitive = Primitive::open(aad, data, envelope).await?;
         if let Some(mac) = primitive.mac() {
             Ok(mac)
         } else {
@@ -84,7 +81,7 @@ impl Mac {
     }
 
     /// Opens a [`Mac`] keyring from the given `data` and validates the
-    /// authenticity with `associated_data` by means of the [`Envelope`] using
+    /// authenticity with `aad` by means of the [`Envelope`] using
     /// blocking APIs.
     ///
     /// # Errors
@@ -93,6 +90,7 @@ impl Mac {
     ///
     /// # Example
     /// ```rust
+    /// use navajo::Aad;
     /// use navajo::mac::{ Mac, Algorithm };
     /// use navajo::envelope::InMemory;
     ///
@@ -101,22 +99,24 @@ impl Mac {
     /// // in a real application, you would use a real key management service.
     /// // InMemory is only suitable for testing.
     /// let in_mem = InMemory::default();
-    /// let data = Mac::seal_sync(&mac, &b"associated data"[..], &in_mem).unwrap();
-    /// let mac = Mac::open_sync(&data, &b"associated data"[..], &in_mem).unwrap();
+    /// let data = Mac::seal_sync(&mac, Aad(&b"associated data"), &in_mem).unwrap();
+    /// let mac = Mac::open_sync(Aad(&b"associated data"), &data, &in_mem).unwrap();
     /// assert_eq!(mac.primary_key(), primary_key);
     /// ```
-    pub fn open_sync<E>(
-        data: &[u8],
-        associated_data: &[u8],
-        envelope: &E,
-    ) -> Result<Self, OpenError>
+    pub fn open_sync<A, E, C>(aad: Aad<A>, ciphertext: C, envelope: &E) -> Result<Self, OpenError>
     where
-        E: Envelope,
+        A: AsRef<[u8]>,
+        C: AsRef<[u8]>,
+        E: Envelope + 'static,
     {
-        let keyring = Keyring::<Material>::open_sync(data, associated_data, envelope)?;
-        Ok(Self { keyring })
+        let primitive = Primitive::open_sync(aad, ciphertext, envelope)?;
+        if let Some(mac) = primitive.mac() {
+            Ok(mac)
+        } else {
+            Err(OpenError("primitive is not a mac".into()))
+        }
     }
-    /// Seals a [`Mac`] keyring and tags it with `associated_data` for future
+    /// Seals a [`Mac`] keyring and tags it with `aad` for future
     /// authenticationby means of the [`Envelope`].
     ///
     /// # Errors
@@ -124,6 +124,7 @@ impl Mac {
     ///
     /// # Example
     /// ```rust
+    /// use navajo::Aad;
     /// use navajo::mac::{ Mac, Algorithm };
     /// use navajo::envelope::InMemory;
     ///
@@ -134,24 +135,19 @@ impl Mac {
     ///     // in a real application, you would use a real key management service.
     ///     // InMemory is only suitable for testing.
     ///     let in_mem = InMemory::default();
-    ///     let data = Mac::seal(&mac, &[], &in_mem).await.unwrap();
-    ///     let mac = Mac::open(&[], &data, &in_mem).await.unwrap();
+    ///     let data = Mac::seal(&mac, Aad::empty(), &in_mem).await.unwrap();
+    ///     let mac = Mac::open(Aad::empty(), &data, &in_mem).await.unwrap();
     ///     assert_eq!(mac.primary_key(), primary_key);
     /// }
     /// ```
-    pub async fn seal<E>(
-        mac: &Self,
-        associated_data: &[u8],
-        envelope: &E,
-    ) -> Result<Vec<u8>, SealError>
+    pub async fn seal<A, E>(mac: &Self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
     where
+        A: AsRef<[u8]> + Send + Sync,
         E: Envelope + 'static,
     {
-        Primitive::Mac(mac.clone())
-            .seal(associated_data, envelope)
-            .await
+        Primitive::Mac(mac.clone()).seal(aad, envelope).await
     }
-    /// Seals a [`Mac`] keyring and tags it with `associated_data` for future
+    /// Seals a [`Mac`] keyring and tags it with `aad` for future
     /// authenticationby means of the [`Envelope`].
     ///
     /// # Errors
@@ -159,6 +155,7 @@ impl Mac {
     ///
     /// # Example
     /// ```rust
+    /// use navajo::Aad;
     /// use navajo::mac::{ Mac, Algorithm };
     /// use navajo::envelope::InMemory;
     ///
@@ -167,19 +164,16 @@ impl Mac {
     /// // in a real application, you would use a real key management service.
     /// // InMemory is only suitable for testing.
     /// let in_mem = InMemory::default();
-    /// let data = Mac::seal_sync(&mac, &[], &in_mem).unwrap();
-    /// let mac = Mac::open_sync(&data, &[], &in_mem).unwrap();
+    /// let ciphertext = Mac::seal_sync(&mac, Aad::empty(), &in_mem).unwrap();
+    /// let mac = Mac::open_sync(Aad::empty(), ciphertext, &in_mem).unwrap();
     /// assert_eq!(mac.primary_key(), primary_key);
     /// ```
-    pub fn seal_sync<K>(
-        mac: &Self,
-        associated_data: &[u8],
-        envelope: &K,
-    ) -> Result<Vec<u8>, SealError>
+    pub fn seal_sync<A, E>(mac: &Self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
     where
-        K: Envelope,
+        A: AsRef<[u8]>,
+        E: Envelope,
     {
-        Keyring::seal_sync(mac.keyring(), associated_data, envelope)
+        Keyring::seal_sync(mac.keyring(), aad, envelope)
     }
 
     /// Create a new MAC keyring by generating a key for the given [`Algorithm`]
@@ -190,7 +184,7 @@ impl Mac {
         let material = Material::new(&bytes, None, algorithm).unwrap();
 
         Self {
-            keyring: Keyring::new(material, Origin::Generated, meta),
+            keyring: Keyring::new(material, Origin::Navajo, meta),
         }
     }
 
@@ -209,16 +203,19 @@ impl Mac {
     ///
     /// assert_eq!(encode(tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a");
     /// ```
-    pub fn new_with_external_key(
-        key: &[u8],
+    pub fn new_with_external_key<K>(
+        key: K,
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
         meta: Option<serde_json::Value>,
-    ) -> Result<Self, InvalidKeyLength> {
+    ) -> Result<Self, InvalidKeyLength>
+    where
+        K: AsRef<[u8]>,
+    {
         // safe, the key is generated
-        let material = Material::new(key, prefix, algorithm)?;
+        let material = Material::new(key.as_ref(), prefix, algorithm)?;
         Ok(Self {
-            keyring: Keyring::new(material, Origin::Generated, meta),
+            keyring: Keyring::new(material, Origin::Navajo, meta),
         })
     }
 
@@ -427,13 +424,9 @@ impl Mac {
         VerifyTryStream::new(stream, verify)
     }
 
-    pub fn add_generated_key(
-        &mut self,
-        algorithm: Algorithm,
-        meta: Option<serde_json::Value>,
-    ) -> Result<MacKeyInfo, InvalidKeyLength> {
+    pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<serde_json::Value>) -> MacKeyInfo {
         let bytes = algorithm.generate_key();
-        self.create_key(algorithm, &bytes, None, Origin::Generated, meta)
+        self.create_key(algorithm, &bytes, None, Origin::Navajo, meta).unwrap() // safe, the key is generated
     }
     pub fn add_external_key(
         &mut self,
@@ -496,12 +489,12 @@ impl Mac {
     fn create_key(
         &mut self,
         algorithm: Algorithm,
-        bytes: &[u8],
+        value: &[u8],
         prefix: Option<&[u8]>,
         origin: Origin,
         meta: Option<serde_json::Value>,
     ) -> Result<MacKeyInfo, InvalidKeyLength> {
-        let material = Material::new(bytes, prefix, algorithm)?;
+        let material = Material::new(value, prefix, algorithm)?;
         Ok(MacKeyInfo::new(self.keyring.add(material, origin, meta)))
     }
 }

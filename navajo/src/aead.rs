@@ -18,7 +18,7 @@ mod try_stream;
 use crate::{
     error::{EncryptError, KeyNotFoundError, RemoveKeyError},
     keyring::Keyring,
-    Buffer,
+    Aad, Buffer,
 };
 use alloc::vec::Vec;
 use core::mem;
@@ -56,140 +56,148 @@ pub struct Aead {
 impl Aead {
     pub fn new(algorithm: Algorithm, meta: Option<Value>) -> Aead {
         Self {
-            keyring: Keyring::new(Material::new(algorithm), crate::Origin::Generated, meta),
+            keyring: Keyring::new(Material::new(algorithm), crate::Origin::Navajo, meta),
         }
     }
 
     pub(crate) fn from_keyring(keyring: Keyring<Material>) -> Self {
         Self { keyring }
     }
-    pub fn encrypt_in_place<B: Buffer>(
-        &self,
-        associated_data: &[u8],
-        data: &mut B,
-    ) -> Result<(), EncryptError> {
+    pub fn encrypt_in_place<B, A>(&self, aad: Aad<A>, data: &mut B) -> Result<(), EncryptError>
+    where
+        A: AsRef<[u8]>,
+        B: Buffer,
+    {
         let encryptor = Encryptor::new(self, None, mem::take(data));
         let result = encryptor
-            .finalize(associated_data)?
+            .finalize(aad)?
             .next()
             .ok_or(EncryptError::Unspecified)?;
         *data = result;
         Ok(())
     }
 
-    pub fn encrypt(&self, associated_data: &[u8], data: &[u8]) -> Result<Vec<u8>, EncryptError> {
-        let encryptor = Encryptor::new(self, None, data.to_vec());
+    pub fn encrypt<A, B>(&self, aad: Aad<A>, data: B) -> Result<Vec<u8>, EncryptError>
+    where
+        A: AsRef<[u8]>,
+        B: AsRef<[u8]>,
+    {
+        let encryptor = Encryptor::new(self, None, data.as_ref().to_vec());
         let result = encryptor
-            .finalize(associated_data)?
+            .finalize(aad)?
             .next()
             .ok_or(EncryptError::Unspecified)?;
         Ok(result)
     }
 
-    pub fn encrypt_stream<S, D>(
+    pub fn encrypt_stream<S, A>(
         &self,
         stream: S,
+        aad: Aad<A>,
         segment: Segment,
-        associated_data: D,
-    ) -> EncryptStream<S, D>
+    ) -> EncryptStream<S, A>
     where
         S: Stream,
         S::Item: AsRef<[u8]>,
-        D: AsRef<[u8]> + Send + Sync,
+        A: AsRef<[u8]> + Send + Sync,
     {
-        EncryptStream::new(stream, segment, associated_data, self)
+        EncryptStream::new(stream, segment, aad, self)
     }
 
-    pub fn encrypt_try_stream<S, D>(
+    pub fn encrypt_try_stream<S, A>(
         &self,
         stream: S,
         segment: Segment,
-        associated_data: D,
-    ) -> EncryptTryStream<S, D>
+        aad: Aad<A>,
+    ) -> EncryptTryStream<S, A>
     where
         S: TryStream,
         S::Ok: AsRef<[u8]>,
         S::Error: Send + Sync,
-        D: AsRef<[u8]> + Send + Sync,
+        A: AsRef<[u8]> + Send + Sync,
     {
-        EncryptTryStream::new(stream, segment, associated_data, self)
+        EncryptTryStream::new(stream, segment, aad, self)
     }
 
     #[cfg(feature = "std")]
-    pub fn encrypt_writer<F, W, D>(
+    pub fn encrypt_writer<'w, F, W, A>(
         &self,
-        writer: W,
-        associated_data: D,
+        writer: &'w mut W,
+        aad: Aad<A>,
         segment: Segment,
         f: F,
-    ) -> Result<(usize, W), std::io::Error>
+    ) -> Result<usize, std::io::Error>
     where
-        F: FnOnce(&mut EncryptWriter<W, D>) -> Result<(), std::io::Error>,
+        F: FnOnce(&mut EncryptWriter<'w, W, A>) -> Result<(), std::io::Error>,
         W: std::io::Write,
-        D: AsRef<[u8]>,
+        A: 'w + AsRef<[u8]>,
     {
-        let mut writer = EncryptWriter::new(writer, segment, associated_data, self);
+        let mut writer = EncryptWriter::new(writer, segment, aad, self);
         f(&mut writer)?;
         writer.finalize()
     }
 
-    pub fn decrypt_in_place<B: Buffer>(
+    pub fn decrypt_in_place<A, B>(
         &self,
-        associated_data: &[u8],
+        aad: Aad<A>,
         data: &mut B,
-    ) -> Result<(), crate::error::DecryptError> {
+    ) -> Result<(), crate::error::DecryptError>
+    where
+        A: AsRef<[u8]>,
+        B: Buffer,
+    {
         let decryptor = Decryptor::new(self, mem::take(data));
         let result = decryptor
-            .finalize(associated_data)?
+            .finalize(aad)?
             .next()
             .ok_or(crate::error::DecryptError::Unspecified)?;
         *data = result;
         Ok(())
     }
 
-    pub fn decrypt(
+    pub fn decrypt<A, C>(
         &self,
-        associated_data: &[u8],
-        data: &[u8],
-    ) -> Result<Vec<u8>, crate::error::DecryptError> {
-        let data = data.to_vec();
+        aad: Aad<A>,
+        cleartext: C,
+    ) -> Result<Vec<u8>, crate::error::DecryptError>
+    where
+        A: AsRef<[u8]>,
+        C: AsRef<[u8]>,
+    {
+        let data = cleartext.as_ref().to_vec();
         let decryptor = Decryptor::new(self, data);
         let mut result = Vec::new();
-        for segment in decryptor.finalize(associated_data)? {
+        for segment in decryptor.finalize(aad)? {
             result.extend_from_slice(&segment);
         }
         Ok(result)
     }
 
-    pub fn decrypt_steram<S, D>(&self, stream: S, associated_data: D) -> DecryptStream<S, Aead, D>
+    pub fn decrypt_steram<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptStream<S, Aead, A>
     where
         S: Stream,
         S::Item: AsRef<[u8]>,
-        D: AsRef<[u8]> + Send + Sync,
+        A: AsRef<[u8]> + Send + Sync,
     {
-        DecryptStream::new(stream, self.clone(), associated_data)
+        DecryptStream::new(stream, self.clone(), aad)
     }
 
-    pub fn decrypt_try_steram<S, D>(
-        &self,
-        stream: S,
-        associated_data: D,
-    ) -> DecryptTryStream<S, Aead, D>
+    pub fn decrypt_try_steram<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptTryStream<S, Aead, A>
     where
         S: TryStream,
         S::Ok: AsRef<[u8]>,
         S::Error: Send + Sync,
-        D: AsRef<[u8]> + Send + Sync,
+        A: AsRef<[u8]> + Send + Sync,
     {
-        DecryptTryStream::new(stream, self.clone(), associated_data)
+        DecryptTryStream::new(stream, self.clone(), aad)
     }
 
-    pub fn decrypt_reader<R, D>(&self, reader: R, associated_data: D) -> DecryptReader<R, D, &Aead>
+    pub fn decrypt_reader<R, A>(&self, reader: R, aad: Aad<A>) -> DecryptReader<R, A, &Aead>
     where
         R: std::io::Read,
-        D: AsRef<[u8]>,
+        A: AsRef<[u8]>,
     {
-        DecryptReader::new(reader, associated_data, self)
+        DecryptReader::new(reader, aad, self)
     }
 
     /// Returns a [`Vec`] containing [`AeadKeyInfo`] for each key in this
@@ -200,7 +208,7 @@ impl Aead {
 
     pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<Value>) -> &mut Self {
         self.keyring
-            .add(Material::new(algorithm), crate::Origin::Generated, meta);
+            .add(Material::new(algorithm), crate::Origin::Navajo, meta);
         self
     }
 
@@ -267,7 +275,7 @@ mod tests {
     fn test_encrypt_in_place() {
         let aead = Aead::new(Algorithm::Aes256Gcm, None);
         let mut data = b"hello world".to_vec();
-        aead.encrypt_in_place(b"additional data", &mut data)
+        aead.encrypt_in_place(Aad(b"additional data"), &mut data)
             .unwrap();
         assert_ne!(data, b"hello world");
         assert!(!data.is_empty());
@@ -276,14 +284,14 @@ mod tests {
     fn test_decrypt_in_place() {
         let aead = Aead::new(Algorithm::Aes256Gcm, None);
         let mut data = b"hello world".to_vec();
-        aead.encrypt_in_place(b"additional data", &mut data)
+        aead.encrypt_in_place(Aad(b"additional data"), &mut data)
             .unwrap();
         let aead = Aead::new(Algorithm::Aes256Gcm, None);
         let mut data = b"hello world".to_vec();
-        aead.encrypt_in_place(b"additional data", &mut data)
+        aead.encrypt_in_place(Aad(b"additional data"), &mut data)
             .unwrap();
         assert_ne!(data, b"hello world");
-        aead.decrypt_in_place(b"additional data", &mut data)
+        aead.decrypt_in_place(Aad(b"additional data"), &mut data)
             .unwrap();
         assert_eq!(data, b"hello world");
     }
@@ -293,10 +301,10 @@ mod tests {
         use std::io::Write;
 
         let mut writer = vec![];
-        let aad = b"additional data";
+        let aad = Aad(b"additional data");
         let aead = Aead::new(Algorithm::Aes256Gcm, None);
         let msg = b"hello world".to_vec();
-        aead.encrypt_writer(&mut writer, aad, Segment::FourKilobytes, |w| {
+        aead.encrypt_writer(&mut writer, Aad(aad), Segment::FourKilobytes, |w| {
             w.write_all(&msg)
         })
         .unwrap();

@@ -1,15 +1,16 @@
 use alloc::sync::Arc;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use zeroize::ZeroizeOnDrop;
 
-use crate::{error::DisableKeyError, KeyInfo, Origin, Status};
+use crate::{error::DisableKeyError, primitive::Kind, KeyInfo, Origin, Status};
 
 pub(crate) trait KeyMaterial:
     Send + Sync + ZeroizeOnDrop + Clone + 'static + PartialEq + Eq
 {
     type Algorithm: PartialEq + Eq;
     fn algorithm(&self) -> Self::Algorithm;
+    fn kind() -> Kind;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ZeroizeOnDrop)]
@@ -24,6 +25,7 @@ where
     origin: Origin,
     material: M,
     #[zeroize(skip)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     meta: Option<Arc<Value>>,
 }
 impl<M> Key<M>
@@ -170,19 +172,22 @@ pub(crate) mod test {
     pub(crate) struct Material {
         #[zeroize(skip)]
         algorithm: Algorithm,
-        bytes: [u8; 32],
+        value: [u8; 32],
     }
     impl Material {
         pub(crate) fn new(algorithm: Algorithm) -> Self {
             let mut bytes = [0u8; 32];
             crate::rand::fill(&mut bytes);
-            Self { algorithm, bytes }
+            Self { algorithm, value: bytes }
         }
     }
     impl super::KeyMaterial for Material {
         type Algorithm = Algorithm;
         fn algorithm(&self) -> Self::Algorithm {
             self.algorithm
+        }
+        fn kind() -> crate::primitive::Kind {
+            crate::primitive::Kind::Aead
         }
     }
 
@@ -192,7 +197,7 @@ pub(crate) mod test {
         let key = Key::new(
             1,
             Status::Primary,
-            Origin::Generated,
+            Origin::Navajo,
             Material::new(Algorithm::Pancakes),
             None,
         );
@@ -205,7 +210,7 @@ pub(crate) mod test {
         let mut key = Key::new(
             1,
             Status::Primary,
-            Origin::Generated,
+            Origin::Navajo,
             Material::new(Algorithm::Pancakes),
             None,
         );
@@ -228,7 +233,7 @@ pub(crate) mod test {
         let mut key = Key::new(
             1,
             Status::Primary,
-            Origin::Generated,
+            Origin::Navajo,
             Material::new(Algorithm::Pancakes),
             Some("(╯°□°）╯︵ ┻━┻".into()),
         );

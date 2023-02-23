@@ -5,6 +5,7 @@ mod verifier;
 
 pub use algorithm::Algorithm;
 pub(crate) use material::Material;
+
 pub use signer::Signer;
 pub use verifier::Verifier;
 

@@ -21,9 +21,9 @@ let prk = salt.extract(&ikm);
 // expand into output key material
 let mut okm = [0u8; 32];
 
-let associated_data = b"associated info".to_vec();
+let aad = b"associated info".to_vec();
 
-prk.expand(&[&associated_data[..]], &mut okm).unwrap();
+prk.expand(&[&aad[..]], &mut okm).unwrap();
 
 println!("{}", encode(okm));
 ```

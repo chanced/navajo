@@ -1,5 +1,5 @@
-use alloc::{boxed::Box, sync::Arc, vec::Vec};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use alloc::{boxed::Box, vec::Vec};
+use serde::{Deserialize, Serialize};
 use zeroize::ZeroizeOnDrop;
 
 use crate::{error::InvalidKeyLength, sensitive::Bytes, Key};
@@ -9,14 +9,15 @@ use super::Algorithm;
 #[derive(Clone, ZeroizeOnDrop, Debug, Deserialize, Serialize)]
 pub(crate) struct Material {
     #[zeroize(skip)]
-    pub(super) algorithm: Algorithm,
-    pub(super) bytes: Bytes,
-    pub(super) prefix: Option<Bytes>,
+    algorithm: Algorithm,
+    value: Bytes,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prefix: Option<Bytes>,
 }
 
 impl PartialEq for Material {
     fn eq(&self, other: &Self) -> bool {
-        self.algorithm == other.algorithm && self.bytes == other.bytes
+        self.algorithm == other.algorithm && self.value == other.value
     }
 }
 impl Eq for Material {}
@@ -27,15 +28,15 @@ impl Material {
     }
 
     pub(super) fn new(
-        bytes: &[u8],
+        value: &[u8],
         prefix: Option<&[u8]>,
         algorithm: Algorithm,
     ) -> Result<Self, InvalidKeyLength> {
-        algorithm.validate_key_len(bytes.len())?;
-        let bytes = Bytes(Arc::from(bytes));
+        algorithm.validate_key_len(value.len())?;
+        let bytes = Bytes::from(value);
         Ok(Self {
             algorithm,
-            bytes,
+            value: bytes,
             prefix: prefix.map(Into::into),
         })
     }
@@ -43,7 +44,7 @@ impl Material {
 impl Key<Material> {
     pub(super) fn crypto_key(&self) -> CryptoKey {
         // safety: key length is validated on Material creation
-        CryptoKey::new(self.algorithm(), self.material().bytes.as_ref()).unwrap()
+        CryptoKey::new(self.algorithm(), self.material().value.as_ref()).unwrap()
     }
 
     pub(super) fn new_context(&self) -> super::Context {
@@ -52,7 +53,7 @@ impl Key<Material> {
 
     pub(super) fn header(&self) -> Vec<u8> {
         match self.origin() {
-            crate::Origin::Generated => self.id().to_be_bytes().to_vec(),
+            crate::Origin::Navajo => self.id().to_be_bytes().to_vec(),
             crate::Origin::External => self
                 .material()
                 .prefix
@@ -67,6 +68,9 @@ impl crate::KeyMaterial for Material {
     type Algorithm = Algorithm;
     fn algorithm(&self) -> Self::Algorithm {
         self.algorithm
+    }
+    fn kind() -> crate::primitive::Kind {
+        crate::primitive::Kind::Mac
     }
 }
 

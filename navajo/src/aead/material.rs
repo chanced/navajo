@@ -5,6 +5,7 @@ use zeroize::ZeroizeOnDrop;
 
 use super::Algorithm;
 use super::{cipher::Cipher, nonce::Nonce};
+use crate::primitive::Kind;
 use crate::{
     key::{Key, KeyMaterial},
     sensitive::Bytes,
@@ -13,13 +14,13 @@ use crate::{
 
 #[derive(Clone, Debug, ZeroizeOnDrop, Eq, Serialize, Deserialize)]
 pub(crate) struct Material {
-    bytes: Bytes,
+    value: Bytes,
     #[zeroize(skip)]
     algorithm: Algorithm,
 }
 impl PartialEq for Material {
     fn eq(&self, other: &Self) -> bool {
-        self.algorithm == other.algorithm && self.bytes == other.bytes
+        self.algorithm == other.algorithm && self.value == other.value
     }
 }
 impl KeyMaterial for Material {
@@ -27,23 +28,30 @@ impl KeyMaterial for Material {
     fn algorithm(&self) -> Self::Algorithm {
         self.algorithm
     }
+
+    fn kind() -> Kind {
+        Kind::Aead
+    }
 }
 impl Material {
     pub(super) fn new(algorithm: Algorithm) -> Self {
         let bytes = vec![0u8; algorithm.key_len()].into();
-        Self { bytes, algorithm }
+        Self {
+            value: bytes,
+            algorithm,
+        }
     }
     pub(super) fn cipher(&self) -> Cipher {
-        Cipher::new(self.algorithm, &self.bytes)
+        Cipher::new(self.algorithm, &self.value)
     }
     pub(super) fn bytes(&self) -> &[u8] {
-        &self.bytes
+        &self.value
     }
 }
 
 impl Key<Material> {
     pub(super) fn bytes(&self) -> &[u8] {
-        &self.material().bytes
+        &self.material().value
     }
     pub(super) fn cipher(&self) -> Cipher {
         self.material().cipher()

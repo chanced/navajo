@@ -3,33 +3,33 @@ use std::io::Read;
 
 use alloc::collections::VecDeque;
 
-use crate::{error::DecryptError, Aead};
+use crate::{error::DecryptError, Aad, Aead};
 
 use super::Decryptor;
 
-pub struct DecryptReader<R, D, K>
+pub struct DecryptReader<R, A, K>
 where
     R: Read,
-    D: AsRef<[u8]>,
+    A: AsRef<[u8]>,
     K: AsRef<Aead>,
 {
     reader: R,
     _marker: PhantomData<K>,
-    aad: D,
+    aad: Aad<A>,
     deserializer: Option<Decryptor<K, Vec<u8>>>,
     buffer: VecDeque<u8>,
 }
-impl<R, D, K> DecryptReader<R, D, K>
+impl<R, A, K> DecryptReader<R, A, K>
 where
     R: Read,
-    D: AsRef<[u8]>,
+    A: AsRef<[u8]>,
     K: AsRef<Aead>,
 {
-    pub fn new(reader: R, associated_data: D, key: K) -> Self {
+    pub fn new(reader: R, aad: Aad<A>, key: K) -> Self {
         Self {
             reader,
             _marker: PhantomData,
-            aad: associated_data,
+            aad,
             deserializer: Some(Decryptor::new(key, Vec::new())),
             buffer: VecDeque::new(),
         }
@@ -79,7 +79,7 @@ where
             if n == 0 {
                 return Ok(ctr);
             }
-            deserializer.update(self.aad.as_ref(), &method_byte)?;
+            deserializer.update(Aad(self.aad.as_ref()), &method_byte)?;
             offset = 1;
         }
 
@@ -90,17 +90,17 @@ where
             crate::aead::Method::Online => {
                 let mut data: Vec<u8> = Vec::new();
                 self.reader.read_to_end(&mut data)?;
-                let result = deserializer.finalize(self.aad.as_ref())?;
+                let result = deserializer.finalize(Aad(self.aad.as_ref()))?;
                 Ok(self.update(ctr, result.flatten(), buf))
             }
             crate::aead::Method::StreamingHmacSha256(segment) => {
                 let mut data: Vec<u8> = vec![0u8; segment - offset];
                 let n = self.reader.read(&mut data)?;
-                deserializer.update(self.aad.as_ref(), &data[..n])?;
+                deserializer.update(Aad(self.aad.as_ref()), &data[..n])?;
                 if n < segment - offset {
                     let result = self.update(
                         ctr,
-                        deserializer.finalize(self.aad.as_ref())?.flatten(),
+                        deserializer.finalize(Aad(self.aad.as_ref()))?.flatten(),
                         buf,
                     );
                     Ok(result)
@@ -108,7 +108,7 @@ where
                     let result = self.update(
                         ctr,
                         deserializer
-                            .next(self.aad.as_ref())?
+                            .next(Aad(self.aad.as_ref()))?
                             .unwrap()
                             .iter()
                             .cloned(),
@@ -134,13 +134,13 @@ mod tests {
         crate::rand::fill(&mut data);
         let aead = Aead::new(Algorithm::ChaCha20Poly1305, None);
         let mut encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), Vec::new());
-        encryptor.update(&[], &data).unwrap();
+        encryptor.update(Aad::empty(), &data).unwrap();
         let ciphertext = encryptor
-            .finalize(&[])
+            .finalize(Aad::empty())
             .unwrap()
             .flatten()
             .collect::<Vec<u8>>();
-        let mut reader = DecryptReader::new(&ciphertext[..], &[], &aead);
+        let mut reader = DecryptReader::new(&ciphertext[..], Aad::empty(), &aead);
         let mut buf = Vec::new();
         reader.read_to_end(&mut buf).unwrap();
         assert_eq!(data.len(), buf.len());

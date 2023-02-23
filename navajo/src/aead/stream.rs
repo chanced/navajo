@@ -9,29 +9,29 @@ use pin_project::pin_project;
 
 use crate::{
     error::{DecryptError, EncryptError},
-    Aead,
+    Aad, Aead,
 };
 
 use super::{Decryptor, Encryptor, Segment};
 
 pub trait AeadStream: Stream {
-    fn encrypt<T, D>(self, segment: Segment, associated_data: D, aead: T) -> EncryptStream<Self, D>
+    fn encrypt<T, A>(self, segment: Segment, aad: Aad<A>, aead: T) -> EncryptStream<Self, A>
     where
         Self: Sized,
         Self::Item: AsRef<[u8]>,
         T: AsRef<Aead>,
-        D: AsRef<[u8]> + Send + Sync,
+        A: AsRef<[u8]> + Send + Sync,
     {
-        EncryptStream::new(self, segment, associated_data, aead)
+        EncryptStream::new(self, segment, aad, aead)
     }
-    fn decrypt<K, D>(self, associated_data: D, aead: K) -> DecryptStream<Self, K, D>
+    fn decrypt<K, A>(self, aad: Aad<A>, aead: K) -> DecryptStream<Self, K, A>
     where
         Self: Sized,
         Self::Item: AsRef<[u8]>,
         K: AsRef<Aead> + Send + Sync,
-        D: AsRef<[u8]> + Send + Sync,
+        A: AsRef<[u8]> + Send + Sync,
     {
-        DecryptStream::new(self, aead, associated_data)
+        DecryptStream::new(self, aead, aad)
     }
 }
 impl<T> AeadStream for T
@@ -42,24 +42,25 @@ where
 }
 
 #[pin_project]
-pub struct EncryptStream<S, D>
+pub struct EncryptStream<S, A>
 where
     S: Stream + Sized,
+    A: AsRef<[u8]>,
 {
     #[pin]
     stream: Fuse<S>,
     encryptor: Option<Encryptor<Vec<u8>>>,
     queue: VecDeque<Vec<u8>>,
-    associated_data: D,
+    aad: Aad<A>,
     done: bool,
 }
 
-impl<S, D> EncryptStream<S, D>
+impl<S, A> EncryptStream<S, A>
 where
     S: Stream + Sized,
-    D: AsRef<[u8]> + Send + Sync,
+    A: AsRef<[u8]> + Send + Sync,
 {
-    pub fn new<K>(stream: S, segment: Segment, associated_data: D, aead: K) -> Self
+    pub fn new<K>(stream: S, segment: Segment, aad: Aad<A>, aead: K) -> Self
     where
         K: AsRef<Aead>,
     {
@@ -68,7 +69,7 @@ where
             stream: stream.fuse(),
             encryptor: Some(encryptor),
             queue: VecDeque::new(),
-            associated_data,
+            aad,
             done: false,
         }
     }
@@ -115,7 +116,7 @@ where
             match this.stream.as_mut().poll_next(cx) {
                 Ready(data) => match data {
                     Some(data) => {
-                        let result = encryptor.update(this.associated_data.as_ref(), data.as_ref());
+                        let result = encryptor.update(Aad(this.aad.as_ref()), data.as_ref());
                         match result {
                             Err(e) => {
                                 *this.done = true;
@@ -130,7 +131,7 @@ where
                         }
                     }
                     None => {
-                        let result = encryptor.finalize(this.associated_data.as_ref());
+                        let result = encryptor.finalize(Aad(this.aad.as_ref()));
                         match result {
                             Err(e) => {
                                 *this.done = true;
@@ -148,29 +149,30 @@ where
     }
 }
 #[pin_project]
-pub struct DecryptStream<S, K, D>
+pub struct DecryptStream<S, K, A>
 where
     S: Stream + Sized,
     K: AsRef<Aead> + Send + Sync,
+    A: AsRef<[u8]>,
 {
     #[pin]
     stream: Fuse<S>,
     decryptor: Option<Decryptor<K, Vec<u8>>>,
     queue: VecDeque<Vec<u8>>,
-    associated_data: D,
+    aad: Aad<A>,
     done: bool,
 }
 
-impl<S, K, D> DecryptStream<S, K, D>
+impl<S, K, A> DecryptStream<S, K, A>
 where
     S: Stream,
     K: AsRef<Aead> + Send + Sync,
-    D: AsRef<[u8]> + Send + Sync,
+    A: AsRef<[u8]> + Send + Sync,
 {
-    pub fn new(stream: S, aead: K, associated_data: D) -> Self {
+    pub fn new(stream: S, aead: K, aad: Aad<A>) -> Self {
         let decryptor = Decryptor::new(aead, vec![]);
         Self {
-            associated_data,
+            aad,
             stream: stream.fuse(),
             decryptor: Some(decryptor),
             queue: VecDeque::new(),
@@ -209,8 +211,8 @@ where
             match this.stream.as_mut().poll_next(cx) {
                 Ready(data) => match data {
                     Some(data) => {
-                        decryptor.update(this.associated_data.as_ref(), data.as_ref())?;
-                        let result = decryptor.next(this.associated_data.as_ref());
+                        decryptor.update(Aad(this.aad.as_ref()), data.as_ref())?;
+                        let result = decryptor.next(Aad(this.aad.as_ref()));
                         match result {
                             Err(e) => {
                                 *this.done = true;
@@ -226,7 +228,7 @@ where
                         }
                     }
                     None => {
-                        let result = decryptor.finalize(this.associated_data.as_ref());
+                        let result = decryptor.finalize(Aad(this.aad.as_ref()));
                         match result {
                             Err(e) => {
                                 *this.done = true;
@@ -258,11 +260,12 @@ mod tests {
             Vec::from(&b"world"[..]),
         ]);
         let aead = Aead::new(Algorithm::Aes256Gcm, None);
-        let encrypt_stream = data_stream.encrypt(Segment::FourKilobytes, vec![], aead.clone());
+        let encrypt_stream =
+            data_stream.encrypt(Segment::FourKilobytes, Aad::empty(), aead.clone());
         let ciphertext: Vec<u8> = encrypt_stream.try_concat().await.unwrap();
 
         let decrypt_stream =
-            stream::iter(ciphertext.chunks(40).map(Vec::from)).decrypt(vec![], aead);
+            stream::iter(ciphertext.chunks(40).map(Vec::from)).decrypt(Aad::empty(), aead);
         let result = decrypt_stream.try_concat().await.unwrap();
         assert_eq!(result, b"hello world");
     }
@@ -275,7 +278,7 @@ mod tests {
         let aead = Aead::new(algorithm, None);
         let encrypt_stream = data_stream.encrypt(
             Segment::FourKilobytes,
-            Vec::from(&b"additional data"[..]),
+            Aad(Vec::from(&b"additional data"[..])),
             aead.clone(),
         );
         let result: Vec<Vec<u8>> = encrypt_stream.try_collect().await.unwrap();
@@ -285,7 +288,7 @@ mod tests {
         println!("ciphertext: {}", ciphertext.len());
 
         let cleartext: Vec<u8> = stream::iter(ciphertext.chunks(40).map(Vec::from))
-            .decrypt(Vec::from(&b"additional data"[..]), aead)
+            .decrypt(Aad(Vec::from(&b"additional data"[..])), aead)
             .try_concat()
             .await
             .unwrap();

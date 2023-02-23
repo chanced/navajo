@@ -6,7 +6,9 @@ use crate::error::RemoveKeyError;
 use crate::error::SealError;
 use crate::key::Key;
 use crate::key::KeyMaterial;
+use crate::primitive::Kind;
 use crate::rand;
+use crate::Aad;
 use crate::Origin;
 use crate::Status;
 
@@ -37,14 +39,17 @@ const PRIMARY_KEY_NOT_FOUND_MSG:&str = "primary key not found in keyring\n\t\n\t
 
 pub(crate) const KEY_ID_LEN: usize = 4;
 
-#[derive(Clone, Debug, ZeroizeOnDrop)]
+#[derive(Clone, Debug, ZeroizeOnDrop, Serialize)]
 pub(crate) struct Keyring<M>
 where
     M: KeyMaterial,
 {
+    version: u8,
     keys: Vec<Key<M>>,
+    #[serde(skip_serializing)]
     primary_key_idx: usize,
     #[zeroize(skip)]
+    #[serde(skip_serializing)]
     lookup: HashMap<u32, usize>,
 }
 impl<Material> PartialEq for Keyring<Material>
@@ -57,20 +62,15 @@ where
 }
 impl<Material> Eq for Keyring<Material> where Material: KeyMaterial + Eq {}
 
-impl<M> Serialize for Keyring<M>
+#[derive(Serialize, Deserialize)]
+struct KeyringData<Material>
 where
-    M: KeyMaterial + Serialize,
+    Material: KeyMaterial,
 {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        KeyringData {
-            keys: self.keys.clone(),
-            version: 0,
-        }
-        .serialize(serializer)
-    }
+    #[serde(alias = "v")]
+    version: u32,
+    #[serde(alias = "m")]
+    keys: Vec<Key<Material>>,
 }
 
 impl<'de, Material> Deserialize<'de> for Keyring<Material>
@@ -118,6 +118,7 @@ where
             keys.len() - 1
         };
         Ok(Self {
+            version: 0,
             keys,
             primary_key_idx,
             lookup,
@@ -135,6 +136,7 @@ where
         let mut lookup = HashMap::new();
         lookup.insert(id, 0);
         Self {
+            version: 0,
             keys: vec![key],
             lookup,
             primary_key_idx: 0,
@@ -272,45 +274,51 @@ where
         id
     }
 }
+
 impl<M> Keyring<M>
 where
     M: KeyMaterial + Serialize,
 {
-    fn seal_first_pass(&self, associated_data: &[u8]) -> Result<Vec<u8>, SealError> {
-        let mut serialized = serde_json::to_vec(self)?;
+    fn serialize_for_sealing(&self) -> Result<Vec<u8>, SealError> {
+        let material = serde_json::to_value(&self.keys).unwrap();
+        let kind = serde_json::to_value(M::kind()).unwrap();
+        let version = serde_json::to_value(self.version).unwrap();
+        let mut data = hashbrown::HashMap::with_capacity(3);
+        data.insert("k", kind);
+        data.insert("v", version);
+        data.insert("m", material);
+        let result = serde_json::to_vec(&data)?;
+        Ok(result)
+    }
+
+    fn seal_first_pass(&self, aad: &[u8]) -> Result<Vec<u8>, SealError> {
+        let mut serialized = self.serialize_for_sealing()?;
+        // serialized = lz4_flex::compress_prepend_size(&serialized);
         use aes_gcm::aead::AeadInPlace;
         // Round 1: AES-256-GCM
         let key = Aes256Gcm::generate_key(&mut crate::Random);
         let cipher = Aes256Gcm::new(&key);
         let nonce = Aes256Gcm::generate_nonce(&mut crate::Random);
         serialized.reserve(AES_256_GCM_TAG_SIZE);
-        cipher.encrypt_in_place(&nonce, associated_data, &mut serialized)?;
+        cipher.encrypt_in_place(&nonce, aad, &mut serialized)?;
         let result = [key.as_slice(), nonce.as_slice(), serialized.as_slice()].concat();
         Ok(result)
     }
 
-    fn seal_second_pass(
-        &self,
-        data: &mut Vec<u8>,
-        associated_data: &[u8],
-    ) -> Result<Vec<u8>, SealError> {
+    fn seal_second_pass(&self, data: &mut Vec<u8>, aad: &[u8]) -> Result<Vec<u8>, SealError> {
         let key = ChaCha20Poly1305::generate_key(&mut crate::Random);
         let cipher = ChaCha20Poly1305::new(&key);
         let nonce = ChaCha20Poly1305::generate_nonce(&mut crate::Random);
         use chacha20poly1305::aead::AeadInPlace;
         data.reserve(CHACHA20_POLY1305_TAG_SIZE);
-        cipher.encrypt_in_place(&nonce, associated_data, data)?;
+        cipher.encrypt_in_place(&nonce, aad, data)?;
         let cipher_and_nonce = [key.as_slice(), nonce.as_slice()].concat();
         Ok(cipher_and_nonce)
     }
 
-    fn serialize_and_seal_locally(
-        &self,
-        associated_data: &[u8],
-    ) -> Result<(Vec<u8>, Vec<u8>), SealError> {
-        let mut serialized_and_sealed = self.seal_first_pass(associated_data)?;
-        let cipher_and_nonce =
-            self.seal_second_pass(&mut serialized_and_sealed, associated_data)?;
+    fn serialize_and_seal_locally(&self, aad: &[u8]) -> Result<(Vec<u8>, Vec<u8>), SealError> {
+        let mut serialized_and_sealed = self.seal_first_pass(aad)?;
+        let cipher_and_nonce = self.seal_second_pass(&mut serialized_and_sealed, aad)?;
         Ok((serialized_and_sealed, cipher_and_nonce))
     }
     fn encode_serialized(
@@ -342,19 +350,16 @@ where
         Ok(result)
     }
 
-    pub(crate) async fn seal<E>(
-        &self,
-        associated_data: &[u8],
-        envelope: &E,
-    ) -> Result<Vec<u8>, SealError>
+    pub(crate) async fn seal<A, E>(&self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
     where
+        A: AsRef<[u8]> + Send + Sync,
         E: Envelope,
     {
         let (locally_serialized_and_sealed, cipher_and_nonce) =
-            self.serialize_and_seal_locally(associated_data)?;
+            self.serialize_and_seal_locally(aad.as_ref())?;
 
         let sealed_cipher_and_nonce = envelope
-            .encrypt(&cipher_and_nonce, associated_data)
+            .encrypt(aad, &cipher_and_nonce)
             .await
             .map_err(|e| e.to_string())?;
 
@@ -364,19 +369,16 @@ where
             &cipher_and_nonce,
         )
     }
-    pub(crate) fn seal_sync<E>(
-        &self,
-        associated_data: &[u8],
-        envelope: &E,
-    ) -> Result<Vec<u8>, SealError>
+    pub(crate) fn seal_sync<A, E>(&self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
     where
+        A: AsRef<[u8]>,
         E: Envelope,
     {
         let (locally_serialized_and_sealed, cipher_and_nonce) =
-            self.serialize_and_seal_locally(associated_data)?;
+            self.serialize_and_seal_locally(aad.as_ref())?;
 
         let sealed_cipher_and_nonce = envelope
-            .encrypt_sync(&cipher_and_nonce, associated_data)
+            .encrypt_sync(aad, &cipher_and_nonce)
             .map_err(|e| e.to_string())?;
 
         self.encode_serialized(
@@ -387,106 +389,57 @@ where
     }
 }
 
-impl<M> Keyring<M>
+pub(crate) async fn open_keyring_value<A, C, E>(
+    aad: Aad<A>,
+    ciphertext: C,
+    envelope: &E,
+) -> Result<(Kind, Value), OpenError>
 where
-    M: KeyMaterial + DeserializeOwned,
+    A: AsRef<[u8]>,
+    C: AsRef<[u8]>,
+    E: Envelope,
 {
-    pub(crate) async fn open<E>(
-        associated_data: &[u8],
-        sealed: &[u8],
-        envelope: &E,
-    ) -> Result<Self, OpenError>
-    where
-        E: Envelope,
-    {
-        let sealed_cipher_and_nonce = Self::read_sealed_cipher_and_nonce(sealed)?;
-        let key = envelope
-            .decrypt(sealed_cipher_and_nonce, associated_data)
-            .await
-            .map_err(|e| e.to_string())?;
+    let sealed_cipher_and_nonce = read_sealed_cipher_and_nonce(ciphertext.as_ref())?;
+    let key = envelope
+        .decrypt(Aad(aad.as_ref()), sealed_cipher_and_nonce)
+        .await
+        .map_err(|e| e.to_string())?;
 
-        Self::open_and_deserialize(key, sealed, sealed_cipher_and_nonce, associated_data)
-    }
-    pub(crate) fn open_sync<E>(
-        associated_data: &[u8],
-        sealed: &[u8],
-        envelope: &E,
-    ) -> Result<Self, OpenError>
-    where
-        E: Envelope,
-    {
-        let sealed_cipher_and_nonce = Self::read_sealed_cipher_and_nonce(sealed)?;
-        let key = envelope
-            .decrypt_sync(sealed_cipher_and_nonce, associated_data)
-            .map_err(|e| e.to_string())?;
-
-        Self::open_and_deserialize(key, sealed, sealed_cipher_and_nonce, associated_data)
-    }
-    fn read_sealed_cipher_nonce_len(sealed: &[u8]) -> Result<usize, OpenError> {
-        if sealed.len() < 4 {
-            return Err("sealed data too short".into());
-        }
-        let sealed_cipher_and_nonce_len = u32::from_be_bytes(sealed[0..4].try_into().unwrap()); // safe: len checked above.
-        if sealed_cipher_and_nonce_len < 4 {
-            return Err("sealed data too short".into());
-        }
-        let sealed_cipher_and_nonce_len: usize = sealed_cipher_and_nonce_len
-            .try_into()
-            .map_err(|_| OpenError("sealed data too long".into()))?;
-
-        if sealed.len() < 4 + sealed_cipher_and_nonce_len {
-            return Err("sealed data too short".into());
-        }
-
-        Ok(sealed_cipher_and_nonce_len)
-    }
-
-    fn read_sealed_cipher_and_nonce(sealed: &[u8]) -> Result<&[u8], OpenError> {
-        let sealed_cipher_and_nonce_len = Self::read_sealed_cipher_nonce_len(sealed)?;
-        let sealed_cipher_and_nonce = &sealed[4..4 + sealed_cipher_and_nonce_len];
-        Ok(sealed_cipher_and_nonce)
-    }
-
-    fn open_first_pass(
-        mut key: Vec<u8>,
-        buffer: &mut Vec<u8>,
-        associated_data: &[u8],
-    ) -> Result<usize, OpenError> {
-        use chacha20poly1305::aead::AeadInPlace;
-        if key.len() != CHACHA20_POLY1305_KEY_SIZE + CHACHA20_POLY1305_NONCE_SIZE {
-            return Err("kms returned invalid data".into());
-        }
-        let nonce = key.split_off(CHACHA20_POLY1305_KEY_SIZE);
-        let nonce = chacha20poly1305::Nonce::from_slice(&nonce);
-
-        let cipher = ChaCha20Poly1305::new_from_slice(&key)?;
-        cipher.decrypt_in_place(nonce, associated_data, buffer)?;
-        Ok(nonce.len() + key.len())
-    }
-
-    fn open_second_pass(buffer: &mut Vec<u8>, associated_data: &[u8]) -> Result<(), OpenError> {
-        use aes_gcm::aead::AeadInPlace;
-        let mut data = buffer.split_off(AES_256_GCM_KEY_SIZE + AES_256_GCM_NONCE_SIZE);
-        let nonce = buffer.split_off(AES_256_GCM_KEY_SIZE);
-        let nonce = aes_gcm::Nonce::from_slice(&nonce);
-        let cipher = Aes256Gcm::new_from_slice(buffer)?;
-        cipher.decrypt_in_place(nonce, associated_data, &mut data)?;
-        *buffer = data;
-        Ok(())
-    }
-    fn open_and_deserialize(
-        key: Vec<u8>,
-        sealed: &[u8],
-        sealed_cipher_and_nonce: &[u8],
-        associated_data: &[u8],
-    ) -> Result<Self, OpenError> {
-        let mut buffer = sealed[4 + sealed_cipher_and_nonce.len()..].to_vec();
-        Self::open_first_pass(key, &mut buffer, associated_data)?;
-        Self::open_second_pass(&mut buffer, associated_data)?;
-        let result: Keyring<M> = serde_json::from_slice(&buffer)?;
-        Ok(result)
-    }
+    let value = open_and_deserialize(key, aad, ciphertext.as_ref(), sealed_cipher_and_nonce)?;
+    let kind = get_kind(&value)?;
+    Ok((kind, value))
 }
+pub(crate) fn open_keyring_value_sync<A, S, E>(
+    aad: Aad<A>,
+    sealed: S,
+    envelope: &E,
+) -> Result<(Kind, Value), OpenError>
+where
+    A: AsRef<[u8]>,
+    S: AsRef<[u8]>,
+    E: Envelope,
+{
+    let sealed = sealed.as_ref();
+    let sealed_cipher_and_nonce = read_sealed_cipher_and_nonce(sealed)?;
+    let key = envelope
+        .decrypt_sync(Aad(aad.as_ref()), sealed_cipher_and_nonce)
+        .map_err(|e| e.to_string())?;
+
+    let value = open_and_deserialize(key, aad, sealed, sealed_cipher_and_nonce)?;
+    let kind = get_kind(&value)?;
+    Ok((kind, value))
+}
+
+fn get_kind(value: &Value) -> Result<Kind, OpenError> {
+    let kind = value
+        .get("k")
+        .cloned()
+        .ok_or("invalid keyring: missing kind")?;
+    let kind: Kind = serde_json::from_value(kind)?;
+    Ok(kind)
+}
+
+impl<M> Keyring<M> where M: KeyMaterial + DeserializeOwned {}
 
 pub(crate) fn gen_id() -> u32 {
     let mut data = [0; 4];
@@ -499,15 +452,69 @@ pub(crate) fn gen_id() -> u32 {
     value
 }
 
-#[derive(Serialize, Deserialize)]
-struct KeyringData<Material>
+fn read_sealed_cipher_nonce_len(sealed: &[u8]) -> Result<usize, OpenError> {
+    if sealed.len() < 4 {
+        return Err("sealed data too short".into());
+    }
+    let sealed_cipher_and_nonce_len = u32::from_be_bytes(sealed[0..4].try_into().unwrap()); // safe: len checked above.
+    if sealed_cipher_and_nonce_len < 4 {
+        return Err("sealed data too short".into());
+    }
+    let sealed_cipher_and_nonce_len: usize = sealed_cipher_and_nonce_len
+        .try_into()
+        .map_err(|_| OpenError("sealed data too long".into()))?;
+
+    if sealed.len() < 4 + sealed_cipher_and_nonce_len {
+        return Err("sealed data too short".into());
+    }
+
+    Ok(sealed_cipher_and_nonce_len)
+}
+
+fn read_sealed_cipher_and_nonce(sealed: &[u8]) -> Result<&[u8], OpenError> {
+    let sealed_cipher_and_nonce_len = read_sealed_cipher_nonce_len(sealed)?;
+    let sealed_cipher_and_nonce = &sealed[4..4 + sealed_cipher_and_nonce_len];
+    Ok(sealed_cipher_and_nonce)
+}
+
+fn open_first_pass(mut key: Vec<u8>, buffer: &mut Vec<u8>, aad: &[u8]) -> Result<usize, OpenError> {
+    use chacha20poly1305::aead::AeadInPlace;
+    if key.len() != CHACHA20_POLY1305_KEY_SIZE + CHACHA20_POLY1305_NONCE_SIZE {
+        return Err("kms returned invalid data".into());
+    }
+    let nonce = key.split_off(CHACHA20_POLY1305_KEY_SIZE);
+    let nonce = chacha20poly1305::Nonce::from_slice(&nonce);
+    let cipher = ChaCha20Poly1305::new_from_slice(&key)?;
+    cipher.decrypt_in_place(nonce, aad, buffer)?;
+    Ok(nonce.len() + key.len())
+}
+
+fn open_second_pass(buffer: &mut Vec<u8>, aad: &[u8]) -> Result<(), OpenError> {
+    use aes_gcm::aead::AeadInPlace;
+    let mut data = buffer.split_off(AES_256_GCM_KEY_SIZE + AES_256_GCM_NONCE_SIZE);
+    let nonce = buffer.split_off(AES_256_GCM_KEY_SIZE);
+    let nonce = aes_gcm::Nonce::from_slice(&nonce);
+    let cipher = Aes256Gcm::new_from_slice(buffer)?;
+    cipher.decrypt_in_place(nonce, aad, &mut data)?;
+    *buffer = data;
+    Ok(())
+}
+fn open_and_deserialize<A>(
+    key: Vec<u8>,
+    aad: Aad<A>,
+    sealed: &[u8],
+    sealed_cipher_and_nonce: &[u8],
+) -> Result<Value, OpenError>
 where
-    Material: KeyMaterial,
+    A: AsRef<[u8]>,
 {
-    #[serde(rename = "v")]
-    version: u32,
-    #[serde(rename = "k")]
-    keys: Vec<Key<Material>>,
+    let mut buffer = sealed[4 + sealed_cipher_and_nonce.len()..].to_vec();
+    open_first_pass(key, &mut buffer, aad.as_ref())?;
+    open_second_pass(&mut buffer, aad.as_ref())?;
+    // let buffer = lz4_flex::decompress_size_prepended(&buffer)
+    //     .map_err(|e| "failed to decompress keyring: ".to_string() + e.to_string().as_str())?;
+    let result: Value = serde_json::from_slice(&buffer)?;
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -519,7 +526,7 @@ mod tests {
     #[test]
     fn test_serde() {
         let material = Material::new(Algorithm::Waffles);
-        let keyring = Keyring::new(material, Origin::Generated, Some("test".into()));
+        let keyring = Keyring::new(material, Origin::Navajo, Some("test".into()));
         let ser = serde_json::to_string(&keyring).unwrap();
         let de = serde_json::from_str::<Keyring<Material>>(&ser).unwrap();
         assert_eq!(keyring, de);
@@ -529,46 +536,50 @@ mod tests {
     #[tokio::test]
     async fn test_seal_and_open() {
         let material = Material::new(Algorithm::Waffles);
-        let mut keyring = Keyring::new(material, Origin::Generated, Some("test".into()));
-        keyring.add(Material::new(Algorithm::Cereal), Origin::Generated, None);
+        let mut keyring = Keyring::new(material, Origin::Navajo, Some("test".into()));
+        keyring.add(Material::new(Algorithm::Cereal), Origin::Navajo, None);
         let ser = serde_json::to_vec(&keyring).unwrap();
         let de = serde_json::from_slice::<Keyring<Material>>(&ser).unwrap();
         assert_eq!(keyring, de);
 
         let in_mem = crate::envelope::InMemory::new();
-        let sealed = keyring.seal(&[], &in_mem).await.unwrap();
+        let sealed = keyring.seal(Aad(&[]), &in_mem).await.unwrap();
         assert_ne!(ser, sealed);
-        let opened = Keyring::open(&[], &sealed, &in_mem).await.unwrap();
+        let (kind, opened) = open_keyring_value(Aad(&[]), &sealed, &in_mem)
+            .await
+            .unwrap();
+        assert_eq!(kind, Kind::Aead);
+        let opened = serde_json::from_value(opened).unwrap();
         assert_eq!(keyring, opened);
     }
 
     #[test]
     fn test_key_status() {
         let material = Material::new(Algorithm::Pancakes);
-        let mut keyring = Keyring::new(material, Origin::Generated, Some("test".into()));
+        let mut keyring = Keyring::new(material, Origin::Navajo, Some("test".into()));
         let first_id = {
             let first = keyring.primary();
             let first_id = first.id();
             assert_eq!(first.status(), Status::Primary);
             assert_eq!(first.meta_as_ref(), Some("test".into()).as_ref());
-            assert_eq!(first.origin(), Origin::Generated);
+            assert_eq!(first.origin(), Origin::Navajo);
             assert_ne!(first.id(), 0);
             assert_eq!(first.algorithm(), Algorithm::Pancakes);
             first_id
         };
 
         let second_id = {
-            let second = keyring.add(Material::new(Algorithm::Waffles), Origin::Generated, None);
+            let second = keyring.add(Material::new(Algorithm::Waffles), Origin::Navajo, None);
             assert_eq!(second.status(), Status::Secondary);
             assert_eq!(second.meta(), None);
-            assert_eq!(second.origin(), Origin::Generated);
+            assert_eq!(second.origin(), Origin::Navajo);
             assert_ne!(second.id(), 0);
             second.id()
         };
         {
             let second = keyring.get(second_id).unwrap();
             assert_eq!(second.status(), Status::Secondary);
-            assert_eq!(second.origin(), Origin::Generated);
+            assert_eq!(second.origin(), Origin::Navajo);
             assert_eq!(second.id(), second_id);
             keyring.promote(second.id()).unwrap();
         }

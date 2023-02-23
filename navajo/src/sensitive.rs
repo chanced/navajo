@@ -1,11 +1,11 @@
 use core::ops::Deref;
 
 use alloc::{sync::Arc, vec::Vec};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-#[derive(Clone)]
-pub(crate) struct Bytes(pub(crate) Arc<[u8]>);
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct Bytes(#[serde(with = "crate::b64::standard")] Arc<[u8]>);
 
 impl Bytes {
     pub(crate) fn new(bytes: &[u8]) -> Self {
@@ -74,24 +74,6 @@ impl Drop for Bytes {
 impl core::hash::Hash for Bytes {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state);
-    }
-}
-
-impl Serialize for Bytes {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_bytes(&self.0)
-    }
-}
-
-impl<'de> Deserialize<'de> for Bytes {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Deserialize::deserialize(deserializer).map(Bytes::new)
     }
 }
 

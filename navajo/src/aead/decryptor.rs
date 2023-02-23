@@ -8,7 +8,7 @@ use crate::{
     error::DecryptError,
     hkdf::{self, Salt},
     key::Key,
-    Buffer,
+    Aad, Buffer,
 };
 
 use super::{cipher::Cipher, nonce::NonceOrNonceSequence, Aead, Algorithm, Method};
@@ -45,14 +45,13 @@ where
     pub fn algorithm(&self) -> Option<Algorithm> {
         self.key.as_ref().map(|c| c.algorithm())
     }
-    pub fn update(
-        &mut self,
-        associated_data: &[u8],
-        ciphertext: &[u8],
-    ) -> Result<(), DecryptError> {
+    pub fn update<A>(&mut self, aad: Aad<A>, ciphertext: &[u8]) -> Result<(), DecryptError>
+    where
+        A: AsRef<[u8]>,
+    {
         self.buf.extend_from_slice(ciphertext);
         if !self.header_is_complete() {
-            self.parse_header(associated_data)?;
+            self.parse_header(aad.as_ref())?;
         }
         Ok(())
     }
@@ -64,12 +63,16 @@ where
         self.key_id
     }
 
-    pub fn next(&mut self, associated_data: &[u8]) -> Result<Option<B>, DecryptError> {
+    pub fn next<A>(&mut self, aad: Aad<A>) -> Result<Option<B>, DecryptError>
+    where
+        A: AsRef<[u8]>,
+    {
+        let aad = aad.as_ref();
         if self.buf.is_empty() {
             return Ok(None);
         }
         if !self.header_is_complete() {
-            self.parse_header(associated_data)?;
+            self.parse_header(aad)?;
         }
         if self.cipher.is_none() {
             return Ok(None);
@@ -89,13 +92,16 @@ where
         self.cipher
             .as_ref()
             .unwrap()
-            .decrypt_in_place(nonce, associated_data, &mut data)?;
+            .decrypt_in_place(nonce, aad, &mut data)?;
 
         Ok(Some(data))
     }
-    pub fn finalize(mut self, associated_data: &[u8]) -> Result<IntoIter<B>, DecryptError> {
+    pub fn finalize<A>(mut self, aad: Aad<A>) -> Result<IntoIter<B>, DecryptError>
+    where
+        A: AsRef<[u8]>,
+    {
         if !self.header_is_complete() {
-            self.parse_header(associated_data)?;
+            self.parse_header(aad.as_ref())?;
         }
         let method = self.method.ok_or(DecryptError::EmptyCiphertext)?;
         if method.is_online() {
@@ -104,11 +110,11 @@ where
                 NonceOrNonceSequence::Nonce(nonce) => Ok(nonce),
                 NonceOrNonceSequence::NonceSequence(_) => Err(DecryptError::Unspecified),
             }?;
-            cipher.decrypt_in_place(nonce, associated_data, &mut self.buf)?;
+            cipher.decrypt_in_place(nonce, aad.as_ref(), &mut self.buf)?;
             Ok(vec![self.buf].into_iter())
         } else {
             let mut segments = Vec::new();
-            while let Some(segment) = self.next(associated_data)? {
+            while let Some(segment) = self.next(Aad(aad.as_ref()))? {
                 segments.push(segment);
             }
             let cipher = self.cipher.ok_or(DecryptError::Unspecified)?;
@@ -116,7 +122,7 @@ where
                 NonceOrNonceSequence::NonceSequence(seq) => Ok(seq),
                 NonceOrNonceSequence::Nonce(_) => Err(DecryptError::Unspecified),
             }?;
-            cipher.decrypt_in_place(nonce_seq.last()?, associated_data, &mut self.buf)?;
+            cipher.decrypt_in_place(nonce_seq.last()?, aad.as_ref(), &mut self.buf)?;
             segments.push(self.buf);
             Ok(segments.into_iter())
         }
@@ -165,7 +171,7 @@ where
         }
     }
 
-    fn parse_header(&mut self, associated_data: &[u8]) -> Result<bool, DecryptError> {
+    fn parse_header(&mut self, aad: &[u8]) -> Result<bool, DecryptError> {
         let mut idx = 0;
         let method: Method;
         if let Some(parsed_method) = self.method {
@@ -188,7 +194,7 @@ where
         }
         let key = self.key.clone().unwrap();
         if self.cipher.is_none() {
-            if let Some(i) = self.parse_cipher(idx, &key, method, associated_data) {
+            if let Some(i) = self.parse_cipher(idx, &key, method, aad) {
                 idx = i;
             } else {
                 self.move_cursor(idx);
@@ -335,7 +341,7 @@ mod tests {
         ]
         .concat();
         let mut dec = Decryptor::new(&aead, buf);
-        dec.next(&[]).unwrap();
+        dec.next(Aad(&[])).unwrap();
         assert_eq!(dec.method, Some(method));
         assert_eq!(dec.key_id, Some(key_id));
         assert!(dec.nonce.is_some());
@@ -370,7 +376,7 @@ mod tests {
         .concat();
         let mut dec = Decryptor::new(aead, buf);
 
-        dec.next(&[]).unwrap();
+        dec.next(Aad(&[])).unwrap();
         assert_eq!(dec.method, Some(method));
         assert_eq!(dec.key_id, Some(key_id));
 
@@ -399,9 +405,9 @@ mod tests {
         let mut data = vec![0u8; 1024];
         rand::fill(&mut data);
         let encryptor = Encryptor::new(&aead, None, data.clone());
-        let ciphertext = encryptor.finalize(&[]).unwrap().next().unwrap();
+        let ciphertext = encryptor.finalize(Aad::empty()).unwrap().next().unwrap();
         let decryptor = Decryptor::new(&aead, ciphertext);
-        let result = decryptor.finalize(&[]).unwrap().next().unwrap();
+        let result = decryptor.finalize(Aad(&[])).unwrap().next().unwrap();
         assert_eq!(result, data);
     }
     #[test]
@@ -411,10 +417,10 @@ mod tests {
         let mut data = vec![0u8; 65536];
         rand::fill(&mut data);
         let encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), data.clone());
-        let enc_seg: Vec<Vec<u8>> = encryptor.finalize(&[]).unwrap().collect();
+        let enc_seg: Vec<Vec<u8>> = encryptor.finalize(Aad::empty()).unwrap().collect();
         let ciphertext = enc_seg.concat();
         let decryptor = Decryptor::new(&aead, ciphertext);
-        let result: Vec<Vec<u8>> = decryptor.finalize(&[]).unwrap().collect();
+        let result: Vec<Vec<u8>> = decryptor.finalize(Aad(&[])).unwrap().collect();
         assert_eq!(result.len(), 17);
         let mut remaining: usize = 65536;
         for (i, r) in result.iter().enumerate() {
@@ -439,13 +445,17 @@ mod tests {
 
         let enc = Encryptor::new(&aead, None, b"hello world".to_vec());
         // enc.nonce = Some(nonce.clone());
-        let ciphertext = enc.finalize(b"additional data").unwrap().next().unwrap();
+        let ciphertext = enc
+            .finalize(Aad(b"additional data"))
+            .unwrap()
+            .next()
+            .unwrap();
         let aad = b"additional data";
         let mut dec = Decryptor::new(&aead, ciphertext);
         assert!(dec.parse_header(aad).unwrap());
         assert_eq!(dec.method, Some(Method::Online));
         assert_eq!(dec.key_id, Some(aead.primary_key().id));
-        let result = dec.finalize(aad).unwrap().next().unwrap();
+        let result = dec.finalize(Aad(aad)).unwrap().next().unwrap();
         assert_eq!(result, b"hello world");
     }
     #[test]
@@ -458,16 +468,16 @@ mod tests {
         let key = aead.keyring.primary();
         let mut encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), vec![]);
         let mut ciphertext_chunks: Vec<Vec<u8>> = vec![];
-        let associated_data = b"additional data";
+        let aad = Aad(b"additional data");
 
         chunks.for_each(|chunk| {
-            encryptor.update(associated_data, &chunk).unwrap();
+            encryptor.update(aad.clone(), &chunk).unwrap();
             if let Some(result) = encryptor.next() {
                 ciphertext_chunks.push(result);
             }
         });
 
-        ciphertext_chunks.extend(encryptor.finalize(associated_data).unwrap());
+        ciphertext_chunks.extend(encryptor.finalize(aad).unwrap());
         assert_eq!(ciphertext_chunks.len(), 2);
         assert_eq!(ciphertext_chunks[0].len(), 4096);
 
@@ -483,10 +493,10 @@ mod tests {
 
         let mut cleartext_chunks = vec![];
         let mut decryptor = Decryptor::new(&aead, ciphertext_chunks.concat());
-        if let Some(result) = decryptor.next(associated_data).unwrap() {
+        if let Some(result) = decryptor.next(Aad(aad)).unwrap() {
             cleartext_chunks.push(result);
         }
-        for chunk in decryptor.finalize(associated_data).unwrap() {
+        for chunk in decryptor.finalize(Aad(aad)).unwrap() {
             cleartext_chunks.push(chunk);
         }
 
@@ -494,13 +504,13 @@ mod tests {
         let mut cleartext_chunks = vec![];
 
         for chunk in ciphertext_chunks.concat().chunks(40) {
-            decryptor.update(associated_data, chunk).unwrap();
+            decryptor.update(Aad(aad), chunk).unwrap();
 
-            if let Some(result) = decryptor.next(associated_data).unwrap() {
+            if let Some(result) = decryptor.next(Aad(aad)).unwrap() {
                 cleartext_chunks.push(result);
             }
         }
-        for chunk in decryptor.finalize(associated_data).unwrap() {
+        for chunk in decryptor.finalize(Aad(aad)).unwrap() {
             cleartext_chunks.push(chunk);
         }
         let cleartext = cleartext_chunks.concat();

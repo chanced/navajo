@@ -4,6 +4,9 @@
 
 extern crate alloc;
 
+mod aad;
+pub use aad::Aad;
+
 pub mod aead;
 pub use aead::Aead;
 
@@ -16,7 +19,7 @@ pub mod daead;
 pub use daead::Daead;
 
 pub mod envelope;
-pub use envelope::{Cleartext, Envelope};
+pub use envelope::{CleartextJson, Envelope};
 
 pub mod error;
 pub mod hkdf;
@@ -49,6 +52,10 @@ mod status;
 pub use status::Status;
 
 pub mod sig;
-pub use sig::{Signature, Signer, Verifier};
+pub use sig::Signature;
 
 mod timestamp;
+
+mod payload;
+
+pub(crate) mod b64;

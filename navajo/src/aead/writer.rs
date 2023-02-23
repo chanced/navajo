@@ -2,7 +2,7 @@ use std::io::Write;
 
 use alloc::collections::VecDeque;
 
-use crate::Aead;
+use crate::{Aad, Aead};
 
 use super::{Buffer, Encryptor, Segment};
 
@@ -14,22 +14,27 @@ use super::{Buffer, Encryptor, Segment};
 /// [`finalize`](`Self::finalize`) **must** be called or the ciphertext will be
 /// incomplete. [`Aead::encrypt_writer`] handles the finalization.
 #[cfg(feature = "std")]
-pub struct EncryptWriter<W, D>
+pub struct EncryptWriter<'write, W, A>
 where
     W: Write,
-    D: AsRef<[u8]>,
+    A: AsRef<[u8]>,
 {
     encryptor: Encryptor<Vec<u8>>,
-    writer: W,
-    aad: D,
+    writer: &'write mut W,
+    aad: Aad<A>,
     counter: usize,
 }
-impl<W, D> EncryptWriter<W, D>
+impl<'write, W, A> EncryptWriter<'write, W, A>
 where
     W: Write,
-    D: AsRef<[u8]>,
+    A: AsRef<[u8]>,
 {
-    pub fn new(writer: W, segment: Segment, associated_data: D, aead: impl AsRef<Aead>) -> Self {
+    pub fn new(
+        writer: &'write mut W,
+        segment: Segment,
+        aad: Aad<A>,
+        aead: impl AsRef<Aead>,
+    ) -> Self {
         let encryptor = Encryptor::new(
             aead.as_ref(),
             Some(segment),
@@ -38,37 +43,37 @@ where
         Self {
             encryptor,
             writer,
-            aad: associated_data,
+            aad,
             counter: 0,
         }
     }
 }
-impl<W, D> EncryptWriter<W, D>
+impl<'write, W, D> EncryptWriter<'write, W, D>
 where
     W: Write,
     D: AsRef<[u8]>,
 {
-    pub fn finalize(self) -> Result<(usize, W), std::io::Error> {
+    pub fn finalize(self) -> Result<usize, std::io::Error> {
         let EncryptWriter {
             encryptor,
             mut writer,
             mut counter,
             aad,
         } = self;
-        let ciphertext: Vec<u8> = encryptor.finalize(aad.as_ref())?.flatten().collect();
+        let ciphertext: Vec<u8> = encryptor.finalize(aad)?.flatten().collect();
         writer.write_all(&ciphertext)?;
         counter += ciphertext.len();
         writer.flush()?;
-        Ok((counter, writer))
+        Ok(counter)
     }
 }
-impl<W, D> Write for EncryptWriter<W, D>
+impl<'write, W, D> Write for EncryptWriter<'write, W, D>
 where
     W: Write,
     D: AsRef<[u8]>,
 {
     fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
-        self.encryptor.update(self.aad.as_ref(), buf)?;
+        self.encryptor.update(Aad(self.aad.as_ref()), buf)?;
         if let Some(ciphertext) = self.encryptor.next() {
             self.writer.write_all(&ciphertext)?;
             self.counter += ciphertext.len();

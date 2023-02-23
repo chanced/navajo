@@ -7,8 +7,8 @@ use crate::{
     aead, daead,
     envelope::is_cleartext,
     error::{OpenError, SealError},
-    keyring::Keyring,
-    mac, sig, Aead, Daead, Envelope, Mac, Signature,
+    keyring::{open_keyring_value, open_keyring_value_sync, Keyring},
+    mac, sig, Aad, Aead, Daead, Envelope, Mac, Signature,
 };
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 
@@ -92,12 +92,26 @@ pub enum Primitive {
     Signature(Signature),
 }
 impl Primitive {
-    pub async fn seal<'a, E>(
-        &self,
-        associated_data: &[u8],
-        envelope: &E,
-    ) -> Result<Vec<u8>, SealError>
+    pub async fn seal<'a, A, E>(&self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
     where
+        A: AsRef<[u8]> + Send + Sync,
+        E: Envelope + 'static,
+    {
+        if is_cleartext(envelope) {
+            self.serialize_cleartext()
+        } else {
+            let sealed = match self {
+                Primitive::Aead(aead) => aead.keyring().seal(aad, envelope).await?,
+                Primitive::Daead(daead) => daead.keyring().seal(aad, envelope).await?,
+                Primitive::Mac(mac) => mac.keyring().seal(aad, envelope).await?,
+                Primitive::Signature(sig) => sig.keyring().seal(aad, envelope).await?,
+            };
+            Ok(sealed)
+        }
+    }
+    pub fn seal_sync<A, E>(&self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
+    where
+        A: AsRef<[u8]>,
         E: Envelope + 'static,
     {
         if is_cleartext(envelope) {
@@ -105,132 +119,70 @@ impl Primitive {
         } else {
             let mut res = vec![self.kind().as_u8()];
             let sealed = match self {
-                Primitive::Aead(aead) => aead.keyring().seal(associated_data, envelope).await?,
-                Primitive::Daead(daead) => daead.keyring().seal(associated_data, envelope).await?,
-                Primitive::Mac(mac) => mac.keyring().seal(associated_data, envelope).await?,
-                Primitive::Signature(sig) => sig.keyring().seal(associated_data, envelope).await?,
+                Primitive::Aead(aead) => aead.keyring().seal_sync(aad, envelope)?,
+                Primitive::Daead(daead) => daead.keyring().seal_sync(aad, envelope)?,
+                Primitive::Mac(mac) => mac.keyring().seal_sync(aad, envelope)?,
+                Primitive::Signature(sig) => sig.keyring().seal_sync(aad, envelope)?,
             };
             res.extend(sealed.into_iter());
             Ok(res)
         }
     }
-    pub fn seal_sync<E>(&self, associated_data: &[u8], envelope: &E) -> Result<Vec<u8>, SealError>
+    pub async fn open<A, C, E>(aad: Aad<A>, ciphertext: C, envelope: &E) -> Result<Self, OpenError>
     where
+        A: AsRef<[u8]> + Send + Sync,
+        C: AsRef<[u8]> + Send + Sync,
         E: Envelope + 'static,
     {
+        if ciphertext.as_ref().is_empty() {
+            return Err("keyring data is empty".into());
+        }
         if is_cleartext(envelope) {
-            self.serialize_cleartext()
+            Self::deserialize_cleartext(ciphertext.as_ref())
         } else {
-            let mut res = vec![self.kind().as_u8()];
-            let sealed = match self {
-                Primitive::Aead(aead) => aead.keyring().seal_sync(associated_data, envelope)?,
-                Primitive::Daead(daead) => daead.keyring().seal_sync(associated_data, envelope)?,
-                Primitive::Mac(mac) => mac.keyring().seal_sync(associated_data, envelope)?,
-                Primitive::Signature(sig) => sig.keyring().seal_sync(associated_data, envelope)?,
-            };
-            res.extend(sealed.into_iter());
-            Ok(res)
+            let (kind, value) = open_keyring_value(aad, ciphertext, envelope).await?;
+            Self::open_value(kind, value)
         }
     }
-    pub async fn open<E>(
-        associated_data: &[u8],
-        keyring_data: &[u8],
-        envelope: &E,
-    ) -> Result<Self, OpenError>
+
+    pub fn open_sync<A, C, E>(aad: Aad<A>, ciphertext: C, envelope: &E) -> Result<Self, OpenError>
     where
+        A: AsRef<[u8]>,
+        C: AsRef<[u8]>,
         E: Envelope + 'static,
     {
-        if keyring_data.is_empty() {
+        let sealed = ciphertext.as_ref();
+        if sealed.is_empty() {
             return Err("keyring data is empty".into());
         }
 
         if is_cleartext(envelope) {
-            Self::deserialize_cleartext(keyring_data)
+            Self::deserialize_cleartext(sealed)
         } else {
-            let kind = Kind::try_from(keyring_data[0])?;
-            let keyring_data = &keyring_data[1..];
-            match kind {
-                Kind::Aead => {
-                    let keyring =
-                        Keyring::<aead::Material>::open(associated_data, keyring_data, envelope)
-                            .await?;
-                    Ok(Self::Aead(Aead::from_keyring(keyring)))
-                }
-                Kind::Daead => {
-                    let keyring =
-                        Keyring::<daead::Material>::open(associated_data, keyring_data, envelope)
-                            .await?;
-                    Ok(Self::Daead(Daead::from_keyring(keyring)))
-                }
-                Kind::Mac => {
-                    let keyring =
-                        Keyring::<mac::Material>::open(associated_data, keyring_data, envelope)
-                            .await?;
-                    Ok(Self::Mac(Mac::from_keyring(keyring)))
-                }
-                Kind::Signature => {
-                    let keyring =
-                        Keyring::<sig::Material>::open(associated_data, keyring_data, envelope)
-                            .await?;
-                    Ok(Self::Signature(Signature::from_keyring(keyring)))
-                }
+            let (kind, value) = open_keyring_value_sync(aad, sealed, envelope)?;
+            Self::open_value(kind, value)
+        }
+    }
+    fn open_value(kind: Kind, value: Value) -> Result<Self, OpenError> {
+        match kind {
+            Kind::Aead => {
+                let keyring: Keyring<aead::Material> = serde_json::from_value(value)?;
+                Ok(Self::Aead(Aead::from_keyring(keyring)))
+            }
+            Kind::Daead => {
+                let keyring: Keyring<daead::Material> = serde_json::from_value(value)?;
+                Ok(Self::Daead(Daead::from_keyring(keyring)))
+            }
+            Kind::Mac => {
+                let keyring: Keyring<mac::Material> = serde_json::from_value(value)?;
+                Ok(Self::Mac(Mac::from_keyring(keyring)))
+            }
+            Kind::Signature => {
+                let keyring: Keyring<sig::Material> = serde_json::from_value(value)?;
+                Ok(Self::Signature(Signature::from_keyring(keyring)))
             }
         }
     }
-
-    pub fn open_sync<E>(
-        associated_data: &[u8],
-        keyring_data: &[u8],
-        envelope: &E,
-    ) -> Result<Self, OpenError>
-    where
-        E: Envelope + 'static,
-    {
-        if keyring_data.is_empty() {
-            return Err("keyring data is empty".into());
-        }
-        if is_cleartext(envelope) {
-            Self::deserialize_cleartext(keyring_data)
-        } else {
-            let kind = Kind::try_from(keyring_data[0])?;
-            let keyring_data = &keyring_data[1..];
-            match kind {
-                Kind::Aead => {
-                    let keyring = Keyring::<aead::Material>::open_sync(
-                        associated_data,
-                        keyring_data,
-                        envelope,
-                    )?;
-                    Ok(Self::Aead(Aead::from_keyring(keyring)))
-                }
-                Kind::Daead => {
-                    let keyring = Keyring::<daead::Material>::open_sync(
-                        associated_data,
-                        keyring_data,
-                        envelope,
-                    )?;
-                    Ok(Self::Daead(Daead::from_keyring(keyring)))
-                }
-                Kind::Mac => {
-                    let keyring = Keyring::<mac::Material>::open_sync(
-                        associated_data,
-                        keyring_data,
-                        envelope,
-                    )?;
-                    Ok(Self::Mac(Mac::from_keyring(keyring)))
-                }
-                Kind::Signature => {
-                    let keyring = Keyring::<sig::Material>::open_sync(
-                        associated_data,
-                        keyring_data,
-                        envelope,
-                    )?;
-                    Ok(Self::Signature(Signature::from_keyring(keyring)))
-                }
-            }
-        }
-    }
-
     pub fn kind(&self) -> Kind {
         match self {
             Primitive::Aead(_) => Kind::Aead,
@@ -264,7 +216,13 @@ impl Primitive {
         }
     }
     fn deserialize_cleartext(value: &[u8]) -> Result<Self, OpenError> {
-        let data: PrimitiveData = serde_json::from_slice(value)?;
+        let value: Value = serde_json::from_slice(value)?;
+        println!(
+            "\n\nvalue: {}\n\n",
+            serde_json::to_string_pretty(&value).unwrap()
+        );
+        let data: PrimitiveData = serde_json::from_value(value)?;
+
         match data.kind {
             Kind::Aead => {
                 let keyring: Keyring<aead::Material> = serde_json::from_value(data.keyring)?;
@@ -308,12 +266,20 @@ struct PrimitiveData {
 
 #[cfg(test)]
 mod tests {
-    use crate::{envelope::InMemory, Aead};
+    use crate::envelope::InMemory;
 
     use super::*;
 
-    #[test]
-    fn test_in_mem_seal_open() {
-        let envelope = InMemory::new();
+    #[cfg(feature = "mac")]
+    #[tokio::test]
+    async fn test_in_mem_seal_open_mac() {
+        let mac = mac::Mac::new(mac::Algorithm::Sha256, None);
+        let primary_key = mac.primary_key();
+        // in a real application, you would use a real key management service.
+        // InMemory is only suitable for testing.
+        let in_mem = InMemory::default();
+        let data = Mac::seal(&mac, Aad::empty(), &in_mem).await.unwrap();
+        let mac = Mac::open(Aad::empty(), &data, &in_mem).await.unwrap();
+        assert_eq!(mac.primary_key(), primary_key);
     }
 }

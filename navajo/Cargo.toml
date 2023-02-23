@@ -24,8 +24,18 @@ version = "1.0"
 
 # rayon
 [dependencies.rayon]
-optional = true
 version = "1.6"
+optional = true
+
+# jsonptr
+[dependencies.jsonptr]
+version = "0.1"
+optional = true
+
+# base64
+[dependencies.base64]
+default-features = false
+features = ["alloc"]
 
 # zeroize
 [dependencies.zeroize]
@@ -39,6 +49,7 @@ version = "1.0"
 # hashbrown
 [dependencies.hashbrown]
 version = "0.13"
+features = ["serde"]
 
 # rand
 [dependencies.random]
@@ -56,6 +67,10 @@ features = ["alloc", "derive", "rc"]
 version = "1.0"
 default-features = false
 features = ["alloc", "raw_value"]
+
+# serde_yaml
+[dependencies.serde_yaml]
+version = "0.9"
 
 # ring
 [dependencies.ring]
