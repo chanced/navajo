@@ -39,11 +39,11 @@ pub trait Envelope {
         C: AsRef<[u8]>;
 }
 
-/// `InMemory` is an in-memory [`Kms`] implementation that is not meant to be used outside of testing.
+/// `InMemory` is an in-memory [`Envelope`] implementation that is not meant to be used outside of testing.
 /// Ciphers are only maintained in memory so any keyrings sealed with it will be lost. Nonces are
 /// static and repeated to simplify implementation.
 ///
-/// ## Do not use outside of testing
+/// **Do not use outside of testing**
 #[derive(Debug, Clone)]
 pub struct InMemory {
     key: [u8; 32],
@@ -158,8 +158,8 @@ impl Envelope for InMemory {
 
 /// `CleartextJson` implements [`Envelope`] but does not encrypt or decrypt the
 /// Data Encryption Key (DEK). Keyrings have special handling for the usage of
-/// `CleartextJson` (and [`CleartextYaml`]) as an [`Envelope`]. The output of
-/// `seal` is raw, unencrypted JSON while `unseal` will deserialize json.
+/// `CleartextJson`as an [`Envelope`]. The output of `seal` is raw, unencrypted
+/// JSON while `unseal` will deserialize json.
 ///
 pub struct CleartextJson;
 

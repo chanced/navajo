@@ -68,9 +68,6 @@ version = "1.0"
 default-features = false
 features = ["alloc", "raw_value"]
 
-# serde_yaml
-[dependencies.serde_yaml]
-version = "0.9"
 
 # ring
 [dependencies.ring]
