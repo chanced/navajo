@@ -56,6 +56,4 @@ pub use sig::Signature;
 
 mod timestamp;
 
-mod payload;
-
 pub(crate) mod b64;
