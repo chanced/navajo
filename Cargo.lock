@@ -21,6 +21,7 @@ dependencies = [
  "cfg-if",
  "cipher",
  "cpufeatures",
+ "zeroize",
 ]
 
 [[package]]
@@ -687,6 +688,7 @@ name = "navajo"
 version = "0.0.0"
 dependencies = [
  "aead",
+ "aes",
  "aes-gcm",
  "aes-siv",
  "base64",

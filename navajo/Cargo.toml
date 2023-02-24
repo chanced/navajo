@@ -180,6 +180,11 @@ optional = true
 package = "hkdf"
 version = "0.12"
 
+# aes
+[dependencies.aes]
+version = "0.8.2"
+features = ["zeroize"]
+optional = true
 
 # -------------------------
 #    Test dependencies
