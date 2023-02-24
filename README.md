@@ -9,8 +9,7 @@ HPKE with integrations for AWS, Azure, GCP, and Hashicrop Vault.
 The first alpha release will lack HPKE. Fuzzing will be setup as soon as the API
 is complete, hopefully before the end of Q1 2024.
 
-The long-term plan is to extend to other languages via WASI or perhaps natively
-but that will come after the API is at least nearing completion.
+The long-term plan is to extend to other languages via WASI after fuzzing is finished.
 
 ## Security Note
 
