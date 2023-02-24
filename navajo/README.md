@@ -4,12 +4,11 @@ Navajo is Rust library that provides secure and easy to use cryptographic APIs.
 
 ## Content
 
--   [Usage overview](#usage-overview)
-    -   [Keyring Management / Envelope Encryption](#keying-management--envelope-encryption)
-    -   [Authenticated Encryption with Associated Data (AEAD)](#authenticated-encryption-with-associated-data-aead)
-    -   [Deterministic Authenticated Encryption with Associated Data (DAEAD)](#deterministic-authenticated-encryption-with-associated-data-daead)
-    -   [Signature](#digital-signature)
-    -   [Message Authentication Code (MAC)](#message-authentication-code-mac)
+-   [Keyring Management / Envelope Encryption](#keying-management--envelope-encryption)
+-   [Authenticated Encryption with Associated Data (AEAD)](#authenticated-encryption-with-associated-data-aead)
+-   [Deterministic Authenticated Encryption with Associated Data (DAEAD)](#deterministic-authenticated-encryption-with-associated-data-daead)
+-   [Signature](#digital-signature)
+-   [Message Authentication Code (MAC)](#message-authentication-code-mac)
 -   [Dependencies](#dependencies)
 -   [Re-exports](#reexports) [docs]
 -   [Modules](#modules) [docs]
@@ -19,15 +18,15 @@ Navajo is Rust library that provides secure and easy to use cryptographic APIs.
 
 ## Usage overview
 
-### Keying Management / Envelope Encryption
+## Keying Management / Envelope Encryption
 
-### Authenticated Encryption with Associated Data (AEAD)
+## Authenticated Encryption with Associated Data (AEAD)
 
-### Deterministic Authenticated Encryption with Associated Data (DAEAD)
+## Deterministic Authenticated Encryption with Associated Data (DAEAD)
 
-### Digital Signature
+## Digital Signature
 
-### Message Authentication Code (MAC)
+## Message Authentication Code (MAC)
 
 ```rust
 use navajo::mac::{Mac, Algorithm};
