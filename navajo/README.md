@@ -2,17 +2,44 @@
 
 Navajo is Rust library that provides secure and easy to use cryptographic APIs.
 
-## AEAD
+## Content
 
-## DAEAD
+-   [Usage overview](#usage-overview)
+    -   [Keyring Management / Envelope Encryption](#keying-management--envelope-encryption)
+    -   [Authenticated Encryption with Associated Data (AEAD)](#authenticated-encryption-with-associated-data-aead)
+    -   [Deterministic Authenticated Encryption with Associated Data (DAEAD)](#deterministic-authenticated-encryption-with-associated-data-daead)
+    -   [Signature](#digital-signature)
+    -   [Message Authentication Code (MAC)](#message-authentication-code-mac)
+-   [Dependencies](#dependencies)
+-   [Re-exports](#reexports) [docs]
+-   [Modules](#modules) [docs]
+-   [Structs](#structs) [docs]
+-   [Enums](#enums) [docs]
+-   [Traits](#traits) [docs]
 
-## HKDF
+## Usage overview
 
-## MAC
+### Keying Management / Envelope Encryption
 
-## Digital signatures
+### Authenticated Encryption with Associated Data (AEAD)
+
+### Deterministic Authenticated Encryption with Associated Data (DAEAD)
+
+### Digital Signature
+
+### Message Authentication Code (MAC)
 
 ## Dependencies
+
+As a measure of transparency and appreciation, each crate and their usage is
+detailed below. A checkmark (✔️) indicates that the crate is optional while (❌)
+indicates that it cannot be disabled.
+
+In addition to the table below, two crates are listed under development
+dependencies for testing purposes. Those include
+[tokio](https://github.com/tokio-rs/tokio) for async tests (streams, futures)
+and [hex](https://github.com/KokaKiwi/rust-hex) for quality of life when dealing
+with binary.
 
 | Crate                                                              | Usage                                                                                                                                          | Optional |
 | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | :------: |
