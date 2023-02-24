@@ -2,58 +2,6 @@
 
 Navajo is Rust library that provides secure and easy to use cryptographic APIs.
 
-## Content
-
--   [Primitives](#usage-overview)
-    -   [Keyring Management / Envelope Encryption](#keying-management--envelope-encryption)
-    -   [Authenticated Encryption with Associated Data (AEAD)](#authenticated-encryption-with-associated-data-aead)
-    -   [Deterministic Authenticated Encryption with Associated Data (DAEAD)](#deterministic-authenticated-encryption-with-associated-data-daead)
-    -   [Signature](#digital-signature)
-    -   [Message Authentication Code (MAC)](#message-authentication-code-mac)
--   [Dependencies](#dependencies)
--   [Re-exports](#reexports) [docs]
--   [Modules](#modules) [docs]
--   [Structs](#structs) [docs]
--   [Enums](#enums) [docs]
--   [Traits](#traits) [docs]
-
-## Primitives
-
-### Keying Management / Envelope Encryption
-
-### Authenticated Encryption with Associated Data (AEAD)
-
-### Deterministic Authenticated Encryption with Associated Data (DAEAD)
-
-### Digital Signature
-
-### Message Authentication Code (MAC)
-
-Compute MAC [`Tag`](`crate::mac::Tag`)s
-
-```rust
-use navajo::mac::{Mac, Algorithm};
-// create a Mac keyring with a single, generated primary key:
-let mac = Mac::new(Algorithm::Sha256, None);
-// compute a tag:
-let tag = mac.compute(b"an example");
-// tags are prepended with a 4 byte key-id for optimization.
-// to remove it from output:
-let tag = tag.omit_header().unwrap();
-// which can fail if you have previously set a truncation length.
-
-// to set a truncation length:
-let tag = tag.truncate_to(16).unwrap();
-// which is fallible because tags must be at least 10 bytes long
-// with the header omitted or 14 bytes with.
-
-// Once you have a Tag, you can validate other tags, in either Tag
-// or byte slice with a equal (==) to get constant-time comparison.
-
-// To use the Mac instance to compute and verify:
-mac.verify(&tag, b"an example").unwrap();
-```
-
 ## Dependencies
 
 As a measure of transparency and appreciation, each crate and their usage is
