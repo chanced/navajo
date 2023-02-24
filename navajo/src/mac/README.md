@@ -30,8 +30,8 @@ let tag = tag.omit_header().unwrap();
 
 // to set a truncation length:
 let tag = tag.truncate_to(16).unwrap();
-// which is fallible because tags must be at least 8 bytes long
-// with the header omitted or 12 bytes with.
+// which is fallible because tags must be at least 10 bytes long
+// with the header omitted or 14 bytes with.
 
 // Once you have a Tag, you can validate other tags, in either Tag
 // or byte slice with a equal (==) to get constant-time comparison.
