@@ -13,14 +13,13 @@ mod tests {
 
     #[test]
     fn test_rust_crypto() {
-        use hex_literal::hex;
-
-        let ikm = hex!("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
-        let salt = hex!("000102030405060708090a0b0c");
-        let info = hex!("f0f1f2f3f4f5f6f7f8f9");
-        let mut expected = hex!(
-            "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865"
-        );
+        let ikm = hex::decode("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b").unwrap();
+        let salt = hex::decode("000102030405060708090a0b0c").unwrap();
+        let info = hex::decode("f0f1f2f3f4f5f6f7f8f9").unwrap();
+        let mut expected = hex::decode(
+            "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865",
+        )
+        .unwrap();
 
         {
             use rust_crypto_hkdf::Hkdf;
@@ -46,7 +45,7 @@ mod tests {
             use rust_crypto_hkdf::Hkdf;
             use sha3::Sha3_224;
             let hk = Hkdf::<Sha3_224>::new(Some(&salt[..]), &ikm);
-            let mut okm = [0u8; 42];
+            let mut okm = vec![0u8; 42];
             hk.expand(&info, &mut okm).unwrap();
             expected = okm;
             // assert_eq!(okm[..], expected[..]);
