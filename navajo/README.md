@@ -1,6 +1,16 @@
 # navajo
 
-## Usage
+Navajo is Rust library that provides secure and easy to use cryptographic APIs.
+
+## AEAD
+
+## DAEAD
+
+## HKDF
+
+## MAC
+
+## Digital signatures
 
 ## Dependencies
 
