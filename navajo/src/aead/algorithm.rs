@@ -18,7 +18,7 @@ pub enum Algorithm {
     Aes128Gcm,
     /// AES 256 GCM
     Aes256Gcm,
-    /// https://en.wikipedia.org/w/index.php?title=ChaCha20-Poly1305&section=3#XChaCha20-Poly1305_%E2%80%93_extended_nonce_variant
+    /// <https://en.wikipedia.org/w/index.php?title=ChaCha20-Poly1305&section=3#XChaCha20-Poly1305_%E2%80%93_extended_nonce_variant>
     XChaCha20Poly1305,
 }
 
