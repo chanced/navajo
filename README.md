@@ -1,6 +1,6 @@
 # navajo
 
-Navajo is Rust library that provides secure and easy to use cryptographic APIs.
+navajo is Rust library that provides secure and easy to use cryptographic APIs.
 
 The project is still in active, pre-release development. The short-term plans
 are to provide adequate coverage for AEAD, DAEAD, MAC, HKDF, Signatures, and
@@ -19,7 +19,7 @@ Please review the code and use at your own risk.
 
 ## Credit
 
-Navajo is inspired by and modeled after Google's [tink
+navajo is inspired by and modeled after Google's [tink
 project](https://github.com/google/tink). The two projects are not wire
 compatible.
 

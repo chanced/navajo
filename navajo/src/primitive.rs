@@ -8,7 +8,7 @@ use crate::{
     envelope::is_cleartext,
     error::{OpenError, SealError},
     keyring::{open_keyring_value, open_keyring_value_sync, Keyring},
-    mac, sig, Aad, Aead, Daead, Envelope, Mac, Signature,
+    mac, signature, Aad, Aead, Daead, Envelope, Mac, Signer,
 };
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 
@@ -89,7 +89,7 @@ pub enum Primitive {
     Daead(Daead),
     // Hpke(Hpke) // TODO: Enable this when HPKE is implemented
     Mac(Mac),
-    Signature(Signature),
+    Signature(Signer),
 }
 impl Primitive {
     pub async fn seal<'a, A, E>(&self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
@@ -178,8 +178,9 @@ impl Primitive {
                 Ok(Self::Mac(Mac::from_keyring(keyring)))
             }
             Kind::Signature => {
-                let keyring: Keyring<sig::Material> = serde_json::from_value(value)?;
-                Ok(Self::Signature(Signature::from_keyring(keyring)))
+                let keyring: Keyring<signature::Material> = serde_json::from_value(value)?;
+                // Ok(Self::Signature(Signature::from_keyring(keyring)))
+                todo!()
             }
         }
     }
@@ -209,7 +210,7 @@ impl Primitive {
             _ => None,
         }
     }
-    pub fn signature(self) -> Option<Signature> {
+    pub fn signature(self) -> Option<Signer> {
         match self {
             Primitive::Signature(sig) => Some(sig),
             _ => None,
@@ -237,8 +238,8 @@ impl Primitive {
                 Ok(Primitive::Mac(Mac::from_keyring(keyring)))
             }
             Kind::Signature => {
-                let keyring: Keyring<sig::Material> = serde_json::from_value(data.keyring)?;
-                Ok(Primitive::Signature(Signature::from_keyring(keyring)))
+                let keyring: Keyring<signature::Material> = serde_json::from_value(data.keyring)?;
+                Ok(Primitive::Signature(Signer::from_keyring(keyring)))
             }
         }
     }

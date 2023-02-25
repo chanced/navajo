@@ -54,7 +54,7 @@ pub struct Aead {
     keyring: Keyring<Material>,
 }
 impl Aead {
-    pub fn new(algorithm: Algorithm, meta: Option<Value>) -> Aead {
+    pub fn new(algorithm: Algorithm, meta: Option<Value>) -> Self {
         Self {
             keyring: Keyring::new(Material::new(algorithm), crate::Origin::Navajo, meta),
         }

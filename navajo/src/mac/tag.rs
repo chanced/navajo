@@ -5,7 +5,6 @@ use crate::{
     Mac,
 };
 use alloc::{sync::Arc, vec::Vec};
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 /// A data structure containing a MAC tag for each key in a [`Mac`](super::Mac)
 /// at the point of computation. Capable of comparing itself to other [`Tag`]s
@@ -214,12 +213,17 @@ impl Tag {
         Err(MacVerificationError)
     }
     fn eq_tag(&self, other: &Tag) -> Result<(), MacVerificationError> {
+        #[cfg(feature = "rayon")]
+        use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+
         // TODO: optimize this. Compare heeaders first. Only compare the tag bytes if they match.
         // If none match, compare the tag against those without headers.
 
         if self.entries.len() > 1 {
             if other.entries.len() > 1 {
-                self.entries
+                #[cfg(feature = "rayon")]
+                let result = self
+                    .entries
                     .par_iter()
                     .find_any(|entry| {
                         other
@@ -233,9 +237,26 @@ impl Tag {
                             .is_some()
                     })
                     .map(|_| ())
-                    .ok_or(MacVerificationError)
+                    .ok_or(MacVerificationError);
+
+                #[cfg(not(feature = "rayon"))]
+                let result = self
+                    .entries
+                    .iter()
+                    .find(|entry| {
+                        other.entries.iter().any(|other_entry| {
+                            entry
+                                .verify(other_entry.output_bytes(), self.truncate_to)
+                                .is_ok()
+                        })
+                    })
+                    .map(|_| ())
+                    .ok_or(MacVerificationError);
+                result
             } else {
-                self.entries
+                #[cfg(feature = "rayon")]
+                let result = self
+                    .entries
                     .par_iter()
                     .find_any(|entry| {
                         entry
@@ -243,7 +264,20 @@ impl Tag {
                             .is_ok()
                     })
                     .map(|_| ())
-                    .ok_or(MacVerificationError)
+                    .ok_or(MacVerificationError);
+
+                #[cfg(not(feature = "rayon"))]
+                let result = self
+                    .entries
+                    .iter()
+                    .find(|entry| {
+                        entry
+                            .verify(other.primary_tag.as_ref(), self.truncate_to)
+                            .is_ok()
+                    })
+                    .map(|_| ())
+                    .ok_or(MacVerificationError);
+                result
             }
         } else if other.entries.len() > 1 {
             other.eq_tag(self)

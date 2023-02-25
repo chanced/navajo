@@ -3,8 +3,8 @@ use alloc::vec;
 use serde::{Deserialize, Serialize};
 use zeroize::ZeroizeOnDrop;
 
+use super::cipher::Cipher;
 use super::Algorithm;
-use super::{cipher::Cipher, nonce::Nonce};
 use crate::primitive::Kind;
 use crate::{
     key::{Key, KeyMaterial},

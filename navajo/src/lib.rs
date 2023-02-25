@@ -51,8 +51,8 @@ mod sensitive;
 mod status;
 pub use status::Status;
 
-pub mod sig;
-pub use sig::Signature;
+pub mod signature;
+pub use signature::{Signer, Verifier};
 
 mod timestamp;
 

@@ -179,15 +179,15 @@ macro_rules! rust_crypto_contexts {
                     $ring([< Hmac $ring Context>]),
                 )*
                 $(
-                    #[cfg(feature = "sha2")]
+                    #[cfg(all(feature = "sha2", feature = "hmac"))]
                     $sha2([< Hmac $sha2 Context>]),
                 )*
                 $(
-                    #[cfg(feature = "sha3")]
+                    #[cfg(all(feature = "sha3", feature = "hmac"))]
                     $sha3([< Hmac $sha3 Context>]),
                 )*
                 $(
-                    #[cfg(feature = "aes")]
+                    #[cfg(all(feature = "aes", feature = "cmac"))]
                     $aes([< Cmac $aes Context>]),
                 )*
             }
@@ -200,15 +200,15 @@ macro_rules! rust_crypto_contexts {
                             RustCryptoContext::$ring(ctx) => ctx.update(data),
                         )*
                         $(
-                            #[cfg(feature = "sha2")]
+                            #[cfg(all(feature = "sha2", feature = "hmac"))]
                             RustCryptoContext::$sha2(ctx) => ctx.update(data),
                         )*
                         $(
-                            #[cfg(feature = "sha3")]
+                            #[cfg(all(feature = "sha3", feature = "hmac"))]
                             RustCryptoContext::$sha3(ctx) => ctx.update(data),
                         )*
                         $(
-                            #[cfg(feature = "aes")]
+                            #[cfg(all(feature = "aes", feature = "cmac"))]
                             RustCryptoContext::$aes(ctx) => ctx.update(data),
                         )*
                     }
@@ -220,15 +220,15 @@ macro_rules! rust_crypto_contexts {
                             RustCryptoContext::$ring(ctx) => ctx.finalize(),
                         )*
                         $(
-                            #[cfg(feature = "sha2")]
+                            #[cfg(all(feature = "sha2", feature = "hmac"))]
                             RustCryptoContext::$sha2(ctx) => ctx.finalize(),
                         )*
                         $(
-                            #[cfg(feature = "sha3")]
+                            #[cfg(all(feature = "sha3", feature = "hmac"))]
                             RustCryptoContext::$sha3(ctx) => ctx.finalize(),
                         )*
                         $(
-                            #[cfg(feature = "aes")]
+                            #[cfg(all(feature = "aes", feature = "cmac"))]
                             RustCryptoContext::$aes(ctx) => ctx.finalize(),
                         )*
                     }
@@ -244,15 +244,15 @@ macro_rules! rust_crypto_contexts {
                             RustCryptoKey::$ring(key) => Self::$ring(key.0.into()),
                         )*
                         $(
-                            #[cfg(feature = "sha2")]
+                            #[cfg(all(feature = "sha2", feature = "hmac"))]
                             RustCryptoKey::$sha2(key) => Self::$sha2(key.0.into()),
                         )*
                         $(
-                            #[cfg(feature = "sha3")]
+                            #[cfg(all(feature = "sha3", feature = "hmac"))]
                             RustCryptoKey::$sha3(key) => Self::$sha3(key.0.into()),
                         )*
                         $(
-                            #[cfg(feature = "aes")]
+                            #[cfg(all(feature = "aes", feature = "cmac"))]
                             RustCryptoKey::$aes(key) => Self::$aes(key.0.into()),
                         )*
                     }

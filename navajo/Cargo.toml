@@ -28,11 +28,6 @@ version = "1.0"
 version = "1.6"
 optional = true
 
-# jsonptr
-[dependencies.jsonptr]
-version = "0.1"
-optional = true
-
 # base64
 [dependencies.base64]
 default-features = false
@@ -69,6 +64,16 @@ version = "1.0"
 default-features = false
 features = ["alloc", "raw_value"]
 
+# strum
+[dependencies.strum]
+version = "0.24"
+default-features = false
+features = ["derive", "strum_macros"]
+
+# strum_macros
+[dependencies.strum_macros]
+version = "0.24"
+
 # bytes
 [dependencies.bytes]
 version = "1.4"
@@ -104,6 +109,8 @@ version = "*"
 [dependencies.hmac]
 version = "0.12"
 optional = true
+default-features = false
+features = ["reset"]
 
 # aead
 [dependencies.rust_crypto_aead]
@@ -125,14 +132,17 @@ optional = true
 # p256
 [dependencies.p256]
 version = "0.12"
-features = ["ecdsa-core", "pkcs8", "hash2curve"]
+features = ["ecdsa", "pkcs8", "pem", "hash2curve"]
 optional = true
 
 # p384
 [dependencies.p384]
 version = "0.12"
-features = ["ecdsa-core", "pkcs8", "hash2curve"]
+features = ["ecdsa", "pkcs8", "pem", "hash2curve"]
 optional = true
+
+# [dependencies.ecdsa]
+# version = "0.15"
 
 # sha2
 [dependencies.sha2]
@@ -149,7 +159,7 @@ default-features = false
 [dependencies.pkcs8]
 version = "0.9"
 default-features = false
-# optional = true
+features = ["alloc", "pem"]
 
 # # pbkdf2
 # [dependencies.pbkdf2]
@@ -170,6 +180,7 @@ version = "2.4"
 [dependencies.digest]
 version = "0.10"
 
+
 # blake3
 [dependencies.blake3]
 version = "1.3"
@@ -186,10 +197,22 @@ version = "0.8.2"
 features = ["zeroize"]
 optional = true
 
+
+[dependencies.ed25519-dalek]
+version = "1"
+default-features = false
+features = ["alloc"]
+optional = true
+
 # -------------------------
 #    Test dependencies
 # -------------------------
 
+# mockall
+[dev-dependencies.mockall]
+version = "0.11"
+
+# hex
 [dev-dependencies.hex]
 version = "0.4"
 default-features = false
@@ -202,18 +225,18 @@ features = ["full"] # todo: reduce this.
 
 [features]
 default = [
-	"bytes",     #remove this
 	"std",
-	"ring",
 	"aead",
+	"aes",
 	"signature",
 	"mac",
-	"blake3",
+	"hmac",
+	"blake3",    # todo: remove
 	"sha2",
-	"sha3",
+	"sha3",      # todoo: remove
 ]
 signature = ["ed25519", "p256", "p384"]
-mac = ["rayon"]
+mac = []
 aead = []
 std = [
 	"ring?/std",
@@ -223,11 +246,13 @@ std = [
 	"zeroize/std",
 	"aes-gcm/std",
 	"aes-siv?/std",
-	"hmac/std",
+	"hmac?/std",
+	"cmac?/std",
 	"chacha20poly1305/std",
 	"pkcs8/std",
-	"cmac/std",
+	"cmac?/std",
 	"digest/std",
 	"sha2/std",
 	"sha3/std",
+	"ed25519-dalek?/std",
 ]

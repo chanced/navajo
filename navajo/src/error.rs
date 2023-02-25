@@ -517,3 +517,39 @@ impl From<rust_crypto_hkdf::InvalidLength> for InvalidLengthError {
         Self {}
     }
 }
+
+pub struct KeyError(pub String);
+impl fmt::Display for KeyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "malformed key: {}", self.0)
+    }
+}
+impl fmt::Debug for KeyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "malformed key: {}", self.0)
+    }
+}
+#[cfg(feature = "std")]
+impl std::error::Error for KeyError {}
+impl From<String> for KeyError {
+    fn from(e: String) -> Self {
+        Self(e)
+    }
+}
+impl From<&str> for KeyError {
+    fn from(e: &str) -> Self {
+        Self(e.to_string())
+    }
+}
+#[cfg(feature = "ring")]
+impl From<ring::error::KeyRejected> for KeyError {
+    fn from(e: ring::error::KeyRejected) -> Self {
+        Self(e.to_string())
+    }
+}
+#[cfg(feature = "p256")]
+impl From<pkcs8::Error> for KeyError {
+    fn from(e: pkcs8::Error) -> Self {
+        Self(e.to_string())
+    }
+}

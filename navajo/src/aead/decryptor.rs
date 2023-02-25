@@ -471,7 +471,7 @@ mod tests {
         let aad = Aad(b"additional data");
 
         chunks.for_each(|chunk| {
-            encryptor.update(aad.clone(), &chunk).unwrap();
+            encryptor.update(aad, &chunk).unwrap();
             if let Some(result) = encryptor.next() {
                 ciphertext_chunks.push(result);
             }

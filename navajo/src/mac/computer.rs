@@ -2,7 +2,6 @@ use core::mem;
 
 use alloc::vec::Vec;
 use futures::Stream;
-use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
 
 const BUFFER_SIZE: usize = 64; // Todo: profile this
 
@@ -81,7 +80,14 @@ impl Computer {
 
     fn update_chunk(&mut self, chunk: Vec<u8>) {
         if self.contexts.len() > 1 {
+            #[cfg(feature = "rayon")]
+            use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
+            #[cfg(feature = "rayon")]
             self.contexts.par_iter_mut().for_each(|ctx| {
+                ctx.update(&chunk);
+            });
+            #[cfg(not(feature = "rayon"))]
+            self.contexts.iter_mut().for_each(|ctx| {
                 ctx.update(&chunk);
             });
         } else {

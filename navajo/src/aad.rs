@@ -44,8 +44,8 @@ where
 {
     type Target = [u8];
     fn deref(&self) -> &Self::Target {
-        &self.as_ref()
+        self.as_ref()
     }
 }
 
-impl<A> Copy for Aad<A> where A: AsRef<[u8]> +  Copy {}
+impl<A> Copy for Aad<A> where A: AsRef<[u8]> + Copy {}

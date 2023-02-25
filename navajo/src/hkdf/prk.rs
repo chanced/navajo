@@ -14,6 +14,7 @@ pub struct Prk {
 impl Prk {
     pub fn expand(&self, info: &[&[u8]], out: &mut [u8]) -> Result<(), InvalidLengthError> {
         match &self.inner {
+            #[cfg(feature = "ring")]
             PrkInner::Ring(prk) => {
                 let len = Length(out.len());
                 let okm = prk.expand(info, len)?;
@@ -26,6 +27,7 @@ impl Prk {
 }
 
 struct Length(usize);
+#[cfg(feature = "ring")]
 impl ring::hkdf::KeyType for Length {
     fn len(&self) -> usize {
         self.0

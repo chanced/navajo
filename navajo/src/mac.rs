@@ -426,7 +426,8 @@ impl Mac {
 
     pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<serde_json::Value>) -> MacKeyInfo {
         let bytes = algorithm.generate_key();
-        self.create_key(algorithm, &bytes, None, Origin::Navajo, meta).unwrap() // safe, the key is generated
+        self.create_key(algorithm, &bytes, None, Origin::Navajo, meta)
+            .unwrap() // safe, the key is generated
     }
     pub fn add_external_key(
         &mut self,

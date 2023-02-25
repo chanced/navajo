@@ -29,6 +29,7 @@ impl Salt {
     }
     pub fn extract(&self, secret: &[u8]) -> Prk {
         match &self.inner {
+            #[cfg(feature = "ring")]
             SaltInner::Ring(ring) => ring.extract(secret),
             SaltInner::RustCrypto(rust_crypto) => rust_crypto.extract(secret),
         }
@@ -41,11 +42,12 @@ enum SaltInner {
     Ring(RingSalt),
     RustCrypto(RustCryptoSalt),
 }
-
+#[cfg(feature = "ring")]
 struct RingSalt {
     salt: ring::hkdf::Salt,
     algorithm: Algorithm,
 }
+#[cfg(feature = "ring")]
 impl RingSalt {
     fn new(algorithm: Algorithm, value: &[u8]) -> Self {
         Self {
@@ -84,15 +86,9 @@ impl RustCryptoSalt {
             #[cfg(not(feature = "ring"))]
             Algorithm::HkdfSha256 => Self::Sha256(hmac::Hmac::new_from_slice(value).unwrap()),
             #[cfg(not(feature = "ring"))]
-            Algorithm::HkdfSha384 => Self::Sha224(RustCryptoSaltInner {
-                hmac: hmac::Hmac::new_from_slice(&value).unwrap(),
-                algorithm,
-            }),
+            Algorithm::HkdfSha384 => Self::Sha224(hmac::Hmac::new_from_slice(value).unwrap()),
             #[cfg(not(feature = "ring"))]
-            Algorithm::HkdfSha512 => Self::Sha512(RustCryptoSaltInner {
-                hmac: hmac::Hmac::new_from_slice(value).unwrap(),
-                algorithm,
-            }),
+            Algorithm::HkdfSha512 => Self::Sha512(hmac::Hmac::new_from_slice(value).unwrap()),
             Algorithm::HkdfSha224 => Self::Sha224(hmac::Hmac::new_from_slice(value).unwrap()),
             Algorithm::HkdfSha512_224 => {
                 Self::Sha512_224(hmac::Hmac::new_from_slice(value).unwrap())
@@ -104,7 +100,7 @@ impl RustCryptoSalt {
             Algorithm::HkdfSha3_224 => Self::Sha3_224(hmac::Hmac::new_from_slice(value).unwrap()),
             Algorithm::HkdfSha3_384 => Self::Sha3_384(hmac::Hmac::new_from_slice(value).unwrap()),
             Algorithm::HkdfSha3_512 => Self::Sha3_512(hmac::Hmac::new_from_slice(value).unwrap()),
-
+            #[cfg(feature = "ring")]
             _ => unreachable!("ring supports Sha256, Sha384, and Sha512"),
         }
     }
@@ -112,7 +108,7 @@ impl RustCryptoSalt {
         use hmac::Mac;
         match self {
             #[cfg(not(feature = "ring"))]
-            RustCryptoSalt::Sha256(mut salt) => {
+            RustCryptoSalt::Sha256(salt) => {
                 let mut salt = salt.clone();
                 salt.update(secret);
                 Prk {
@@ -122,7 +118,7 @@ impl RustCryptoSalt {
                 }
             }
             #[cfg(not(feature = "ring"))]
-            RustCryptoSalt::Sha384(mut salt) => {
+            RustCryptoSalt::Sha384(salt) => {
                 let mut salt = salt.clone();
                 salt.update(secret);
                 Prk {
@@ -132,7 +128,7 @@ impl RustCryptoSalt {
                 }
             }
             #[cfg(not(feature = "ring"))]
-            RustCryptoSalt::Sha512(mut salt) => {
+            RustCryptoSalt::Sha512(salt) => {
                 let mut salt = salt.clone();
                 salt.update(secret);
                 Prk {

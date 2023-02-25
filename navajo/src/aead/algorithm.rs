@@ -6,20 +6,41 @@ use super::{
 };
 use alloc::string::String;
 use serde::{Deserialize, Serialize};
+use strum::{Display, EnumIter, IntoStaticStr, FromRepr};
 
 use super::Size;
 
 /// AEAD Algorithms
-#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    IntoStaticStr,
+    Display,
+    EnumIter,
+    FromRepr
+)]
+#[serde(rename_all = "SCREAMING-KEBAB-CASE")]
+#[strum(serialize_all = "SCREAMING-KEBAB-CASE")]
+#[repr(u8)]
 pub enum Algorithm {
-    /// https://datatracker.ietf.org/doc/html/rfc8439
-    ChaCha20Poly1305,
+    /// <https://datatracker.ietf.org/doc/html/rfc8439>
+    #[serde(rename = "ChaCha20-Poly1305")]
+    #[strum(serialize = "ChaCha20-Poly1305")]
+    ChaCha20Poly1305 = 0,
     /// AES 128 GCM
-    Aes128Gcm,
+    Aes128Gcm = 1,
     /// AES 256 GCM
-    Aes256Gcm,
+    Aes256Gcm = 2,
     /// <https://en.wikipedia.org/w/index.php?title=ChaCha20-Poly1305&section=3#XChaCha20-Poly1305_%E2%80%93_extended_nonce_variant>
-    XChaCha20Poly1305,
+    #[serde(rename = "XChaCha20-Poly1305")]
+    #[strum(serialize = "XChaCha20-Poly1305")]
+    XChaCha20Poly1305 = 3,
 }
 
 impl Algorithm {
@@ -51,36 +72,8 @@ impl Algorithm {
         Method::LEN + KEY_ID_LEN + self.nonce_prefix_len() + self.key_len()
     }
 }
-
-impl core::fmt::Display for Algorithm {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Algorithm::ChaCha20Poly1305 => write!(f, "ChaCha20Poly1305"),
-            Algorithm::Aes128Gcm => write!(f, "Aes128Gcm"),
-            Algorithm::Aes256Gcm => write!(f, "Aes256Gcm"),
-            Algorithm::XChaCha20Poly1305 => write!(f, "XChaCha20Poly1305"),
-        }
-    }
-}
 impl From<Algorithm> for u8 {
     fn from(alg: Algorithm) -> Self {
-        match alg {
-            Algorithm::ChaCha20Poly1305 => 0,
-            Algorithm::Aes128Gcm => 1,
-            Algorithm::Aes256Gcm => 2,
-            Algorithm::XChaCha20Poly1305 => 3,
-        }
-    }
-}
-impl TryFrom<u8> for Algorithm {
-    type Error = String;
-    fn try_from(v: u8) -> Result<Self, Self::Error> {
-        match v {
-            0 => Ok(Algorithm::ChaCha20Poly1305),
-            1 => Ok(Algorithm::Aes128Gcm),
-            2 => Ok(Algorithm::Aes256Gcm),
-            3 => Ok(Algorithm::XChaCha20Poly1305),
-            _ => Err("invalid algorithm".into()),
-        }
+        alg as u8
     }
 }
