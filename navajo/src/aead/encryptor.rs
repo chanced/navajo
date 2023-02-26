@@ -1,9 +1,8 @@
 use core::{mem, ops::Range};
 
-use alloc::{
-    collections::{vec_deque::IntoIter, VecDeque},
-    vec::Vec,
-};
+use alloc::collections::{vec_deque::IntoIter, VecDeque};
+use alloc::vec;
+use alloc::vec::Vec;
 use zeroize::ZeroizeOnDrop;
 
 use crate::{
@@ -210,7 +209,7 @@ where
     fn derive_key(key: &Key<Material>, aad: &[u8]) -> (Vec<u8>, sensitive::Bytes) {
         let mut salt_bytes = vec![0u8; key.algorithm().key_len()];
         rand::fill(&mut salt_bytes);
-        let salt = hkdf::Salt::new(hkdf::Algorithm::HkdfSha256, &salt_bytes);
+        let salt = hkdf::Salt::new(hkdf::Algorithm::Sha256, &salt_bytes);
         let prk = salt.extract(key.material().bytes());
         let mut derived_key = vec![0u8; key.algorithm().key_len()];
         prk.expand(&[aad], &mut derived_key).unwrap(); // safety: key is always an appropriate length
@@ -238,6 +237,9 @@ where
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+    use alloc::vec::Vec;
+
     use crate::{
         aead::{segment::FOUR_KB, Algorithm, Method, Segment},
         keyring::KEY_ID_LEN,

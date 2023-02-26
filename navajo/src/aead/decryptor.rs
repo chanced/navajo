@@ -1,5 +1,3 @@
-use alloc::vec::IntoIter;
-
 use super::{
     nonce::{Nonce, NonceSequence},
     Material,
@@ -10,6 +8,8 @@ use crate::{
     key::Key,
     Aad, Buffer,
 };
+use alloc::vec;
+use alloc::vec::{IntoIter, Vec};
 
 use super::{cipher::Cipher, nonce::NonceOrNonceSequence, Aead, Algorithm, Method};
 
@@ -217,7 +217,7 @@ where
     fn move_cursor(&mut self, idx: usize) {
         if idx > 0 {
             let mut buf = self.buf.split_off(idx);
-            std::mem::swap(&mut buf, &mut self.buf);
+            core::mem::swap(&mut buf, &mut self.buf);
         }
     }
 
@@ -299,10 +299,9 @@ where
             }
         }
     }
-
     fn derive_key(&self, salt: &[u8], aad: &[u8]) -> Vec<u8> {
         let key = self.key.as_ref().unwrap();
-        let salt = Salt::new(hkdf::Algorithm::HkdfSha256, salt);
+        let salt = Salt::new(hkdf::Algorithm::Sha256, salt);
         let prk = salt.extract(key.material().bytes());
         let mut derived_key = vec![0u8; key.len()];
         prk.expand(&[aad], &mut derived_key).unwrap(); // safety: key is always an appropriate length

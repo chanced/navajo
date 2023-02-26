@@ -185,9 +185,9 @@ where
 
 #[cfg(test)]
 mod tests {
-
     use crate::Buffer;
     use alloc::vec;
+    use alloc::vec::Vec;
 
     fn split_off<B: Buffer>(b: &mut B) -> B {
         b.split_off(3)
@@ -240,7 +240,7 @@ mod tests {
         use bytes::BytesMut;
 
         let header = [0, 1, 2, 3, 4];
-        let buffer: Vec<u8> = vec![];
+        let buffer: alloc::vec::Vec<u8> = vec![];
         let mut buffer = BytesMut::from(&buffer[..]);
         buffer.prepend_slice(&header);
         assert_eq!(buffer, vec![0, 1, 2, 3, 4])

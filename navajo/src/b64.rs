@@ -1,4 +1,5 @@
 pub(crate) mod standard {
+    use alloc::{string::String, vec::Vec};
     use base64::{engine::general_purpose, Engine as _};
     use serde::{self, Deserialize, Deserializer, Serializer};
 

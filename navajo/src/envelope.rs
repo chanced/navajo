@@ -1,7 +1,7 @@
 use core::{any::Any, fmt::Display, pin::Pin};
 
 use aes_gcm::{aead::Aead as RustCryptoAead, AeadCore};
-use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, string::String, vec, vec::Vec};
 use chacha20poly1305::{aead::Payload, ChaCha20Poly1305, KeyInit};
 
 use futures::Future;
@@ -227,8 +227,9 @@ mod tests {
         use crate::mac::{Algorithm, Mac};
 
         let mut m = Mac::new(Algorithm::Sha256, None);
+
         m.add_key(
-            Algorithm::Blake3,
+            Algorithm::Sha512,
             Some(serde_json::Value::String("test".to_string())),
         );
 

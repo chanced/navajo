@@ -29,6 +29,7 @@ optional = true
 [dependencies.base64]
 default-features = false
 features = ["alloc"]
+version = "0.21"
 
 # zeroize
 [dependencies.zeroize]
@@ -80,6 +81,7 @@ optional = true
 # typenum
 [dependencies.typenum]
 features = ["no_std"]
+version = "1.16"
 
 # generic-array
 [dependencies.generic-array]
@@ -194,7 +196,7 @@ features = ["alloc"]
 [dependencies.ed25519-dalek]
 version = "1"
 default-features = false
-features = ["alloc"]
+features = ["alloc", "u64_backend"]
 optional = true
 
 # -------------------------
@@ -227,13 +229,14 @@ default = [
 	"hmac",      # todo: remove
 	"cmac",      # todo: remove
 	"aes",       # todo remove
-	"blake3",    # todo: remove
-	"sha2",      # todo: remove
-	"sha3",      # todoo: remove
+	# "blake3",    # todo: remove
+	"sha2", # todo: remove
+	"sha3", # todoo: remove
 ]
 signature = ["ed25519", "p256", "p384"]
-mac = []
-aead = []
+mac = ["sha2", "hmac"]
+hkdf = ["sha2", "hmac"]
+aead = ["hkdf"]
 std = [
 	"ring?/std",
 	"hex/std",

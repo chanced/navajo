@@ -1,14 +1,23 @@
 use core::{fmt::Display, str::FromStr};
 
+// todo: provide appropriate error messages when a primitive is correct but not enabled
+
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{value::RawValue, Value};
 
 use crate::{
-    aead, daead,
     envelope::is_cleartext,
     error::{OpenError, SealError},
     keyring::{open_keyring_value, open_keyring_value_sync, Keyring},
-    mac, signature, Aad, Aead, Daead, Envelope, Mac, Signer,
+    Aad,
+    Envelope,
+    // mac, signature, Aad, Daead, Envelope, Mac, Signer,
 };
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 
@@ -85,11 +94,15 @@ impl TryFrom<u8> for Kind {
 }
 
 pub enum Primitive {
-    Aead(Aead),
-    Daead(Daead),
+    #[cfg(feature = "aead")]
+    Aead(crate::Aead),
+    #[cfg(feature = "daead")]
+    Daead(crate::Daead),
     // Hpke(Hpke) // TODO: Enable this when HPKE is implemented
-    Mac(Mac),
-    Signature(Signer),
+    #[cfg(feature = "mac")]
+    Mac(crate::Mac),
+    #[cfg(feature = "signature")]
+    Signature(crate::Signer),
 }
 impl Primitive {
     pub async fn seal<'a, A, E>(&self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
@@ -101,9 +114,13 @@ impl Primitive {
             self.serialize_cleartext()
         } else {
             let sealed = match self {
+                #[cfg(feature = "aead")]
                 Primitive::Aead(aead) => aead.keyring().seal(aad, envelope).await?,
+                #[cfg(feature = "daead")]
                 Primitive::Daead(daead) => daead.keyring().seal(aad, envelope).await?,
+                #[cfg(feature = "mac")]
                 Primitive::Mac(mac) => mac.keyring().seal(aad, envelope).await?,
+                #[cfg(feature = "signature")]
                 Primitive::Signature(sig) => sig.keyring().seal(aad, envelope).await?,
             };
             Ok(sealed)
@@ -119,9 +136,13 @@ impl Primitive {
         } else {
             let mut res = vec![self.kind().as_u8()];
             let sealed = match self {
+                #[cfg(feature = "aead")]
                 Primitive::Aead(aead) => aead.keyring().seal_sync(aad, envelope)?,
+                #[cfg(feature = "daead")]
                 Primitive::Daead(daead) => daead.keyring().seal_sync(aad, envelope)?,
+                #[cfg(feature = "mac")]
                 Primitive::Mac(mac) => mac.keyring().seal_sync(aad, envelope)?,
+                #[cfg(feature = "signature")]
                 Primitive::Signature(sig) => sig.keyring().seal_sync(aad, envelope)?,
             };
             res.extend(sealed.into_iter());
@@ -163,54 +184,91 @@ impl Primitive {
             Self::open_value(kind, value)
         }
     }
+
     fn open_value(kind: Kind, value: Value) -> Result<Self, OpenError> {
         match kind {
             Kind::Aead => {
-                let keyring: Keyring<aead::Material> = serde_json::from_value(value)?;
-                Ok(Self::Aead(Aead::from_keyring(keyring)))
+                #[cfg(feature = "aead")]
+                {
+                    let keyring: Keyring<crate::aead::Material> = serde_json::from_value(value)?;
+                    Ok(Self::Aead(crate::Aead::from_keyring(keyring)))
+                }
+                #[cfg(not(feature = "aead"))]
+                {
+                    Err("aead feature is not enabled".into())
+                }
             }
             Kind::Daead => {
-                let keyring: Keyring<daead::Material> = serde_json::from_value(value)?;
-                Ok(Self::Daead(Daead::from_keyring(keyring)))
+                #[cfg(feature = "daead")]
+                {
+                    let keyring: Keyring<crate::daead::Material> = serde_json::from_value(value)?;
+                    Ok(Self::Daead(crate::Daead::from_keyring(keyring)))
+                }
+                #[cfg(not(feature = "daead"))]
+                {
+                    Err("daead feature is not enabled".into())
+                }
             }
             Kind::Mac => {
-                let keyring: Keyring<mac::Material> = serde_json::from_value(value)?;
-                Ok(Self::Mac(Mac::from_keyring(keyring)))
+                #[cfg(feature = "mac")]
+                {
+                    let keyring: Keyring<crate::mac::Material> = serde_json::from_value(value)?;
+                    Ok(Self::Mac(crate::Mac::from_keyring(keyring)))
+                }
+                #[cfg(not(feature = "mac"))]
+                {
+                    Err("mac feature is not enabled".into())
+                }
             }
             Kind::Signature => {
-                let keyring: Keyring<signature::Material> = serde_json::from_value(value)?;
-                // Ok(Self::Signature(Signature::from_keyring(keyring)))
-                todo!()
+                #[cfg(feature = "signature")]
+                {
+                    let keyring: Keyring<crate::signature::Material> =
+                        serde_json::from_value(value)?;
+                    Ok(Self::Signature(crate::Signer::from_keyring(keyring)))
+                }
+                #[cfg(not(feature = "signature"))]
+                {
+                    Err("signature feature is not enabled".into())
+                }
             }
         }
     }
     pub fn kind(&self) -> Kind {
         match self {
+            #[cfg(feature = "aead")]
             Primitive::Aead(_) => Kind::Aead,
+            #[cfg(feature = "daead")]
             Primitive::Daead(_) => Kind::Daead,
+            #[cfg(feature = "mac")]
             Primitive::Mac(_) => Kind::Mac,
+            #[cfg(feature = "signature")]
             Primitive::Signature(_) => Kind::Signature,
         }
     }
-    pub fn aead(self) -> Option<Aead> {
+    #[cfg(feature = "aead")]
+    pub fn aead(self) -> Option<crate::Aead> {
         match self {
             Primitive::Aead(aead) => Some(aead),
             _ => None,
         }
     }
-    pub fn daead(self) -> Option<Daead> {
+    #[cfg(feature = "daead")]
+    pub fn daead(self) -> Option<crate::Daead> {
         match self {
             Primitive::Daead(daead) => Some(daead),
             _ => None,
         }
     }
-    pub fn mac(self) -> Option<Mac> {
+    #[cfg(feature = "mac")]
+    pub fn mac(self) -> Option<crate::Mac> {
         match self {
             Primitive::Mac(mac) => Some(mac),
             _ => None,
         }
     }
-    pub fn signature(self) -> Option<Signer> {
+    #[cfg(feature = "signature")]
+    pub fn signature(self) -> Option<crate::Signer> {
         match self {
             Primitive::Signature(sig) => Some(sig),
             _ => None,
@@ -218,37 +276,69 @@ impl Primitive {
     }
     fn deserialize_cleartext(value: &[u8]) -> Result<Self, OpenError> {
         let value: Value = serde_json::from_slice(value)?;
-        println!(
-            "\n\nvalue: {}\n\n",
-            serde_json::to_string_pretty(&value).unwrap()
-        );
         let data: PrimitiveData = serde_json::from_value(value)?;
 
         match data.kind {
             Kind::Aead => {
-                let keyring: Keyring<aead::Material> = serde_json::from_value(data.keyring)?;
-                Ok(Primitive::Aead(Aead::from_keyring(keyring)))
+                #[cfg(feature = "aead")]
+                {
+                    let keyring: Keyring<crate::aead::Material> =
+                        serde_json::from_value(data.keyring)?;
+                    Ok(Primitive::Aead(crate::Aead::from_keyring(keyring)))
+                }
+                #[cfg(not(feature = "aead"))]
+                {
+                    Err("aead feature is not enabled".into())
+                }
             }
             Kind::Daead => {
-                let keyring: Keyring<daead::Material> = serde_json::from_value(data.keyring)?;
-                Ok(Primitive::Daead(Daead::from_keyring(keyring)))
+                #[cfg(feature = "daead")]
+                {
+                    let keyring: Keyring<crate::daead::Material> =
+                        serde_json::from_value(data.keyring)?;
+                    Ok(Primitive::Daead(crate::Daead::from_keyring(keyring)))
+                }
+                #[cfg(not(feature = "daead"))]
+                {
+                    Err("daead feature is not enabled".into())
+                }
             }
             Kind::Mac => {
-                let keyring: Keyring<mac::Material> = serde_json::from_value(data.keyring)?;
-                Ok(Primitive::Mac(Mac::from_keyring(keyring)))
+                #[cfg(feature = "mac")]
+                {
+                    let keyring: Keyring<crate::mac::Material> =
+                        serde_json::from_value(data.keyring)?;
+                    Ok(Primitive::Mac(crate::Mac::from_keyring(keyring)))
+                }
+                #[cfg(not(feature = "mac"))]
+                {
+                    Err("mac feature is not enabled".into())
+                }
             }
             Kind::Signature => {
-                let keyring: Keyring<signature::Material> = serde_json::from_value(data.keyring)?;
-                Ok(Primitive::Signature(Signer::from_keyring(keyring)))
+                #[cfg(feature = "signature")]
+                {
+                    let keyring: Keyring<crate::signature::Material> =
+                        serde_json::from_value(data.keyring)?;
+                    Ok(Primitive::Signature(crate::Signer::from_keyring(keyring)))
+                }
+                #[cfg(not(feature = "signature"))]
+                {
+                    Err("signature feature is not enabled".into())
+                }
             }
         }
     }
 
     fn serialize_cleartext(&self) -> Result<Vec<u8>, SealError> {
         let keyring = match self {
+            #[cfg(feature = "aead")]
             Primitive::Aead(aead) => serde_json::to_value(aead.keyring())?,
+            #[cfg(feature = "daead")]
             Primitive::Daead(daead) => serde_json::to_value(daead.keyring())?,
+            #[cfg(feature = "mac")]
             Primitive::Mac(mac) => serde_json::to_value(mac.keyring())?,
+            #[cfg(feature = "signature")]
             Primitive::Signature(sig) => serde_json::to_value(sig.keyring())?,
         };
         let data = PrimitiveData {
@@ -272,15 +362,18 @@ mod tests {
     use super::*;
 
     #[cfg(feature = "mac")]
+    #[cfg(feature = "std")]
     #[tokio::test]
     async fn test_in_mem_seal_open_mac() {
-        let mac = mac::Mac::new(mac::Algorithm::Sha256, None);
+        let mac = crate::mac::Mac::new(crate::mac::Algorithm::Sha256, None);
         let primary_key = mac.primary_key();
         // in a real application, you would use a real key management service.
         // InMemory is only suitable for testing.
         let in_mem = InMemory::default();
-        let data = Mac::seal(&mac, Aad::empty(), &in_mem).await.unwrap();
-        let mac = Mac::open(Aad::empty(), &data, &in_mem).await.unwrap();
+        let data = crate::Mac::seal(&mac, Aad::empty(), &in_mem).await.unwrap();
+        let mac = crate::Mac::open(Aad::empty(), &data, &in_mem)
+            .await
+            .unwrap();
         assert_eq!(mac.primary_key(), primary_key);
     }
 }

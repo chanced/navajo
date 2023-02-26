@@ -104,6 +104,8 @@ impl Inner {
 #[cfg(feature = "blake3")]
 #[derive(Clone)]
 pub(crate) struct Blake3Context(blake3::Hasher);
+
+#[cfg(feature = "blake3")]
 impl Blake3Context {
     fn update(&mut self, data: &[u8]) {
         self.0.update(data);
@@ -112,7 +114,7 @@ impl Blake3Context {
         output::Output::Blake3(self.0.finalize().into())
     }
 }
-
+#[cfg(feature = "blake3")]
 impl From<blake3::Hasher> for Blake3Context {
     fn from(hasher: blake3::Hasher) -> Self {
         Self(hasher)
@@ -149,8 +151,6 @@ impl RustCryptoContext {
             RustCryptoKey::Sha384(ref mut k) => hmac::Mac::update(k, data),
             #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
             RustCryptoKey::Sha512(ref mut k) => hmac::Mac::update(k, data),
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
-            RustCryptoKey::Sha224(ref mut k) => hmac::Mac::update(k, data),
             #[cfg(all(feature = "sha3", feature = "hmac"))]
             RustCryptoKey::Sha3_256(ref mut k) => hmac::Mac::update(k, data),
             #[cfg(all(feature = "sha3", feature = "hmac"))]
@@ -180,10 +180,6 @@ impl RustCryptoContext {
             #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
             RustCryptoKey::Sha512(k) => {
                 RustCryptoOutput::Sha512(hmac::Mac::finalize(k).into_bytes())
-            }
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
-            RustCryptoKey::Sha224(k) => {
-                RustCryptoOutput::Sha224(hmac::Mac::finalize(k).into_bytes())
             }
             #[cfg(all(feature = "sha3", feature = "hmac"))]
             RustCryptoKey::Sha3_256(k) => {

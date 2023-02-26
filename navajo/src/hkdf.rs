@@ -10,6 +10,7 @@ pub use salt::Salt;
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
 
     #[test]
     fn test_rust_crypto() {
@@ -33,14 +34,14 @@ mod tests {
 
         {
             use crate::hkdf::*;
-            let salt = Salt::new(Algorithm::HkdfSha256, &salt[..]);
+            let salt = Salt::new(Algorithm::Sha256, &salt[..]);
             let prk = salt.extract(&ikm);
             let mut okm = [0u8; 42];
             prk.expand(&[&info[..]], &mut okm)
                 .expect("42 is a valid length for Sha256 to output");
             assert_eq!(okm[..], expected[..])
         }
-
+        #[cfg(feature = "sha3")]
         {
             use rust_crypto_hkdf::Hkdf;
             use sha3::Sha3_224;
@@ -50,10 +51,10 @@ mod tests {
             expected = okm;
             // assert_eq!(okm[..], expected[..]);
         }
-
+        #[cfg(feature = "sha3")]
         {
             use crate::hkdf::*;
-            let salt = Salt::new(Algorithm::HkdfSha3_224, &salt[..]);
+            let salt = Salt::new(Algorithm::Sha3_224, &salt[..]);
             let prk = salt.extract(&ikm);
             let mut okm = [0u8; 42];
             prk.expand(&[&info[..]], &mut okm).unwrap();

@@ -126,9 +126,6 @@ pub(super) enum RustCryptoKey {
     #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
     Sha512(hmac::Hmac<sha2::Sha512>),
 
-    #[cfg(all(feature = "sha2", feature = "hmac"))]
-    Sha224(hmac::Hmac<sha2::Sha224>),
-
     #[cfg(all(feature = "sha3", feature = "hmac"))]
     Sha3_256(hmac::Hmac<sha3::Sha3_256>),
 
@@ -160,8 +157,6 @@ impl RustCryptoKey {
             Algorithm::Sha384 => Self::Sha384(hmac::Mac::new_from_slice(bytes)?),
             #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
             Algorithm::Sha512 => Self::Sha512(hmac::Mac::new_from_slice(bytes)?),
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
-            Algorithm::Sha224 => Self::Sha224(hmac::Mac::new_from_slice(bytes)?),
             #[cfg(all(feature = "sha3", feature = "hmac"))]
             Algorithm::Sha3_256 => Self::Sha3_256(hmac::Mac::new_from_slice(bytes)?),
             #[cfg(all(feature = "sha3", feature = "hmac"))]

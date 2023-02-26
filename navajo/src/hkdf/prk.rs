@@ -8,6 +8,11 @@ pub struct Prk {
     pub(super) inner: PrkInner,
 }
 
+#[cfg(any(
+    feature = "ring",
+    all(feature = "sha2", feature = "hmac"),
+    all(feature = "sha3", feature = "hmac")
+))]
 impl Prk {
     pub fn expand(&self, info: &[&[u8]], out: &mut [u8]) -> Result<(), InvalidLengthError> {
         match &self.inner {
@@ -39,63 +44,56 @@ pub(super) enum PrkInner {
 }
 #[derive(Clone, Debug)]
 pub(super) enum RustCryptoPrk {
-    #[cfg(all(not(feature = "ring"), feature = "sha2"))]
+    #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
     Sha256(hmac::digest::Output<hmac::Hmac<sha2::Sha256>>),
-    #[cfg(all(not(feature = "ring"), feature = "sha2"))]
+    #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
     Sha384(hmac::digest::Output<hmac::Hmac<sha2::Sha384>>),
-    #[cfg(all(not(feature = "ring"), feature = "sha2"))]
+    #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
     Sha512(hmac::digest::Output<hmac::Hmac<sha2::Sha512>>),
-    Sha224(hmac::digest::Output<hmac::Hmac<sha2::Sha224>>),
-    Sha512_224(hmac::digest::Output<hmac::Hmac<sha2::Sha512_224>>),
-    Sha512_256(hmac::digest::Output<hmac::Hmac<sha2::Sha512_256>>),
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
     Sha3_256(hmac::digest::Output<hmac::Hmac<sha3::Sha3_256>>),
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
     Sha3_224(hmac::digest::Output<hmac::Hmac<sha3::Sha3_224>>),
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
     Sha3_384(hmac::digest::Output<hmac::Hmac<sha3::Sha3_384>>),
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
     Sha3_512(hmac::digest::Output<hmac::Hmac<sha3::Sha3_512>>),
 }
 impl RustCryptoPrk {
     fn expand(&self, info: &[&[u8]], out: &mut [u8]) -> Result<(), InvalidLengthError> {
         use rust_crypto_hkdf::Hkdf;
         match self {
-            #[cfg(not(feature = "ring"))]
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
             RustCryptoPrk::Sha256(prk) => {
                 let hk = Hkdf::<sha2::Sha256>::from_prk(prk).unwrap();
                 hk.expand_multi_info(info, out)?;
             }
-            #[cfg(not(feature = "ring"))]
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
             RustCryptoPrk::Sha384(prk) => {
                 let hk = Hkdf::<sha2::Sha384>::from_prk(prk).unwrap();
                 hk.expand_multi_info(info, out)?;
             }
-            #[cfg(not(feature = "ring"))]
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
             RustCryptoPrk::Sha512(prk) => {
                 let hk = Hkdf::<sha2::Sha512>::from_prk(prk).unwrap();
                 hk.expand_multi_info(info, out)?;
             }
-            RustCryptoPrk::Sha224(prk) => {
-                let hk = Hkdf::<sha2::Sha224>::from_prk(prk).unwrap();
-                hk.expand_multi_info(info, out)?;
-            }
-            RustCryptoPrk::Sha512_224(prk) => {
-                let hk = Hkdf::<sha2::Sha512_224>::from_prk(prk).unwrap();
-                hk.expand_multi_info(info, out)?;
-            }
-            RustCryptoPrk::Sha512_256(prk) => {
-                let hk = Hkdf::<sha2::Sha512_256>::from_prk(prk).unwrap();
-                hk.expand_multi_info(info, out)?;
-            }
+            #[cfg(feature = "sha3")]
             RustCryptoPrk::Sha3_256(prk) => {
                 let hk = Hkdf::<sha3::Sha3_256>::from_prk(prk).unwrap();
                 hk.expand_multi_info(info, out)?;
             }
+            #[cfg(feature = "sha3")]
             RustCryptoPrk::Sha3_224(prk) => {
                 let hk = Hkdf::<sha3::Sha3_224>::from_prk(prk).unwrap();
                 hk.expand_multi_info(info, out)?;
             }
+            #[cfg(feature = "sha3")]
             RustCryptoPrk::Sha3_384(prk) => {
                 let hk = Hkdf::<sha3::Sha3_384>::from_prk(prk).unwrap();
                 hk.expand_multi_info(info, out)?;
             }
+            #[cfg(feature = "sha3")]
             RustCryptoPrk::Sha3_512(prk) => {
                 let hk = Hkdf::<sha3::Sha3_512>::from_prk(prk).unwrap();
                 hk.expand_multi_info(info, out)?;
@@ -103,21 +101,28 @@ impl RustCryptoPrk {
         };
         Ok(())
     }
+
+    #[cfg(any(
+        feature = "ring",
+        all(feature = "sha2", feature = "hmac"),
+        all(feature = "sha3", feature = "hmac")
+    ))]
     fn algorithm(&self) -> Algorithm {
         match self {
-            #[cfg(not(feature = "ring"))]
-            RustCryptoPrk::Sha256(_) => Algorithm::HkdfSha256,
-            #[cfg(not(feature = "ring"))]
-            RustCryptoPrk::Sha384(_) => Algorithm::HkdfSha384,
-            #[cfg(not(feature = "ring"))]
-            RustCryptoPrk::Sha512(_) => Algorithm::HkdfSha512,
-            RustCryptoPrk::Sha224(_) => Algorithm::HkdfSha224,
-            RustCryptoPrk::Sha512_224(_) => Algorithm::HkdfSha512_224,
-            RustCryptoPrk::Sha512_256(_) => Algorithm::HkdfSha512_256,
-            RustCryptoPrk::Sha3_256(_) => Algorithm::HkdfSha256,
-            RustCryptoPrk::Sha3_224(_) => Algorithm::HkdfSha3_224,
-            RustCryptoPrk::Sha3_384(_) => Algorithm::HkdfSha3_384,
-            RustCryptoPrk::Sha3_512(_) => Algorithm::HkdfSha3_512,
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            RustCryptoPrk::Sha256(_) => Algorithm::Sha256,
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            RustCryptoPrk::Sha384(_) => Algorithm::Sha384,
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            RustCryptoPrk::Sha512(_) => Algorithm::Sha512,
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            RustCryptoPrk::Sha3_256(_) => Algorithm::Sha256,
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            RustCryptoPrk::Sha3_224(_) => Algorithm::Sha3_224,
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            RustCryptoPrk::Sha3_384(_) => Algorithm::Sha3_384,
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            RustCryptoPrk::Sha3_512(_) => Algorithm::Sha3_512,
         }
     }
 }

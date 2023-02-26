@@ -192,7 +192,7 @@ impl Aead {
     {
         DecryptTryStream::new(stream, self.clone(), aad)
     }
-
+    #[cfg(feature = "std")]
     pub fn decrypt_reader<R, A>(&self, reader: R, aad: Aad<A>) -> DecryptReader<R, A, &Aead>
     where
         R: std::io::Read,

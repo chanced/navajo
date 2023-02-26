@@ -1,5 +1,7 @@
 use core::{fmt::Debug, ops::Deref};
 
+use alloc::vec::Vec;
+
 pub(super) trait DigestOutput: AsRef<[u8]> + Clone {
     fn into_bytes(self) -> Vec<u8> {
         self.as_ref().to_vec()
@@ -22,6 +24,7 @@ impl Output {
             #[cfg(feature = "ring")]
             Self::Ring(output) => output.as_ref(),
             Self::RustCrypto(output) => output.as_ref(),
+            #[cfg(feature = "blake3")]
             Self::Blake3(output) => output.as_ref(),
         }
     }
@@ -33,6 +36,7 @@ impl DigestOutput for Output {
             #[cfg(feature = "ring")]
             Self::Ring(output) => output.truncatable(),
             Self::RustCrypto(output) => output.truncatable(),
+            #[cfg(feature = "blake3")]
             Self::Blake3(output) => output.truncatable(),
         }
     }
@@ -106,9 +110,6 @@ pub(super) enum RustCryptoOutput {
     #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
     Sha512(sha2::digest::Output<sha2::Sha512>),
 
-    #[cfg(all(feature = "sha2", feature = "hmac"))]
-    Sha224(sha2::digest::Output<sha2::Sha224>),
-
     #[cfg(all(feature = "sha3", feature = "hmac"))]
     Sha3_256(sha3::digest::Output<sha3::Sha3_256>),
 
@@ -145,8 +146,6 @@ impl AsRef<[u8]> for RustCryptoOutput {
             Self::Sha384(output) => output.as_ref(),
             #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
             Self::Sha512(output) => output.as_ref(),
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
-            Self::Sha224(output) => output.as_ref(),
             #[cfg(all(feature = "sha3", feature = "hmac"))]
             Self::Sha3_256(output) => output.as_ref(),
             #[cfg(all(feature = "sha3", feature = "hmac"))]
@@ -174,8 +173,6 @@ impl Deref for RustCryptoOutput {
             Self::Sha384(output) => output.as_ref(),
             #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
             Self::Sha512(output) => output.as_ref(),
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
-            Self::Sha224(output) => output.as_ref(),
             #[cfg(all(feature = "sha3", feature = "hmac"))]
             Self::Sha3_256(output) => output.as_ref(),
             #[cfg(all(feature = "sha3", feature = "hmac"))]

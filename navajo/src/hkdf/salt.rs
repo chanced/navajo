@@ -10,7 +10,7 @@ pub struct Salt {
 impl Salt {
     pub fn new(algorithm: Algorithm, value: &[u8]) -> Self {
         let inner = match algorithm {
-            Algorithm::HkdfSha256 | Algorithm::HkdfSha384 | Algorithm::HkdfSha512 => {
+            Algorithm::Sha256 | Algorithm::Sha384 | Algorithm::Sha512 => {
                 #[cfg(feature = "ring")]
                 {
                     SaltInner::Ring(RingSalt::new(algorithm, value))
@@ -64,42 +64,44 @@ impl RingSalt {
 }
 
 enum RustCryptoSalt {
-    #[cfg(not(feature = "ring"))]
+    #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
     Sha256(hmac::Hmac<sha2::Sha256>),
-    #[cfg(not(feature = "ring"))]
+    #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
     Sha384(hmac::Hmac<sha2::Sha384>),
-    #[cfg(not(feature = "ring"))]
+    #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
     Sha512(hmac::Hmac<sha2::Sha512>),
-    Sha224(hmac::Hmac<sha2::Sha224>),
-    Sha512_224(hmac::Hmac<sha2::Sha512_224>),
-    Sha512_256(hmac::Hmac<sha2::Sha512_256>),
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
     Sha3_256(hmac::Hmac<sha3::Sha3_256>),
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
     Sha3_224(hmac::Hmac<sha3::Sha3_224>),
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
     Sha3_384(hmac::Hmac<sha3::Sha3_384>),
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
     Sha3_512(hmac::Hmac<sha3::Sha3_512>),
 }
 
 impl RustCryptoSalt {
+    // #[cfg(any(
+    //     feature = "ring",
+    //     all(feature = "sha2", feature = "hmac"),
+    //     all(feature = "sha3", feature = "hmac")
+    // ))]
     fn new(algorithm: Algorithm, value: &[u8]) -> Self {
-        use hmac::Mac;
         match algorithm {
-            #[cfg(not(feature = "ring"))]
-            Algorithm::HkdfSha256 => Self::Sha256(hmac::Hmac::new_from_slice(value).unwrap()),
-            #[cfg(not(feature = "ring"))]
-            Algorithm::HkdfSha384 => Self::Sha224(hmac::Hmac::new_from_slice(value).unwrap()),
-            #[cfg(not(feature = "ring"))]
-            Algorithm::HkdfSha512 => Self::Sha512(hmac::Hmac::new_from_slice(value).unwrap()),
-            Algorithm::HkdfSha224 => Self::Sha224(hmac::Hmac::new_from_slice(value).unwrap()),
-            Algorithm::HkdfSha512_224 => {
-                Self::Sha512_224(hmac::Hmac::new_from_slice(value).unwrap())
-            }
-            Algorithm::HkdfSha512_256 => {
-                Self::Sha512_256(hmac::Hmac::new_from_slice(value).unwrap())
-            }
-            Algorithm::HkdfSha3_256 => Self::Sha3_256(hmac::Hmac::new_from_slice(value).unwrap()),
-            Algorithm::HkdfSha3_224 => Self::Sha3_224(hmac::Hmac::new_from_slice(value).unwrap()),
-            Algorithm::HkdfSha3_384 => Self::Sha3_384(hmac::Hmac::new_from_slice(value).unwrap()),
-            Algorithm::HkdfSha3_512 => Self::Sha3_512(hmac::Hmac::new_from_slice(value).unwrap()),
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            Algorithm::Sha256 => Self::Sha256(hmac::Mac::new_from_slice(value).unwrap()),
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            Algorithm::Sha384 => Self::Sha384(hmac::Mac::new_from_slice(value).unwrap()),
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            Algorithm::Sha512 => Self::Sha512(hmac::Mac::new_from_slice(value).unwrap()),
+            #[cfg(feature = "sha3")]
+            Algorithm::Sha3_256 => Self::Sha3_256(hmac::Mac::new_from_slice(value).unwrap()),
+            #[cfg(feature = "sha3")]
+            Algorithm::Sha3_224 => Self::Sha3_224(hmac::Mac::new_from_slice(value).unwrap()),
+            #[cfg(feature = "sha3")]
+            Algorithm::Sha3_384 => Self::Sha3_384(hmac::Mac::new_from_slice(value).unwrap()),
+            #[cfg(feature = "sha3")]
+            Algorithm::Sha3_512 => Self::Sha3_512(hmac::Mac::new_from_slice(value).unwrap()),
             #[cfg(feature = "ring")]
             _ => unreachable!("ring supports Sha256, Sha384, and Sha512"),
         }
@@ -137,33 +139,7 @@ impl RustCryptoSalt {
                     )),
                 }
             }
-            RustCryptoSalt::Sha224(salt) => {
-                let mut salt = salt.clone();
-                salt.update(secret);
-                Prk {
-                    inner: PrkInner::RustCrypto(RustCryptoPrk::Sha224(
-                        salt.finalize().into_bytes(),
-                    )),
-                }
-            }
-            RustCryptoSalt::Sha512_224(salt) => {
-                let mut salt = salt.clone();
-                salt.update(secret);
-                Prk {
-                    inner: PrkInner::RustCrypto(RustCryptoPrk::Sha512_224(
-                        salt.finalize().into_bytes(),
-                    )),
-                }
-            }
-            RustCryptoSalt::Sha512_256(salt) => {
-                let mut salt = salt.clone();
-                salt.update(secret);
-                Prk {
-                    inner: PrkInner::RustCrypto(RustCryptoPrk::Sha512_256(
-                        salt.finalize().into_bytes(),
-                    )),
-                }
-            }
+            #[cfg(feature = "sha3")]
             RustCryptoSalt::Sha3_256(salt) => {
                 let mut salt = salt.clone();
                 salt.update(secret);
@@ -173,6 +149,7 @@ impl RustCryptoSalt {
                     )),
                 }
             }
+            #[cfg(feature = "sha3")]
             RustCryptoSalt::Sha3_224(salt) => {
                 let mut salt = salt.clone();
                 salt.update(secret);
@@ -182,6 +159,7 @@ impl RustCryptoSalt {
                     )),
                 }
             }
+            #[cfg(feature = "sha3")]
             RustCryptoSalt::Sha3_384(salt) => {
                 let mut salt = salt.clone();
                 salt.update(secret);
@@ -191,6 +169,7 @@ impl RustCryptoSalt {
                     )),
                 }
             }
+            #[cfg(feature = "sha3")]
             RustCryptoSalt::Sha3_512(salt) => {
                 let mut salt = salt.clone();
                 salt.update(secret);

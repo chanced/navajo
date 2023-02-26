@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{aead::AeadKeyInfo, mac::MacKeyInfo, KeyMaterial, Origin, Status};
+use crate::{KeyMaterial, Origin, Status};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Metadata for a particular key.
@@ -23,18 +23,6 @@ where
     }
 }
 
-impl From<MacKeyInfo> for KeyInfo<crate::mac::Algorithm> {
-    fn from(info: MacKeyInfo) -> Self {
-        Self {
-            id: info.id,
-            algorithm: info.algorithm,
-            origin: info.origin,
-            status: info.status,
-            meta: info.meta,
-        }
-    }
-}
-
 impl<A> Eq for KeyInfo<A> where A: Eq {}
 impl<A> From<KeyInfo<A>> for u32 {
     fn from(ki: KeyInfo<A>) -> Self {
@@ -46,8 +34,21 @@ impl<A> From<&KeyInfo<A>> for u32 {
         ki.id
     }
 }
-impl From<AeadKeyInfo> for KeyInfo<crate::aead::Algorithm> {
-    fn from(info: AeadKeyInfo) -> Self {
+#[cfg(feature = "aead")]
+impl From<crate::aead::AeadKeyInfo> for KeyInfo<crate::aead::Algorithm> {
+    fn from(info: crate::aead::AeadKeyInfo) -> Self {
+        Self {
+            id: info.id,
+            algorithm: info.algorithm,
+            origin: info.origin,
+            status: info.status,
+            meta: info.meta,
+        }
+    }
+}
+#[cfg(feature = "mac")]
+impl From<crate::mac::MacKeyInfo> for KeyInfo<crate::mac::Algorithm> {
+    fn from(info: crate::mac::MacKeyInfo) -> Self {
         Self {
             id: info.id,
             algorithm: info.algorithm,

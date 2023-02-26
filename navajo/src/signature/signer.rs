@@ -1,3 +1,5 @@
+use alloc::string::String;
+
 use crate::keyring::Keyring;
 
 use super::{Algorithm, Material};

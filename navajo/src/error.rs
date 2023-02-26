@@ -5,13 +5,14 @@ use core::{
 
 use alloc::{
     borrow::Cow,
+    format,
     string::{String, ToString},
 };
 
 #[cfg(feature = "ring")]
 use ring;
 
-use crate::KeyInfo;
+// use crate::KeyInfo;
 
 #[derive(Debug, Clone, Copy)]
 pub struct KeyNotFoundError(pub u32);
@@ -406,12 +407,23 @@ impl From<crypto_common::InvalidLength> for OpenError {
 #[cfg(feature = "std")]
 impl std::error::Error for OpenError {}
 
+#[cfg(any(
+    feature = "aead",
+    feature = "daead",
+    feature = "mac",
+    feature = "signature",
+))]
 #[derive(Debug, Clone)]
 pub enum RemoveKeyError<A> {
-    IsPrimaryKey(KeyInfo<A>),
+    IsPrimaryKey(crate::KeyInfo<A>),
     KeyNotFound(KeyNotFoundError),
 }
-
+#[cfg(any(
+    feature = "aead",
+    feature = "daead",
+    feature = "mac",
+    feature = "signature",
+))]
 impl<A> fmt::Display for RemoveKeyError<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -420,11 +432,23 @@ impl<A> fmt::Display for RemoveKeyError<A> {
         }
     }
 }
-impl<A> From<KeyInfo<A>> for RemoveKeyError<A> {
-    fn from(info: KeyInfo<A>) -> Self {
+#[cfg(any(
+    feature = "aead",
+    feature = "daead",
+    feature = "mac",
+    feature = "signature",
+))]
+impl<A> From<crate::KeyInfo<A>> for RemoveKeyError<A> {
+    fn from(info: crate::KeyInfo<A>) -> Self {
         Self::IsPrimaryKey(info)
     }
 }
+#[cfg(any(
+    feature = "aead",
+    feature = "daead",
+    feature = "mac",
+    feature = "signature",
+))]
 impl<A> From<KeyNotFoundError> for RemoveKeyError<A> {
     fn from(e: KeyNotFoundError) -> Self {
         Self::KeyNotFound(e)
@@ -434,12 +458,23 @@ impl<A> From<KeyNotFoundError> for RemoveKeyError<A> {
 #[cfg(feature = "std")]
 impl<A> std::error::Error for RemoveKeyError<A> where A: Debug {}
 
+#[cfg(any(
+    feature = "aead",
+    feature = "daead",
+    feature = "mac",
+    feature = "signature",
+))]
 #[derive(Debug, Clone)]
 pub enum DisableKeyError<A> {
-    IsPrimaryKey(KeyInfo<A>),
+    IsPrimaryKey(crate::KeyInfo<A>),
     KeyNotFound(KeyNotFoundError),
 }
-
+#[cfg(any(
+    feature = "aead",
+    feature = "daead",
+    feature = "mac",
+    feature = "signature",
+))]
 impl<A> fmt::Display for DisableKeyError<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -448,11 +483,23 @@ impl<A> fmt::Display for DisableKeyError<A> {
         }
     }
 }
-impl<A> From<KeyInfo<A>> for DisableKeyError<A> {
-    fn from(info: KeyInfo<A>) -> Self {
+#[cfg(any(
+    feature = "aead",
+    feature = "daead",
+    feature = "mac",
+    feature = "signature",
+))]
+impl<A> From<crate::KeyInfo<A>> for DisableKeyError<A> {
+    fn from(info: crate::KeyInfo<A>) -> Self {
         Self::IsPrimaryKey(info)
     }
 }
+#[cfg(any(
+    feature = "aead",
+    feature = "daead",
+    feature = "mac",
+    feature = "signature",
+))]
 impl<A> From<KeyNotFoundError> for DisableKeyError<A> {
     fn from(e: KeyNotFoundError) -> Self {
         Self::KeyNotFound(e)

@@ -1,6 +1,6 @@
 use core::task::Poll::{Pending, Ready};
 
-use alloc::collections::VecDeque;
+use alloc::{collections::VecDeque, vec, vec::Vec};
 use futures::{stream::FusedStream, Stream, TryStream};
 use pin_project::pin_project;
 
@@ -263,11 +263,13 @@ where
 mod tests {
     use super::*;
     use crate::aead::Algorithm;
+    use alloc::string::String;
     use futures::{stream, StreamExt, TryStreamExt};
 
     fn to_try_stream(d: Vec<u8>) -> Result<Vec<u8>, String> {
         Ok(d)
     }
+    #[cfg(feature = "std")]
     #[tokio::test]
     async fn test_stream_roundtrip() {
         let data_stream = stream::iter(vec![
@@ -288,6 +290,7 @@ mod tests {
         let result = decrypt_stream.try_concat().await.unwrap();
         assert_eq!(result, b"hello world");
     }
+    #[cfg(feature = "std")]
     #[tokio::test]
     async fn test_stream_with_aad_roundtrip() {
         let mut data = vec![0u8; 5556];

@@ -54,11 +54,6 @@ pub enum Algorithm {
     #[strum(serialize = "SHA2-512")]
     Sha512,
 
-    #[cfg(any(all(feature = "sha2", feature = "hmac")))]
-    #[serde(rename = "SHA2-224")]
-    #[strum(serialize = "SHA2-224")]
-    Sha224,
-
     #[cfg(all(feature = "sha3", feature = "hmac"))]
     #[serde(rename = "SHA3-256")]
     #[strum(serialize = "SHA3-256")]
@@ -106,8 +101,6 @@ impl Algorithm {
         match self {
             #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
             Algorithm::Sha256 => 32,
-            #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
-            Algorithm::Sha224 => 28,
             #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
             Algorithm::Sha384 => 48,
             #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
@@ -172,8 +165,6 @@ impl Algorithm {
         match self {
             #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
             Algorithm::Sha256 => SHA2_256_KEY_LEN,
-            #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
-            Algorithm::Sha224 => SHA2_224_KEY_LEN,
             #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
             Algorithm::Sha384 => SHA2_384_KEY_LEN,
             #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]

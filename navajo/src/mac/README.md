@@ -61,7 +61,7 @@ let verified = mac.verify_reader(&tag, &mut buf_reader);
 
 ### Stream Compute / Verify
 
-```rust
+```
 use navajo::mac::{Mac, Algorithm};
 use futures::{ StreamExt, stream };
 
