@@ -1,4 +1,7 @@
-use core::fmt::{self, Debug, Display};
+use core::{
+    array::TryFromSliceError,
+    fmt::{self, Debug, Display},
+};
 
 use alloc::{
     borrow::Cow,
@@ -328,23 +331,6 @@ impl From<UnspecifiedError> for MacVerificationError {
 #[cfg(feature = "std")]
 impl std::error::Error for MacVerificationError {}
 
-#[derive(Debug, Clone)]
-pub struct InvalidKeyLength;
-
-impl core::fmt::Display for InvalidKeyLength {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "invalid key length")
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for InvalidKeyLength {}
-
-impl From<crypto_common::InvalidLength> for InvalidKeyLength {
-    fn from(_: crypto_common::InvalidLength) -> Self {
-        Self {}
-    }
-}
 #[derive(Debug)]
 pub struct SealError(pub String);
 
@@ -551,5 +537,10 @@ impl From<ring::error::KeyRejected> for KeyError {
 impl From<pkcs8::Error> for KeyError {
     fn from(e: pkcs8::Error) -> Self {
         Self(e.to_string())
+    }
+}
+impl From<TryFromSliceError> for KeyError {
+    fn from(e: TryFromSliceError) -> Self {
+        Self(format!("invalid key length: {e}"))
     }
 }

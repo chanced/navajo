@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoStaticStr};
 
-use crate::error::InvalidKeyLength;
+use crate::error::KeyError;
 
 const SHA2_256_KEY_LEN: usize = 32;
 const SHA2_224_KEY_LEN: usize = 32;
@@ -36,37 +36,63 @@ const AES256_KEY_LEN: usize = 32;
 #[strum(serialize_all = "SCREAMING-KEBAB-CASE")]
 pub enum Algorithm {
     // HMAC
-    #[cfg(all(feature = "sha2", feature = "hmac"))]
-    Sha256,
-    #[cfg(all(feature = "sha2", feature = "hmac"))]
-    Sha224,
-    #[cfg(all(feature = "sha2", feature = "hmac"))]
-    Sha384,
-    #[cfg(all(feature = "sha2", feature = "hmac"))]
-    Sha512,
-    #[cfg(all(feature = "sha2", feature = "hmac"))]
-    Sha512_224,
-    #[cfg(all(feature = "sha2", feature = "hmac"))]
-    Sha512_256,
-    #[cfg(all(feature = "sha2", feature = "hmac"))]
-    Sha3_256,
-    #[cfg(all(feature = "sha3", feature = "hmac"))]
-    Sha3_224,
-    #[cfg(all(feature = "sha3", feature = "hmac"))]
-    Sha3_384,
-    #[cfg(all(feature = "sha3", feature = "hmac"))]
-    Sha3_512,
     #[cfg(feature = "blake3")]
-    #[serde(rename="BLAKE3")]
-    #[strum(serialize="BLAKE3")]
     Blake3,
+
+    #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
+    #[serde(rename = "SHA2-256")]
+    #[strum(serialize = "SHA2-256")]
+    Sha256,
+
+    #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
+    #[serde(rename = "SHA2-384")]
+    #[strum(serialize = "SHA2-384")]
+    Sha384,
+
+    #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
+    #[serde(rename = "SHA2-512")]
+    #[strum(serialize = "SHA2-512")]
+    Sha512,
+
+    #[cfg(any(all(feature = "sha2", feature = "hmac")))]
+    #[serde(rename = "SHA2-224")]
+    #[strum(serialize = "SHA2-224")]
+    Sha224,
+
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
+    #[serde(rename = "SHA3-256")]
+    #[strum(serialize = "SHA3-256")]
+    Sha3_256,
+
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
+    #[serde(rename = "SHA3-224")]
+    #[strum(serialize = "SHA3-224")]
+    Sha3_224,
+
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
+    #[serde(rename = "SHA3-384")]
+    #[strum(serialize = "SHA3-384")]
+    Sha3_384,
+
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
+    #[serde(rename = "SHA3-512")]
+    #[strum(serialize = "SHA3-512")]
+    Sha3_512,
 
     // CMAC
     #[cfg(all(feature = "aes", feature = "cmac"))]
+    #[serde(rename = "AES-128")]
+    #[strum(serialize = "AES-128")]
     Aes128,
+
     #[cfg(all(feature = "aes", feature = "cmac"))]
+    #[serde(rename = "AES-192")]
+    #[strum(serialize = "AES-192")]
     Aes192,
+
     #[cfg(all(feature = "aes", feature = "cmac"))]
+    #[serde(rename = "AES-256")]
+    #[strum(serialize = "AES-256")]
     Aes256,
 }
 
@@ -78,18 +104,14 @@ impl Algorithm {
     }
     pub fn tag_len(&self) -> usize {
         match self {
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
+            #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
             Algorithm::Sha256 => 32,
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
+            #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
             Algorithm::Sha224 => 28,
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
+            #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
             Algorithm::Sha384 => 48,
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
+            #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
             Algorithm::Sha512 => 64,
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
-            Algorithm::Sha512_224 => 28,
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
-            Algorithm::Sha512_256 => 32,
             #[cfg(all(feature = "sha3", feature = "hmac"))]
             Algorithm::Sha3_256 => 32,
             #[cfg(all(feature = "sha3", feature = "hmac"))]
@@ -108,9 +130,9 @@ impl Algorithm {
             Algorithm::Aes256 => 32,
         }
     }
-    pub fn validate_key_len(&self, len: usize) -> Result<(), InvalidKeyLength> {
+    pub fn validate_key_len(&self, len: usize) -> Result<(), KeyError> {
         if len == 0 {
-            return Err(InvalidKeyLength);
+            return Err(KeyError("key length must be greater than 0".into()));
         }
         match self {
             #[cfg(feature = "blake")]
@@ -122,7 +144,7 @@ impl Algorithm {
             #[cfg(all(feature = "aes", feature = "cmac"))]
             Algorithm::Aes128 => {
                 if len != AES128_KEY_LEN {
-                    Err(InvalidKeyLength)
+                    Err("AES-128 key length must be 16 bytes".into())
                 } else {
                     Ok(())
                 }
@@ -130,7 +152,7 @@ impl Algorithm {
             #[cfg(all(feature = "aes", feature = "cmac"))]
             Algorithm::Aes192 => {
                 if len != AES192_KEY_LEN {
-                    Err(InvalidKeyLength)
+                    Err("AES-192 key length must be 24 bytes".into())
                 } else {
                     Ok(())
                 }
@@ -138,7 +160,7 @@ impl Algorithm {
             #[cfg(all(feature = "aes", feature = "cmac"))]
             Algorithm::Aes256 => {
                 if len != AES256_KEY_LEN {
-                    Err(InvalidKeyLength)
+                    Err("AES-256 key length must be 32 bytes".into())
                 } else {
                     Ok(())
                 }
@@ -148,22 +170,18 @@ impl Algorithm {
     }
     pub fn default_key_len(&self) -> usize {
         match self {
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
+            #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
             Algorithm::Sha256 => SHA2_256_KEY_LEN,
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
+            #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
             Algorithm::Sha224 => SHA2_224_KEY_LEN,
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
+            #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
             Algorithm::Sha384 => SHA2_384_KEY_LEN,
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
+            #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
             Algorithm::Sha512 => SHA2_512_KEY_LEN,
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
-            Algorithm::Sha512_224 => SHA2_512_224_KEY_LEN,
-            #[cfg(all(feature = "sha2", feature = "hmac"))]
-            Algorithm::Sha512_256 => SHA2_512_256_KEY_LEN,
-            #[cfg(all(feature = "sha3", feature = "hmac"))]
-            Algorithm::Sha3_256 => SHA3_256_KEY_LEN,
             #[cfg(all(feature = "sha3", feature = "hmac"))]
             Algorithm::Sha3_224 => SHA3_224_KEY_LEN,
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            Algorithm::Sha3_256 => SHA3_256_KEY_LEN,
             #[cfg(all(feature = "sha3", feature = "hmac"))]
             Algorithm::Sha3_384 => SHA3_384_KEY_LEN,
             #[cfg(all(feature = "sha3", feature = "hmac"))]
@@ -179,38 +197,3 @@ impl Algorithm {
         }
     }
 }
-
-// impl core::fmt::Display for Algorithm {
-//     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-//         match self {
-//             #[cfg(all(feature = "sha2", feature = "hmac"))]
-//             Algorithm::Sha256 => write!(f, "SHA256"),
-//             #[cfg(all(feature = "sha2", feature = "hmac"))]
-//             Algorithm::Sha224 => write!(f, "SHA224"),
-//             #[cfg(all(feature = "sha2", feature = "hmac"))]
-//             Algorithm::Sha384 => write!(f, "SHA384"),
-//             #[cfg(all(feature = "sha2", feature = "hmac"))]
-//             Algorithm::Sha512 => write!(f, "SHA512"),
-//             #[cfg(all(feature = "sha2", feature = "hmac"))]
-//             Algorithm::Sha512_224 => write!(f, "SHA512_224"),
-//             #[cfg(all(feature = "sha2", feature = "hmac"))]
-//             Algorithm::Sha512_256 => write!(f, "SHA512_256"),
-//             #[cfg(all(feature = "sha3", feature = "hmac"))]
-//             Algorithm::Sha3_256 => write!(f, "SHA3_256"),
-//             #[cfg(all(feature = "sha3", feature = "hmac"))]
-//             Algorithm::Sha3_224 => write!(f, "SHA3_224"),
-//             #[cfg(all(feature = "sha3", feature = "hmac"))]
-//             Algorithm::Sha3_384 => write!(f, "SHA3_384"),
-//             #[cfg(all(feature = "sha3", feature = "hmac"))]
-//             Algorithm::Sha3_512 => write!(f, "SHA3_512"),
-//             #[cfg(feature = "blake3")]
-//             Algorithm::Blake3 => write!(f, "BLAKE3"),
-//             #[cfg(all(feature = "aes", feature = "cmac"))]
-//             Algorithm::Aes128 => write!(f, "AES128"),
-//             #[cfg(all(feature = "aes", feature = "cmac"))]
-//             Algorithm::Aes192 => write!(f, "AES192"),
-//             #[cfg(all(feature = "aes", feature = "cmac"))]
-//             Algorithm::Aes256 => write!(f, "AES256"),
-//         }
-//     }
-// }

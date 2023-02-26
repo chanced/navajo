@@ -20,9 +20,6 @@ version = "0.3"
 [dependencies.pin-project]
 version = "1.0"
 
-#cfg-if
-[dependencies.cfg-if]
-
 # rayon
 [dependencies.rayon]
 version = "1.6"
@@ -37,10 +34,6 @@ features = ["alloc"]
 [dependencies.zeroize]
 version = "1.5"
 features = ["alloc", "zeroize_derive", "serde"]
-
-# paste
-[dependencies.paste]
-version = "1.0"
 
 # hashbrown
 [dependencies.hashbrown]
@@ -176,11 +169,6 @@ optional = true
 [dependencies.subtle]
 version = "2.4"
 
-# digest
-[dependencies.digest]
-version = "0.10"
-
-
 # blake3
 [dependencies.blake3]
 version = "1.3"
@@ -225,14 +213,17 @@ features = ["full"] # todo: reduce this.
 
 [features]
 default = [
-	"std",
-	"aead",
-	"aes",
-	"signature",
-	"mac",
-	"hmac",
+	# "ring",
+	"std",       # todo: remove
+	"aead",      # todo: remove
+	"aes",       # todo: remove
+	"signature", # todo: remove
+	"mac",       # todo: remove
+	"hmac",      # todo: remove
+	"cmac",      # todo: remove
+	"aes",       # todo remove
 	"blake3",    # todo: remove
-	"sha2",
+	"sha2",      # todo: remove
 	"sha3",      # todoo: remove
 ]
 signature = ["ed25519", "p256", "p384"]
@@ -251,7 +242,6 @@ std = [
 	"chacha20poly1305/std",
 	"pkcs8/std",
 	"cmac?/std",
-	"digest/std",
 	"sha2/std",
 	"sha3/std",
 	"ed25519-dalek?/std",

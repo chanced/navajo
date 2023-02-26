@@ -57,3 +57,5 @@ pub use signature::{Signer, Verifier};
 mod timestamp;
 
 pub(crate) mod b64;
+
+pub(crate) const NEW_ISSUE_URL: &str = "https://github.com/chanced/navajo/issues/new";

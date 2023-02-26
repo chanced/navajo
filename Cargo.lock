@@ -818,11 +818,9 @@ dependencies = [
  "base64",
  "blake3",
  "bytes",
- "cfg-if",
  "chacha20poly1305",
  "cmac",
  "crypto-common",
- "digest 0.10.6",
  "ed25519 2.1.0",
  "ed25519-dalek",
  "futures",
@@ -834,7 +832,6 @@ dependencies = [
  "mockall",
  "p256",
  "p384",
- "paste",
  "pin-project",
  "pkcs8",
  "rand 0.8.5",
@@ -959,12 +956,6 @@ dependencies = [
  "smallvec",
  "windows-sys 0.45.0",
 ]
-
-[[package]]
-name = "paste"
-version = "1.0.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d01a5bd0424d00070b0098dd17ebca6f961a959dead1dbcbbbc1d1cd8d3deeba"
 
 [[package]]
 name = "pem-rfc7468"

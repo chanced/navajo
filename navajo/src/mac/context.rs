@@ -1,31 +1,38 @@
 use crate::{key::Key, mac::output};
-use alloc::{boxed::Box, vec::Vec};
+use alloc::vec::Vec;
+use sha2::Sha256;
 
 use super::{
     entry::Entry,
-    material::{CryptoKey, Material},
-    output::Output,
-    RustCryptoKey,
+    material::{BackendKey, Material, RustCryptoKey},
+    output::{Output, RustCryptoOutput},
 };
 
 pub(super) struct Context {
-    pub(super) key_id: u32,
-    pub(super) is_primary: bool,
-    pub(super) inner: ContextInner,
-    pub(super) header: Vec<u8>,
+    key_id: u32,
+    is_primary: bool,
+    inner: Inner,
+    header: Vec<u8>,
 }
 impl Context {
     pub(super) fn new(key: &Key<Material>) -> Self {
         Self {
             key_id: key.id(),
             is_primary: key.is_primary(),
-            inner: ContextInner::new(key.crypto_key()),
+            inner: Inner::new(key.new_backend_key()),
             header: key.header(),
         }
     }
     pub(super) fn update(&mut self, data: &[u8]) {
         self.inner.update(data)
     }
+    pub(super) fn is_primary(&self) -> bool {
+        self.is_primary
+    }
+    pub(super) fn key_id(&self) -> u32 {
+        self.key_id
+    }
+
     pub(super) fn finalize(self) -> Entry {
         Entry::new(
             self.key_id,
@@ -36,49 +43,49 @@ impl Context {
     }
 }
 
-pub(super) enum ContextInner {
+enum Inner {
     #[cfg(feature = "blake3")]
-    Blake3(crate::mac::Blake3Context),
-    #[cfg(all(feature = "ring", feature = "sha2"))]
-    Ring(crate::mac::RingContext),
-    RustCrypto(crate::mac::RustCryptoContext),
+    Blake3(Blake3Context),
+    #[cfg(feature = "ring")]
+    Ring(RingContext),
+    RustCrypto(RustCryptoContext),
 }
 
-#[cfg(all(feature = "ring", feature = "sha2"))]
-impl From<Box<ring::hmac::Key>> for ContextInner {
-    fn from(key: Box<ring::hmac::Key>) -> Self {
+#[cfg(feature = "ring")]
+impl From<ring::hmac::Key> for Inner {
+    fn from(key: ring::hmac::Key) -> Self {
         Self::Ring(key.into())
     }
 }
 
 #[cfg(feature = "blake3")]
-impl From<Box<blake3::Hasher>> for ContextInner {
-    fn from(hasher: Box<blake3::Hasher>) -> Self {
+impl From<blake3::Hasher> for Inner {
+    fn from(hasher: blake3::Hasher) -> Self {
         Self::Blake3(Blake3Context(hasher))
     }
 }
 
-impl From<Box<RustCryptoKey>> for ContextInner {
-    fn from(key: Box<RustCryptoKey>) -> Self {
-        Self::RustCrypto(key.into())
+impl From<RustCryptoKey> for Inner {
+    fn from(key: RustCryptoKey) -> Self {
+        Self::RustCrypto(RustCryptoContext(key))
     }
 }
 
-impl ContextInner {
-    pub(super) fn new(key: CryptoKey) -> ContextInner {
+impl Inner {
+    pub(super) fn new(key: BackendKey) -> Inner {
         match key {
-            #[cfg(all(feature = "ring", feature = "sha2"))]
-            CryptoKey::Ring(key) => key.into(),
-            CryptoKey::RustCrypto(key) => key.into(),
+            #[cfg(feature = "ring")]
+            BackendKey::Ring(key) => key.into(),
+            BackendKey::RustCrypto(key) => key.into(),
             #[cfg(feature = "blake3")]
-            CryptoKey::Blake3(key) => key.into(),
+            BackendKey::Blake3(key) => key.into(),
         }
     }
     pub(super) fn update(&mut self, data: &[u8]) {
         match self {
             #[cfg(feature = "blake3")]
             Self::Blake3(ctx) => ctx.update(data),
-            #[cfg(all(feature = "ring", feature = "sha2"))]
+            #[cfg(feature = "ring")]
             Self::Ring(ctx) => ctx.update(data),
             Self::RustCrypto(ctx) => ctx.update(data),
         }
@@ -87,27 +94,17 @@ impl ContextInner {
         match self {
             #[cfg(feature = "blake3")]
             Self::Blake3(ctx) => ctx.finalize(),
-            #[cfg(all(feature = "ring", feature = "sha2"))]
+            #[cfg(feature = "ring")]
             Self::Ring(ctx) => ctx.finalize(),
             Self::RustCrypto(ctx) => ctx.finalize(),
         }
     }
 }
 
-pub(super) trait MacContext {
-    fn update(&mut self, data: &[u8]);
-    fn finalize(self) -> output::Output;
-}
 #[cfg(feature = "blake3")]
 #[derive(Clone)]
-pub(crate) struct Blake3Context(Box<blake3::Hasher>);
-
-impl From<Box<blake3::Hasher>> for Blake3Context {
-    fn from(hasher: Box<blake3::Hasher>) -> Self {
-        Self(hasher)
-    }
-}
-impl MacContext for Blake3Context {
+pub(crate) struct Blake3Context(blake3::Hasher);
+impl Blake3Context {
     fn update(&mut self, data: &[u8]) {
         self.0.update(data);
     }
@@ -115,155 +112,108 @@ impl MacContext for Blake3Context {
         output::Output::Blake3(self.0.finalize().into())
     }
 }
-cfg_if::cfg_if! {
-    if #[cfg(all(feature = "ring", feature="sha2"))]{
-        pub(super) struct RingContext(Box<ring::hmac::Context>);
 
-        impl MacContext for RingContext {
-            fn update(&mut self, data: &[u8]) {
-                self.0.update(data);
-            }
-            fn finalize(self) -> Output {
-                self.0.sign().into()
-            }
-        }
-        impl From<Box<ring::hmac::Key>> for RingContext {
-            fn from(key: Box<ring::hmac::Key>) -> Self {
-                Self(Box::new(ring::hmac::Context::with_key(&key)))
-            }
-        }
+impl From<blake3::Hasher> for Blake3Context {
+    fn from(hasher: blake3::Hasher) -> Self {
+        Self(hasher)
     }
 }
 
-macro_rules! rust_crypto_context_inner {
-    ($typ:ident, $crt:ident, $alg:ident, $feat:meta$(, not($cfg:meta))?) => {
-        cfg_if::cfg_if! {
-            if #[cfg(all($feat, $(not($cfg))?))] {
-                paste::paste! {
-                    #[derive(Clone, Debug)]
-                    pub(super) struct [<$typ $alg Context>] (pub(crate) alloc::boxed::Box<[< $typ:lower >]::$typ<$crt::$alg>>);
-                    impl MacContext for [<$typ $alg Context>] {
-                        fn update(&mut self, data: &[u8]) {
-                            use [< $typ:lower >]::Mac;
-                            self.0.update(data);
-                        }
-                        fn finalize(self) -> Output {
-                            use [< $typ:lower >]::Mac;
-                            self.0.finalize().into()
-                        }
-                    }
-                    impl From<[<$typ $alg Context>]> for RustCryptoContext {
-                        fn from(ctx: [<$typ $alg Context>]) -> Self {
-                            RustCryptoContext::$alg(ctx)
-                        }
-                    }
-                    impl From<[< $typ:lower >]::$typ<$crt::$alg>> for [<$typ $alg Context>] {
-                        fn from(ctx: [< $typ:lower >]::$typ<$crt::$alg>) -> Self {
-                            Self(alloc::boxed::Box::new(ctx))
-                        }
-                    }
-                }
-            }
-        }
-    };
-}
-macro_rules! rust_crypto_contexts {
-    ({
-        hmac: { ring: [$($ring:ident),*], sha2: [$($sha2:ident),*], sha3: [$($sha3:ident),*]$(,)? },
-        cmac: { aes: [$($aes:ident),*]$(,)? }
-	}) => {
-        paste::paste!{
-        pub(crate) enum RustCryptoContext {
-                $(
-                    #[cfg(all(feature = "sha2", not(feature="ring")))]
-                    $ring([< Hmac $ring Context>]),
-                )*
-                $(
-                    #[cfg(all(feature = "sha2", feature = "hmac"))]
-                    $sha2([< Hmac $sha2 Context>]),
-                )*
-                $(
-                    #[cfg(all(feature = "sha3", feature = "hmac"))]
-                    $sha3([< Hmac $sha3 Context>]),
-                )*
-                $(
-                    #[cfg(all(feature = "aes", feature = "cmac"))]
-                    $aes([< Cmac $aes Context>]),
-                )*
-            }
+#[cfg(feature = "ring")]
+pub(super) struct RingContext(ring::hmac::Context);
 
-            impl MacContext for crate::mac::RustCryptoContext {
-                fn update(&mut self, data: &[u8]) {
-                    match self{
-                        $(
-                            #[cfg(all(feature = "sha2", not(feature="ring")))]
-                            RustCryptoContext::$ring(ctx) => ctx.update(data),
-                        )*
-                        $(
-                            #[cfg(all(feature = "sha2", feature = "hmac"))]
-                            RustCryptoContext::$sha2(ctx) => ctx.update(data),
-                        )*
-                        $(
-                            #[cfg(all(feature = "sha3", feature = "hmac"))]
-                            RustCryptoContext::$sha3(ctx) => ctx.update(data),
-                        )*
-                        $(
-                            #[cfg(all(feature = "aes", feature = "cmac"))]
-                            RustCryptoContext::$aes(ctx) => ctx.update(data),
-                        )*
-                    }
-                }
-                fn finalize(self) -> Output {
-                    match self{
-                        $(
-                            #[cfg(all(feature = "sha2", not(feature="ring")))]
-                            RustCryptoContext::$ring(ctx) => ctx.finalize(),
-                        )*
-                        $(
-                            #[cfg(all(feature = "sha2", feature = "hmac"))]
-                            RustCryptoContext::$sha2(ctx) => ctx.finalize(),
-                        )*
-                        $(
-                            #[cfg(all(feature = "sha3", feature = "hmac"))]
-                            RustCryptoContext::$sha3(ctx) => ctx.finalize(),
-                        )*
-                        $(
-                            #[cfg(all(feature = "aes", feature = "cmac"))]
-                            RustCryptoContext::$aes(ctx) => ctx.finalize(),
-                        )*
-                    }
-                }
-            }
-
-            impl From<alloc::boxed::Box<crate::mac::RustCryptoKey>> for crate::mac::RustCryptoContext {
-                fn from(key: alloc::boxed::Box<crate::mac::RustCryptoKey>) -> Self {
-                    let key = *key;
-                    match key {
-                        $(
-                            #[cfg(all(not(feature="ring"), feature = "sha2"))]
-                            RustCryptoKey::$ring(key) => Self::$ring(key.0.into()),
-                        )*
-                        $(
-                            #[cfg(all(feature = "sha2", feature = "hmac"))]
-                            RustCryptoKey::$sha2(key) => Self::$sha2(key.0.into()),
-                        )*
-                        $(
-                            #[cfg(all(feature = "sha3", feature = "hmac"))]
-                            RustCryptoKey::$sha3(key) => Self::$sha3(key.0.into()),
-                        )*
-                        $(
-                            #[cfg(all(feature = "aes", feature = "cmac"))]
-                            RustCryptoKey::$aes(key) => Self::$aes(key.0.into()),
-                        )*
-                    }
-                }
-            }
-			$( rust_crypto_context_inner!(Hmac, sha2, $ring, feature = "sha2", not(feature="ring")); )*
-            $( rust_crypto_context_inner!(Hmac, sha2, $sha2, feature = "sha2"); )*
-            $( rust_crypto_context_inner!(Hmac, sha3, $sha3, feature = "sha3"); )*
-            $( rust_crypto_context_inner!(Cmac, aes, $aes, feature = "aes"); )*
-        }
-	}
+#[cfg(feature = "ring")]
+impl RingContext {
+    fn update(&mut self, data: &[u8]) {
+        self.0.update(data);
+    }
+    fn finalize(self) -> Output {
+        self.0.sign().into()
+    }
 }
-pub(super) use rust_crypto_context_inner;
-pub(super) use rust_crypto_contexts;
+
+#[cfg(all(feature = "ring"))]
+impl From<ring::hmac::Key> for RingContext {
+    fn from(key: ring::hmac::Key) -> Self {
+        Self(ring::hmac::Context::with_key(&key))
+    }
+}
+
+struct RustCryptoContext(RustCryptoKey);
+impl RustCryptoContext {
+    fn update(&mut self, data: &[u8]) {
+        match self.0 {
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            RustCryptoKey::Sha256(ref mut k) => hmac::Mac::update(k, data),
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            RustCryptoKey::Sha384(ref mut k) => hmac::Mac::update(k, data),
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            RustCryptoKey::Sha512(ref mut k) => hmac::Mac::update(k, data),
+            #[cfg(all(feature = "sha2", feature = "hmac"))]
+            RustCryptoKey::Sha224(ref mut k) => hmac::Mac::update(k, data),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            RustCryptoKey::Sha3_256(ref mut k) => hmac::Mac::update(k, data),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            RustCryptoKey::Sha3_224(ref mut k) => hmac::Mac::update(k, data),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            RustCryptoKey::Sha3_384(ref mut k) => hmac::Mac::update(k, data),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            RustCryptoKey::Sha3_512(ref mut k) => hmac::Mac::update(k, data),
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            RustCryptoKey::Aes128(ref mut k) => cmac::Mac::update(k, data),
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            RustCryptoKey::Aes192(ref mut k) => cmac::Mac::update(k, data),
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            RustCryptoKey::Aes256(ref mut k) => cmac::Mac::update(k, data),
+        }
+    }
+    fn finalize(self) -> output::Output {
+        let output = match self.0 {
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            RustCryptoKey::Sha256(k) => {
+                RustCryptoOutput::Sha256(hmac::Mac::finalize(k).into_bytes())
+            }
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            RustCryptoKey::Sha384(k) => {
+                RustCryptoOutput::Sha384(hmac::Mac::finalize(k).into_bytes())
+            }
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            RustCryptoKey::Sha512(k) => {
+                RustCryptoOutput::Sha512(hmac::Mac::finalize(k).into_bytes())
+            }
+            #[cfg(all(feature = "sha2", feature = "hmac"))]
+            RustCryptoKey::Sha224(k) => {
+                RustCryptoOutput::Sha224(hmac::Mac::finalize(k).into_bytes())
+            }
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            RustCryptoKey::Sha3_256(k) => {
+                RustCryptoOutput::Sha3_256(hmac::Mac::finalize(k).into_bytes())
+            }
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            RustCryptoKey::Sha3_224(k) => {
+                RustCryptoOutput::Sha3_224(hmac::Mac::finalize(k).into_bytes())
+            }
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            RustCryptoKey::Sha3_384(k) => {
+                RustCryptoOutput::Sha3_384(hmac::Mac::finalize(k).into_bytes())
+            }
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            RustCryptoKey::Sha3_512(k) => {
+                RustCryptoOutput::Sha3_512(hmac::Mac::finalize(k).into_bytes())
+            }
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            RustCryptoKey::Aes128(k) => {
+                RustCryptoOutput::Aes128(cmac::Mac::finalize(k).into_bytes())
+            }
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            RustCryptoKey::Aes192(k) => {
+                RustCryptoOutput::Aes192(cmac::Mac::finalize(k).into_bytes())
+            }
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            RustCryptoKey::Aes256(k) => {
+                RustCryptoOutput::Aes256(cmac::Mac::finalize(k).into_bytes())
+            }
+        };
+        output::Output::RustCrypto(output)
+    }
+}

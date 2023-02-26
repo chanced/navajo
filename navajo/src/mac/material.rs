@@ -1,8 +1,9 @@
+use crate::NEW_ISSUE_URL;
 use alloc::{boxed::Box, vec::Vec};
 use serde::{Deserialize, Serialize};
 use zeroize::ZeroizeOnDrop;
 
-use crate::{error::InvalidKeyLength, sensitive::Bytes, Key};
+use crate::{error::KeyError, primitive::Kind, sensitive::Bytes, Key};
 
 use super::Algorithm;
 
@@ -31,7 +32,7 @@ impl Material {
         value: &[u8],
         prefix: Option<&[u8]>,
         algorithm: Algorithm,
-    ) -> Result<Self, InvalidKeyLength> {
+    ) -> Result<Self, KeyError> {
         algorithm.validate_key_len(value.len())?;
         let bytes = Bytes::from(value);
         Ok(Self {
@@ -42,9 +43,9 @@ impl Material {
     }
 }
 impl Key<Material> {
-    pub(super) fn crypto_key(&self) -> CryptoKey {
+    pub(super) fn new_backend_key(&self) -> BackendKey {
         // safety: key length is validated on Material creation
-        CryptoKey::new(self.algorithm(), self.material().value.as_ref()).unwrap()
+        BackendKey::new(self.algorithm(), self.material().value.as_ref()).unwrap()
     }
 
     pub(super) fn new_context(&self) -> super::Context {
@@ -69,161 +70,116 @@ impl crate::KeyMaterial for Material {
     fn algorithm(&self) -> Self::Algorithm {
         self.algorithm
     }
-    fn kind() -> crate::primitive::Kind {
-        crate::primitive::Kind::Mac
+    fn kind() -> Kind {
+        Kind::Mac
     }
 }
 
 #[derive(Clone, Debug)]
-pub(super) enum CryptoKey {
-    #[cfg(all(feature = "ring", feature = "sha2"))]
-    Ring(Box<ring::hmac::Key>),
-    RustCrypto(Box<crate::mac::RustCryptoKey>),
+pub(super) enum BackendKey {
+    #[cfg(feature = "ring")]
+    Ring(ring::hmac::Key),
+    RustCrypto(RustCryptoKey),
     #[cfg(feature = "blake3")]
-    Blake3(Box<blake3::Hasher>),
+    Blake3(blake3::Hasher),
 }
-#[cfg(feature = "blake3")]
-impl From<Box<blake3::Hasher>> for CryptoKey {
-    fn from(key: Box<blake3::Hasher>) -> Self {
-        Self::Blake3(key)
-    }
-}
-#[cfg(all(feature = "ring", feature = "sha2"))]
-impl From<Box<ring::hmac::Key>> for CryptoKey {
-    fn from(key: Box<ring::hmac::Key>) -> Self {
+
+#[cfg(feature = "ring")]
+impl From<ring::hmac::Key> for BackendKey {
+    fn from(key: ring::hmac::Key) -> Self {
         Self::Ring(key)
     }
 }
-impl From<Box<crate::mac::RustCryptoKey>> for CryptoKey {
-    fn from(key: Box<crate::mac::RustCryptoKey>) -> Self {
-        Self::RustCrypto(key)
-    }
-}
 
-impl CryptoKey {
-    pub(super) fn new(algorithm: Algorithm, bytes: &[u8]) -> Result<Self, InvalidKeyLength> {
+impl BackendKey {
+    pub(super) fn new(algorithm: Algorithm, bytes: &[u8]) -> Result<Self, KeyError> {
         algorithm.validate_key_len(bytes.len())?;
-        match algorithm {
-            #[cfg(all(feature = "ring", feature = "sha2"))]
-            Algorithm::Sha256 => Ok(Self::Ring(Box::new(ring::hmac::Key::new(
-                ring::hmac::HMAC_SHA256,
-                bytes,
-            )))),
-            #[cfg(all(feature = "ring"))]
-            Algorithm::Sha384 => Ok(Self::Ring(Box::new(ring::hmac::Key::new(
-                ring::hmac::HMAC_SHA384,
-                bytes,
-            )))),
-            #[cfg(all(feature = "ring"))]
-            Algorithm::Sha512 => Ok(Self::Ring(Box::new(ring::hmac::Key::new(
-                ring::hmac::HMAC_SHA512,
-                bytes,
-            )))),
+        #[cfg(feature = "blake3")]
+        use blake3::Hasher as Blake3;
+        #[cfg(feature = "ring")]
+        use ring::hmac::{Key as Ring, HMAC_SHA256, HMAC_SHA384, HMAC_SHA512};
+        let key = match algorithm {
+            #[cfg(feature = "ring")]
+            Algorithm::Sha256 => Self::Ring(Ring::new(HMAC_SHA256, bytes)),
+            #[cfg(feature = "ring")]
+            Algorithm::Sha384 => Self::Ring(Ring::new(HMAC_SHA384, bytes)),
+            #[cfg(feature = "ring")]
+            Algorithm::Sha512 => Self::Ring(Ring::new(HMAC_SHA512, bytes)),
             #[cfg(feature = "blake3")]
-            Algorithm::Blake3 => Ok(Self::Blake3(Box::new(blake3::Hasher::new_keyed(
-                bytes.try_into().map_err(|_| InvalidKeyLength)?,
-            )))),
-            _ => Ok(Self::RustCrypto(Box::new(crate::mac::RustCryptoKey::new(
-                algorithm, bytes,
-            )?))),
-        }
+            Algorithm::Blake3 => Self::Blake3(Blake3::new_keyed(bytes.try_into()?)),
+            _ => Self::RustCrypto(RustCryptoKey::new(algorithm, bytes)?),
+        };
+        Ok(key)
     }
 }
-macro_rules! rust_crypto_key {
-    ($typ:ident, $crt:ident, $alg:ident, $feat:meta$(, not($cfg:meta))?) => {
-        paste::paste! {
-            cfg_if::cfg_if! {
-                if #[cfg(all($feat, $(not($cfg))?))] {
-                    #[derive(Clone)]
-                    pub(super) struct [<$typ $alg Key>] ([< $typ:lower >]::$typ<$crt::$alg>);
-                    impl From<[< $typ:lower >]::$typ<$crt::$alg>> for [<$typ $alg Key>] {
-                        fn from(key: [< $typ:lower >]::$typ<$crt::$alg>) -> Self {
-                            Self(key)
-                        }
-                    }
-                    impl From<[<$typ $alg Key>]> for RustCryptoKey {
-                        fn from(key: [<$typ $alg Key>]) -> Self {
-                            Self::$alg(key)
-                        }
-                    }
-                    impl TryFrom<&[u8]> for [<$typ $alg Key>] {
-                        type Error = crate::error::InvalidKeyLength;
-                        fn try_from(key: &[u8]) -> Result<Self, Self::Error> {
-                            use [< $typ:lower >]::Mac;
-                            Ok(Self([< $typ:lower >]::$typ::new_from_slice(key)?))
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-macro_rules! rust_crypto_keys {
-    ({
-        hmac: { ring: [$($ring:ident),*], sha2: [$($sha2:ident),*], sha3: [$($sha3:ident),*]$(,)? },
-        cmac: { aes: [$($aes:ident),*]$(,)? }
-	}) => {
-        paste::paste! {
-            #[derive(Clone)]
-            pub(crate) enum RustCryptoKey {
-                $(
-                    #[cfg(all(feature = "sha2", not(feature="ring")))]
-                    $ring([< Hmac $ring Key>]),
-                )*
-                $(
-                    #[cfg(all(feature = "sha2", feature = "hmac"))]
-                    $sha2([< Hmac $sha2 Key >]),
-                )*
-                $(
-                    #[cfg(all(feature = "sha3", feature = "hmac"))]
-                    $sha3([< Hmac $sha3 Key >]),
-                )*
-                $(
-                    #[cfg(all(feature = "aes", feature = "cmac"))]
-                    $aes([< Cmac $aes Key >]),
-                )*
-            }
-            impl core::fmt::Debug for RustCryptoKey {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    f.debug_struct("RustCryptoKey").finish()
-                }
-            }
-            impl From<RustCryptoKey> for CryptoKey {
-                fn from(key: RustCryptoKey) -> Self {
-                    Self::RustCrypto(alloc::boxed::Box::new(key))
-                }
-            }
-            impl RustCryptoKey {
-                pub(super) fn new(algorithm: Algorithm, bytes: &[u8]) -> Result<Self, crate::error::InvalidKeyLength> {
-                    use crate::mac::Algorithm::*;
-                    Ok(match algorithm {
-                        $(
-                            #[cfg(all(feature = "sha2", not(feature="ring")))]
-                            $ring => Self::$ring(bytes.try_into()?),
-                        )*
-                        $(
-                            #[cfg(all(feature = "sha2", feature = "hmac"))]
-                            $sha2 => Self::$sha2(bytes.try_into()?),
-                        )*
-                        $(
-                            #[cfg(all(feature = "sha3", feature = "hmac"))]
-                            $sha3 => Self::$sha3(bytes.try_into()?),
-                        )*
-                        $(
-                            #[cfg(all(feature = "aes", feature = "cmac"))]
-                            $aes => Self::$aes(bytes.try_into()?),
-                        )*
-                        _ => unreachable!(),
-                    })
-                }
-            }
-        }
-        $( rust_crypto_key!(Hmac, sha2, $ring, feature = "sha2", not(feature="ring")); )*
-        $( rust_crypto_key!(Hmac, sha2, $sha2, feature = "sha2"); )*
-        $( rust_crypto_key!(Hmac, sha3, $sha3, feature = "sha3"); )*
-        $( rust_crypto_key!(Cmac, aes, $aes, feature = "aes"); )*
+#[derive(Clone, Debug)]
+pub(super) enum RustCryptoKey {
+    #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+    Sha256(hmac::Hmac<sha2::Sha256>),
 
-    };
+    #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+    Sha384(hmac::Hmac<sha2::Sha384>),
+
+    #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+    Sha512(hmac::Hmac<sha2::Sha512>),
+
+    #[cfg(all(feature = "sha2", feature = "hmac"))]
+    Sha224(hmac::Hmac<sha2::Sha224>),
+
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
+    Sha3_256(hmac::Hmac<sha3::Sha3_256>),
+
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
+    Sha3_224(hmac::Hmac<sha3::Sha3_224>),
+
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
+    Sha3_384(hmac::Hmac<sha3::Sha3_384>),
+
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
+    Sha3_512(hmac::Hmac<sha3::Sha3_512>),
+
+    #[cfg(all(feature = "aes", feature = "cmac"))]
+    Aes128(cmac::Cmac<aes::Aes128>),
+
+    #[cfg(all(feature = "aes", feature = "cmac"))]
+    Aes192(cmac::Cmac<aes::Aes192>),
+
+    #[cfg(all(feature = "aes", feature = "cmac"))]
+    Aes256(cmac::Cmac<aes::Aes256>),
 }
-pub(super) use rust_crypto_key;
-pub(super) use rust_crypto_keys;
+
+impl RustCryptoKey {
+    fn new(algorithm: Algorithm, bytes: &[u8]) -> Result<Self, KeyError> {
+        let result = match algorithm {
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            Algorithm::Sha256 => {
+                use hmac::Mac;
+                Self::Sha256(hmac::Hmac::<sha2::Sha256>::new_from_slice(bytes).unwrap())
+            },
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            Algorithm::Sha384 => todo!(),
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            Algorithm::Sha512 => todo!(),
+            #[cfg(all(feature = "sha2", feature = "hmac"))]
+            Algorithm::Sha224 => todo!(),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            Algorithm::Sha3_256 => todo!(),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            Algorithm::Sha3_224 => todo!(),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            Algorithm::Sha3_384 => todo!(),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            Algorithm::Sha3_512 => todo!(),
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            Algorithm::Aes128 => todo!(),
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            Algorithm::Aes128 => todo!(),
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            Algorithm::Aes128 => todo!(),
+            _ => unreachable!(
+                "{algorithm} is either not supported by rust crypto, disabled, or should be handled by ring\nthis is a bug\nplease report it to {NEW_ISSUE_URL}",
+            ),
+        };
+        Ok(result)
+    }
+}

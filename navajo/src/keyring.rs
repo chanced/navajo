@@ -11,6 +11,7 @@ use crate::rand;
 use crate::Aad;
 use crate::Origin;
 use crate::Status;
+use crate::NEW_ISSUE_URL;
 
 use aes_gcm::Aes256Gcm;
 use alloc::format;
@@ -35,7 +36,8 @@ const AES_256_GCM_KEY_SIZE: usize = 32;
 const AES_256_GCM_NONCE_SIZE: usize = 12;
 const AES_256_GCM_TAG_SIZE: usize = 16;
 
-const PRIMARY_KEY_NOT_FOUND_MSG:&str = "primary key not found in keyring\n\t\n\tthis is a bug. please report it to https://github.com/chanced/navajo/issues/new";
+const PRIMARY_KEY_NOT_FOUND_MSG: &str =
+    "primary key not found in keyring\n\t\n\tthis is a bug. please report it to {NEW_ISSUE_URL}";
 
 pub(crate) const KEY_ID_LEN: usize = 4;
 

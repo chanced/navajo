@@ -1,4 +1,4 @@
-use crate::mac::RustCryptoOutput;
+use core::{fmt::Debug, ops::Deref};
 
 pub(super) trait DigestOutput: AsRef<[u8]> + Clone {
     fn into_bytes(self) -> Vec<u8> {
@@ -9,16 +9,17 @@ pub(super) trait DigestOutput: AsRef<[u8]> + Clone {
 
 #[derive(Clone, Debug)]
 pub(super) enum Output {
-    #[cfg(all(feature = "ring", feature = "sha2"))]
+    #[cfg(feature = "ring")]
     Ring(RingOutput),
     RustCrypto(RustCryptoOutput),
     #[cfg(feature = "blake3")]
     Blake3(Blake3Output),
 }
+
 impl Output {
     pub(super) fn as_bytes(&self) -> &[u8] {
         match self {
-            #[cfg(all(feature = "ring", feature = "sha2"))]
+            #[cfg(feature = "ring")]
             Self::Ring(output) => output.as_ref(),
             Self::RustCrypto(output) => output.as_ref(),
             Self::Blake3(output) => output.as_ref(),
@@ -29,7 +30,7 @@ impl Output {
 impl DigestOutput for Output {
     fn truncatable(&self) -> bool {
         match self {
-            #[cfg(all(feature = "ring", feature = "sha2"))]
+            #[cfg(feature = "ring")]
             Self::Ring(output) => output.truncatable(),
             Self::RustCrypto(output) => output.truncatable(),
             Self::Blake3(output) => output.truncatable(),
@@ -43,155 +44,152 @@ impl AsRef<[u8]> for Output {
     }
 }
 
-cfg_if::cfg_if! {
-    if #[cfg(all(feature = "ring", feature="sha2"))] {
-        #[derive(Clone, Debug)]
-        pub(super) struct RingOutput(ring::hmac::Tag);
-        impl AsRef<[u8]> for RingOutput {
-            fn as_ref(&self) -> &[u8] {
-                self.0.as_ref()
-            }
-        }
-        impl DigestOutput for RingOutput {
-            fn truncatable(&self) -> bool { true }
-        }
-        impl From<ring::hmac::Tag> for Output {
-            fn from(output: ring::hmac::Tag) -> Self {
-                Self::Ring(RingOutput(output))
-            }
-        }
+#[cfg(all(feature = "ring", feature = "sha2"))]
+#[derive(Clone, Debug)]
+pub(super) struct RingOutput(ring::hmac::Tag);
+#[cfg(all(feature = "ring", feature = "sha2"))]
+impl AsRef<[u8]> for RingOutput {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
     }
-
 }
-
-cfg_if::cfg_if! {
-    if #[cfg(feature = "blake3")] {
-        #[derive(Clone, Debug)]
-        pub(super) struct Blake3Output (blake3::Hash);
-        impl DigestOutput for Blake3Output {
-            fn truncatable(&self) -> bool { true } //github.com/BLAKE3-team/BLAKE3/issues/123
-        }
-        impl From<blake3::Hash> for Blake3Output {
-            fn from(hash: blake3::Hash) -> Self {
-                Self(hash)
-            }
-        }
-        impl AsRef<[u8]> for Blake3Output {
-            fn as_ref(&self) -> &[u8] {
-                self.0.as_bytes()
-            }
-        }
-        impl From<Blake3Output> for Output {
-            fn from(output: Blake3Output) -> Self {
-                Self::Blake3(output)
-            }
-        }
+#[cfg(all(feature = "ring", feature = "sha2"))]
+impl DigestOutput for RingOutput {
+    fn truncatable(&self) -> bool {
+        true
+    }
+}
+#[cfg(all(feature = "ring", feature = "sha2"))]
+impl From<ring::hmac::Tag> for Output {
+    fn from(output: ring::hmac::Tag) -> Self {
+        Self::Ring(RingOutput(output))
     }
 }
 
-macro_rules! rust_crypto_internal_tag {
-    ($typ:ident, $crt:ident, $alg:ident, $feat:meta$(, not($cfg:meta))?) => {
-        paste::paste! {
-            cfg_if::cfg_if! {
-                if #[cfg(all($feat, $(not($cfg))?))] {
-                    #[derive(Clone, Debug)]
-                    pub(super) struct [< $typ $alg InternalTag >] (digest::Output<[< $typ:lower >]::$typ<$crt::$alg>>);
-                    impl AsRef<[u8]> for [< $typ $alg InternalTag >] {
-                        fn as_ref(&self) -> &[u8] {
-                            self.0.as_ref()
-                        }
-                    }
-                    impl From<digest::CtOutput<[< $typ:lower >]::$typ<$crt::$alg>>> for [< $typ $alg InternalTag >] {
-                        fn from(output: digest::CtOutput<[< $typ:lower >]::$typ<$crt::$alg>>) -> Self {
-                            Self(output.into_bytes())
-                        }
-                    }
-                    impl crate::mac::output::DigestOutput for [< $typ $alg InternalTag >] {
-                        fn truncatable(&self) -> bool { true }
-                    }
-                    impl From<[< $typ $alg InternalTag >]> for  crate::mac::output::Output {
-                        fn from(output: [< $typ $alg InternalTag >]) -> Self {
-                            RustCryptoOutput::$alg(output).into()
-                        }
-                    }
-                    impl From<digest::CtOutput<[< $typ:lower >]::$typ<$crt::$alg>>> for crate::mac::output::Output {
-                        fn from(output: digest::CtOutput<[< $typ:lower >]::$typ<$crt::$alg>>) -> Self {
-                            [< $typ $alg InternalTag >]::from(output).into()
-                        }
-                    }
-                }
-            }
-        }
+#[cfg(feature = "blake3")]
+#[derive(Clone, Debug)]
+pub(super) struct Blake3Output(blake3::Hash);
+
+#[cfg(feature = "blake3")]
+impl DigestOutput for Blake3Output {
+    fn truncatable(&self) -> bool {
+        true
+    } //github.com/BLAKE3-team/BLAKE3/issues/123
+}
+#[cfg(feature = "blake3")]
+impl From<blake3::Hash> for Blake3Output {
+    fn from(hash: blake3::Hash) -> Self {
+        Self(hash)
+    }
+}
+#[cfg(feature = "blake3")]
+impl AsRef<[u8]> for Blake3Output {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+#[cfg(feature = "blake3")]
+impl From<Blake3Output> for Output {
+    fn from(output: Blake3Output) -> Self {
+        Self::Blake3(output)
     }
 }
 
-macro_rules! rust_crypto_internal_tags {
-    ({
-        hmac: { ring: [$($ring:ident),*], sha2: [$($sha2:ident),*], sha3: [$($sha3:ident),*]$(,)? },
-        cmac: { aes: [$($aes:ident),*]$(,)? }
-	}) => {
-        paste::paste! {
-            #[derive(Clone, Debug)]
-            pub(super) enum RustCryptoOutput {
-                $(
-                    #[cfg(all(feature="sha2", not(feature = "ring")))]
-                    $ring(crate::mac::[< Hmac $ring InternalTag >]),
-                )*
-                $(
-                    #[cfg(feature="sha2")]
-                    $sha2(crate::mac::[< Hmac $sha2 InternalTag >]),
-                )*
+#[derive(Clone, Debug)]
+pub(super) enum RustCryptoOutput {
+    #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+    Sha256(sha2::digest::Output<sha2::Sha256>),
 
-                $(
-                    #[cfg(feature="sha3")]
-                    $sha3(crate::mac::[< Hmac $sha3 InternalTag >]),
-                )*
-                $(
-                    #[cfg(feature="aes")]
-                    $aes(crate::mac::[< Cmac $aes InternalTag >]),
-                )*
-            }
-            impl From<RustCryptoOutput> for crate::mac::output::Output {
-                fn from(output: RustCryptoOutput) -> Self {
-                    Self::RustCrypto(output)
-                }
-            }
-			$( rust_crypto_internal_tag!(Hmac, sha2, $ring, feature = "sha2", not(feature="ring")); )*
-            $( rust_crypto_internal_tag!(Hmac, sha2, $sha2, feature = "sha2"); )*
-            $( rust_crypto_internal_tag!(Hmac, sha3, $sha3, feature = "sha3"); )*
-            $( rust_crypto_internal_tag!(Cmac, aes, $aes, feature = "aes"); )*
+    #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+    Sha384(sha2::digest::Output<sha2::Sha384>),
 
-            impl AsRef<[u8]> for RustCryptoOutput {
-                fn as_ref(&self) -> &[u8] {
-                    match self {
-                        $(
-                            #[cfg(not(feature = "ring"))]
-                            Self::$ring(tag) => tag.as_ref(),
-                        )*
-                        $(
-                            #[cfg(feature="sha2")]
-                            Self::$sha2(tag) => tag.as_ref(),
+    #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+    Sha512(sha2::digest::Output<sha2::Sha512>),
 
-                        )*
-                        $(
-                            #[cfg(feature="sha3")]
-                            Self::$sha3(tag) => tag.as_ref(),
-                        )*
-                        $(
-                            #[cfg(feature="aes")]
-                            Self::$aes(tag) => tag.as_ref(),
+    #[cfg(all(feature = "sha2", feature = "hmac"))]
+    Sha224(sha2::digest::Output<sha2::Sha224>),
 
-                        )*
-                    }
-                }
-            }
-            impl crate::mac::output::DigestOutput for RustCryptoOutput {
-                fn truncatable(&self) -> bool { true }
-            }
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
+    Sha3_256(sha3::digest::Output<sha3::Sha3_256>),
+
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
+    Sha3_224(sha3::digest::Output<sha3::Sha3_224>),
+
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
+    Sha3_384(sha3::digest::Output<sha3::Sha3_384>),
+
+    #[cfg(all(feature = "sha3", feature = "hmac"))]
+    Sha3_512(sha3::digest::Output<sha3::Sha3_512>),
+
+    #[cfg(all(feature = "aes", feature = "cmac"))]
+    Aes128(cmac::digest::Output<cmac::Cmac<aes::Aes128>>),
+
+    #[cfg(all(feature = "aes", feature = "cmac"))]
+    Aes192(cmac::digest::Output<cmac::Cmac<aes::Aes192>>),
+
+    #[cfg(all(feature = "aes", feature = "cmac"))]
+    Aes256(cmac::digest::Output<cmac::Cmac<aes::Aes256>>),
+}
+impl RustCryptoOutput {
+    fn truncatable(&self) -> bool {
+        // todo: handle this if new algorithms are added
+        true
+    }
+}
+impl AsRef<[u8]> for RustCryptoOutput {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            Self::Sha256(output) => output.as_ref(),
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            Self::Sha384(output) => output.as_ref(),
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            Self::Sha512(output) => output.as_ref(),
+            #[cfg(all(feature = "sha2", feature = "hmac"))]
+            Self::Sha224(output) => output.as_ref(),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            Self::Sha3_256(output) => output.as_ref(),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            Self::Sha3_224(output) => output.as_ref(),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            Self::Sha3_384(output) => output.as_ref(),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            Self::Sha3_512(output) => output.as_ref(),
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            Self::Aes128(output) => output.as_ref(),
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            Self::Aes192(output) => output.as_ref(),
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            Self::Aes256(output) => output.as_ref(),
         }
     }
 }
-
-use alloc::vec::Vec;
-pub(super) use rust_crypto_internal_tag;
-pub(super) use rust_crypto_internal_tags;
+impl Deref for RustCryptoOutput {
+    type Target = [u8];
+    fn deref(&self) -> &Self::Target {
+        match self {
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            Self::Sha256(output) => output.as_ref(),
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            Self::Sha384(output) => output.as_ref(),
+            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+            Self::Sha512(output) => output.as_ref(),
+            #[cfg(all(feature = "sha2", feature = "hmac"))]
+            Self::Sha224(output) => output.as_ref(),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            Self::Sha3_256(output) => output.as_ref(),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            Self::Sha3_224(output) => output.as_ref(),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            Self::Sha3_384(output) => output.as_ref(),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            Self::Sha3_512(output) => output.as_ref(),
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            Self::Aes128(output) => output.as_ref(),
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            Self::Aes192(output) => output.as_ref(),
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            Self::Aes256(output) => output.as_ref(),
+        }
+    }
+}

@@ -1,7 +1,7 @@
+use crate::{error::InvalidLengthError, NEW_ISSUE_URL};
 use core::ops::Deref;
 
 use alloc::boxed::Box;
-use digest::InvalidLength;
 use generic_array::GenericArray;
 
 use typenum::{U12, U24};
@@ -35,7 +35,7 @@ impl Nonce {
         let mut result = match size {
             12 => Self::Twelve([0u8; 12]),
             24 => Self::TwentyFour(Box::new([0u8; 24])),
-            _ => unreachable!("NonceSequence must be 12 or 24 bytes\nthis is a bug!\n\nplease report it to https://github.com/chanced/navajo/issues/new"),
+            _ => unreachable!("NonceSequence must be 12 or 24 bytes\nthis is a bug!\n\nplease report it to {NEW_ISSUE_URL}"),
         };
         match result {
             Self::Twelve(ref mut seed) => {
@@ -47,11 +47,14 @@ impl Nonce {
         };
         result
     }
-    pub(crate) fn new_from_slice(size: usize, slice: &[u8]) -> Result<Self, InvalidLength> {
+    pub(crate) fn new_from_slice(
+        size: usize,
+        slice: &[u8],
+    ) -> Result<Self, crate::error::InvalidLengthError> {
         match size {
-            12 => Ok(Self::Twelve(slice.try_into().map_err(|_| InvalidLength)?)),
-            24 => Ok(Self::TwentyFour(Box::new(slice.try_into().map_err(|_| InvalidLength)?))),
-            _ => unreachable!("NonceSequence must be 12 or 24 bytes\nthis is a bug!\n\nplease report it to https://github.com/chanced/navajo/issues/new"),
+            12 => Ok(Self::Twelve(slice.try_into().map_err(|_| InvalidLengthError)?)),
+            24 => Ok(Self::TwentyFour(Box::new(slice.try_into().map_err(|_| InvalidLengthError)?))),
+            _ => unreachable!("NonceSequence must be 12 or 24 bytes\nthis is a bug!\n\nplease report it to {NEW_ISSUE_URL}"),
         }
     }
     pub(crate) fn bytes(&self) -> &[u8] {
@@ -92,7 +95,7 @@ impl From<Nonce> for GenericArray<u8, U12> {
     fn from(nonce: Nonce) -> Self {
         match nonce {
             Nonce::Twelve(nonce) => GenericArray::clone_from_slice(&nonce[..]),
-            Nonce::TwentyFour(_) => panic!("attempted to convert a 24 byte nonce to a 12 byte nonce\nthis is a bug!\n\nplease report it to https://github.com/chanced/navajo/issues/new"),
+            Nonce::TwentyFour(_) => panic!("attempted to convert a 24 byte nonce to a 12 byte nonce\nthis is a bug!\n\nplease report it to "),
         }
     }
 }
@@ -100,7 +103,7 @@ impl From<Nonce> for GenericArray<u8, U24> {
     fn from(nonce: Nonce) -> Self {
         match nonce {
             Nonce::TwentyFour(nonce) => GenericArray::clone_from_slice(&nonce[..]),
-            Nonce::Twelve(_) => panic!("attempted to convert a 12 byte nonce to a 24 byte nonce\nthis is a bug!\n\nplease report it to https://github.com/chanced/navajo/issues/new"),
+            Nonce::Twelve(_) => panic!("attempted to convert a 12 byte nonce to a 24 byte nonce\nthis is a bug!\n\nplease report it to {NEW_ISSUE_URL}"),
         }
     }
 }
@@ -110,7 +113,7 @@ impl From<Nonce> for ring::aead::Nonce {
     fn from(nonce: Nonce) -> Self {
         match nonce {
             Nonce::Twelve(nonce) => ring::aead::Nonce::assume_unique_for_key(nonce),
-            Nonce::TwentyFour(_) => unreachable!("ring does not support 24 byte nonces\nthis is a bug!\n\nplease report it to https://github.com/chanced/navajo/issues/new"),
+            Nonce::TwentyFour(_) => unreachable!("ring does not support 24 byte nonces\nthis is a bug!\n\nplease report it to {NEW_ISSUE_URL}"),
         }
     }
 }
@@ -125,7 +128,7 @@ impl NonceSequence {
         let mut result = match size {
             12 => Self::Twelve(0, [0u8; 12]),
             24 => Self::TwentyFour(0, Box::new([0u8; 24])),
-            _ => panic!("NonceSequence must be 12 or 24 bytes\nthis is a bug!\n\nplease report it to https://github.com/chanced/navajo/issues/new"),
+            _ => panic!("NonceSequence must be 12 or 24 bytes\nthis is a bug!\n\nplease report it to {NEW_ISSUE_URL}"),
         };
         match result {
             Self::Twelve(_, ref mut seed) => crate::rand::fill(&mut seed[..12 - 5]),

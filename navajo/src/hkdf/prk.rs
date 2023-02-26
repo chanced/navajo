@@ -1,6 +1,3 @@
-use crypto_common::OutputSizeUser;
-use digest::{core_api::CoreWrapper, CtOutput};
-
 use crate::error::InvalidLengthError;
 
 use super::Algorithm;
@@ -42,19 +39,19 @@ pub(super) enum PrkInner {
 }
 #[derive(Clone, Debug)]
 pub(super) enum RustCryptoPrk {
-    #[cfg(not(feature = "ring"))]
-    Sha256(digest::Output<hmac::Hmac<sha2::Sha256>>),
-    #[cfg(not(feature = "ring"))]
-    Sha384(digest::Output<hmac::Hmac<sha2::Sha384>>),
-    #[cfg(not(feature = "ring"))]
-    Sha512(digest::Output<hmac::Hmac<sha2::Sha512>>),
-    Sha224(digest::Output<hmac::Hmac<sha2::Sha224>>),
-    Sha512_224(digest::Output<hmac::Hmac<sha2::Sha512_224>>),
-    Sha512_256(digest::Output<hmac::Hmac<sha2::Sha512_256>>),
-    Sha3_256(digest::Output<hmac::Hmac<sha3::Sha3_256>>),
-    Sha3_224(digest::Output<hmac::Hmac<sha3::Sha3_224>>),
-    Sha3_384(digest::Output<hmac::Hmac<sha3::Sha3_384>>),
-    Sha3_512(digest::Output<hmac::Hmac<sha3::Sha3_512>>),
+    #[cfg(all(not(feature = "ring"), feature = "sha2"))]
+    Sha256(hmac::digest::Output<hmac::Hmac<sha2::Sha256>>),
+    #[cfg(all(not(feature = "ring"), feature = "sha2"))]
+    Sha384(hmac::digest::Output<hmac::Hmac<sha2::Sha384>>),
+    #[cfg(all(not(feature = "ring"), feature = "sha2"))]
+    Sha512(hmac::digest::Output<hmac::Hmac<sha2::Sha512>>),
+    Sha224(hmac::digest::Output<hmac::Hmac<sha2::Sha224>>),
+    Sha512_224(hmac::digest::Output<hmac::Hmac<sha2::Sha512_224>>),
+    Sha512_256(hmac::digest::Output<hmac::Hmac<sha2::Sha512_256>>),
+    Sha3_256(hmac::digest::Output<hmac::Hmac<sha3::Sha3_256>>),
+    Sha3_224(hmac::digest::Output<hmac::Hmac<sha3::Sha3_224>>),
+    Sha3_384(hmac::digest::Output<hmac::Hmac<sha3::Sha3_384>>),
+    Sha3_512(hmac::digest::Output<hmac::Hmac<sha3::Sha3_512>>),
 }
 impl RustCryptoPrk {
     fn expand(&self, info: &[&[u8]], out: &mut [u8]) -> Result<(), InvalidLengthError> {

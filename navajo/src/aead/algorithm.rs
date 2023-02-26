@@ -4,9 +4,8 @@ use super::{
     size::{AES_128_GCM, AES_256_GCM, CHACHA20_POLY1305, XCHACHA20_POLY1305},
     Method,
 };
-use alloc::string::String;
 use serde::{Deserialize, Serialize};
-use strum::{Display, EnumIter, IntoStaticStr, FromRepr};
+use strum::{Display, EnumIter, FromRepr, IntoStaticStr};
 
 use super::Size;
 
@@ -23,24 +22,29 @@ use super::Size;
     IntoStaticStr,
     Display,
     EnumIter,
-    FromRepr
+    FromRepr,
 )]
-#[serde(rename_all = "SCREAMING-KEBAB-CASE")]
-#[strum(serialize_all = "SCREAMING-KEBAB-CASE")]
 #[repr(u8)]
 pub enum Algorithm {
+    /// AES 128 GCM
+    #[serde(rename = "AES-128-GCM")]
+    #[strum(serialize = "AES-128-GCM")]
+    Aes128Gcm = 1,
+
+    /// AES 256 GCM
+    #[serde(rename = "AES-256-GCM")]
+    #[strum(serialize = "AES-256-GCM")]
+    Aes256Gcm = 2,
+
     /// <https://datatracker.ietf.org/doc/html/rfc8439>
     #[serde(rename = "ChaCha20-Poly1305")]
     #[strum(serialize = "ChaCha20-Poly1305")]
-    ChaCha20Poly1305 = 0,
-    /// AES 128 GCM
-    Aes128Gcm = 1,
-    /// AES 256 GCM
-    Aes256Gcm = 2,
+    ChaCha20Poly1305 = 3,
+
     /// <https://en.wikipedia.org/w/index.php?title=ChaCha20-Poly1305&section=3#XChaCha20-Poly1305_%E2%80%93_extended_nonce_variant>
     #[serde(rename = "XChaCha20-Poly1305")]
     #[strum(serialize = "XChaCha20-Poly1305")]
-    XChaCha20Poly1305 = 3,
+    XChaCha20Poly1305 = 4,
 }
 
 impl Algorithm {

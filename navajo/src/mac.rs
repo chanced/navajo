@@ -24,16 +24,15 @@ pub use verifier::Verifier;
 use zeroize::ZeroizeOnDrop;
 
 use crate::error::{
-    InvalidKeyLength, KeyNotFoundError, MacVerificationError, OpenError, RemoveKeyError, SealError,
+    KeyError, KeyNotFoundError, MacVerificationError, OpenError, RemoveKeyError, SealError,
 };
 use crate::primitive::Primitive;
 use crate::{Aad, Envelope, Keyring, Origin};
 use alloc::vec::Vec;
 use context::*;
 pub(crate) use material::Material;
-use material::{rust_crypto_key, rust_crypto_keys, CryptoKey};
+
 use output::Output;
-use output::{rust_crypto_internal_tag, rust_crypto_internal_tags};
 
 /// Message Authentication Code Keyring (HMAC & CMAC)
 #[derive(Clone, Debug, ZeroizeOnDrop)]
@@ -208,7 +207,7 @@ impl Mac {
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
         meta: Option<serde_json::Value>,
-    ) -> Result<Self, InvalidKeyLength>
+    ) -> Result<Self, KeyError>
     where
         K: AsRef<[u8]>,
     {
@@ -435,7 +434,7 @@ impl Mac {
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
         meta: Option<serde_json::Value>,
-    ) -> Result<MacKeyInfo, InvalidKeyLength> {
+    ) -> Result<MacKeyInfo, KeyError> {
         self.create_key(algorithm, key, prefix, Origin::External, meta)
     }
     /// Returns [`MacKeyInfo`] for the primary key.
@@ -494,7 +493,7 @@ impl Mac {
         prefix: Option<&[u8]>,
         origin: Origin,
         meta: Option<serde_json::Value>,
-    ) -> Result<MacKeyInfo, InvalidKeyLength> {
+    ) -> Result<MacKeyInfo, KeyError> {
         let material = Material::new(value, prefix, algorithm)?;
         Ok(MacKeyInfo::new(self.keyring.add(material, origin, meta)))
     }
@@ -505,21 +504,3 @@ impl AsRef<Mac> for Mac {
         self
     }
 }
-
-macro_rules! rust_crypto_internals {
-    ($input:tt) => {
-        rust_crypto_internal_tags!($input);
-        rust_crypto_contexts!($input);
-        rust_crypto_keys!($input);
-    };
-}
-rust_crypto_internals!({
-    hmac: {
-        ring: [Sha256, Sha384, Sha512],
-        sha2: [Sha224, Sha512_224, Sha512_256],
-        sha3: [Sha3_224, Sha3_256, Sha3_384, Sha3_512],
-    },
-    cmac: {
-        aes: [Aes128, Aes192, Aes256]
-    }
-});

@@ -38,14 +38,15 @@ pub use method::Method;
 pub use segment::Segment;
 pub use stream::{AeadStream, DecryptStream, EncryptStream};
 pub use try_stream::{AeadTryStream, DecryptTryStream, EncryptTryStream};
-cfg_if::cfg_if! {
-    if #[cfg(feature = "std")] {
-        mod reader;
-        mod writer;
-        pub use reader::DecryptReader;
-        pub use writer::EncryptWriter;
-    }
-}
+
+#[cfg(feature = "std")]
+mod reader;
+#[cfg(feature = "std")]
+mod writer;
+#[cfg(feature = "std")]
+pub use reader::DecryptReader;
+#[cfg(feature = "std")]
+pub use writer::EncryptWriter;
 
 // use cipher::{ciphers, ring_ciphers, Cipher};
 
