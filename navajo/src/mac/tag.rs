@@ -76,9 +76,11 @@ impl Tag {
             primary_tag: self.primary_tag.clone(),
         }
     }
-    pub fn update(&mut self, _mac: &Mac) {
-        todo!()
-    }
+
+    // TODO: allow updating a tag with an updated Mac, only computing for the tags for new keys
+    // pub fn update(&mut self, _mac: &Mac) {
+    //     todo!()
+    // }
 
     /// Returns this `Tag` cloned with truncation set to `len` bytes if
     /// possible.

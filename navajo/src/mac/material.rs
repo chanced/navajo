@@ -76,6 +76,9 @@ impl crate::KeyMaterial for Material {
 }
 
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
+// todo: revisit the allowance of large_enum_variant. I don't know how often
+// folks will have numerous hmac algos/backends enabled though
 pub(super) enum BackendKey {
     #[cfg(feature = "ring")]
     Ring(ring::hmac::Key),
@@ -152,30 +155,27 @@ impl RustCryptoKey {
     fn new(algorithm: Algorithm, bytes: &[u8]) -> Result<Self, KeyError> {
         let result = match algorithm {
             #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
-            Algorithm::Sha256 => {
-                use hmac::Mac;
-                Self::Sha256(hmac::Hmac::<sha2::Sha256>::new_from_slice(bytes).unwrap())
-            },
+            Algorithm::Sha256 => Self::Sha256(hmac::Mac::new_from_slice(bytes)?),
             #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
-            Algorithm::Sha384 => todo!(),
+            Algorithm::Sha384 => Self::Sha384(hmac::Mac::new_from_slice(bytes)?),
             #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
-            Algorithm::Sha512 => todo!(),
+            Algorithm::Sha512 => Self::Sha512(hmac::Mac::new_from_slice(bytes)?),
             #[cfg(all(feature = "sha2", feature = "hmac"))]
-            Algorithm::Sha224 => todo!(),
+            Algorithm::Sha224 => Self::Sha224(hmac::Mac::new_from_slice(bytes)?),
             #[cfg(all(feature = "sha3", feature = "hmac"))]
-            Algorithm::Sha3_256 => todo!(),
+            Algorithm::Sha3_256 => Self::Sha3_256(hmac::Mac::new_from_slice(bytes)?),
             #[cfg(all(feature = "sha3", feature = "hmac"))]
-            Algorithm::Sha3_224 => todo!(),
+            Algorithm::Sha3_224 => Self::Sha3_224(hmac::Mac::new_from_slice(bytes)?),
             #[cfg(all(feature = "sha3", feature = "hmac"))]
-            Algorithm::Sha3_384 => todo!(),
+            Algorithm::Sha3_384 => Self::Sha3_384(hmac::Mac::new_from_slice(bytes)?),
             #[cfg(all(feature = "sha3", feature = "hmac"))]
-            Algorithm::Sha3_512 => todo!(),
+            Algorithm::Sha3_512 => Self::Sha3_512(hmac::Mac::new_from_slice(bytes)?),
             #[cfg(all(feature = "aes", feature = "cmac"))]
-            Algorithm::Aes128 => todo!(),
+            Algorithm::Aes128 => Self::Aes128(cmac::Mac::new_from_slice(bytes)?),
             #[cfg(all(feature = "aes", feature = "cmac"))]
-            Algorithm::Aes128 => todo!(),
+            Algorithm::Aes192 => Self::Aes192(cmac::Mac::new_from_slice(bytes)?),
             #[cfg(all(feature = "aes", feature = "cmac"))]
-            Algorithm::Aes128 => todo!(),
+            Algorithm::Aes256 => Self::Aes256(cmac::Mac::new_from_slice(bytes)?),
             _ => unreachable!(
                 "{algorithm} is either not supported by rust crypto, disabled, or should be handled by ring\nthis is a bug\nplease report it to {NEW_ISSUE_URL}",
             ),

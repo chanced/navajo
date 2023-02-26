@@ -544,3 +544,8 @@ impl From<TryFromSliceError> for KeyError {
         Self(format!("invalid key length: {e}"))
     }
 }
+impl From<digest::InvalidLength> for KeyError {
+    fn from(e: digest::InvalidLength) -> Self {
+        Self(format!("invalid key length: {e}"))
+    }
+}
