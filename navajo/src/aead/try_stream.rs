@@ -5,8 +5,9 @@ use futures::{stream::FusedStream, Stream, TryStream};
 use pin_project::pin_project;
 
 use crate::{
-    error::{DecryptTryStreamError, EncryptTryStreamError},
-    Aad, Aead,
+    error::{DecryptStreamError, EncryptTryStreamError},
+    rand::Random,
+    Aad, Aead, SystemRandom,
 };
 
 use super::{Decryptor, Encryptor, Segment};
@@ -42,16 +43,17 @@ where
 }
 
 #[pin_project]
-pub struct EncryptTryStream<S, A>
+pub struct EncryptTryStream<S, A, Rand = SystemRandom>
 where
     S: TryStream + Sized,
     S::Ok: AsRef<[u8]>,
     S::Error: Send + Sync,
     A: AsRef<[u8]> + Send + Sync,
+    Rand: Random,
 {
     #[pin]
     stream: S,
-    encryptor: Option<Encryptor<Vec<u8>>>,
+    encryptor: Option<Encryptor<Vec<u8>, Rand>>,
     queue: VecDeque<Vec<u8>>,
     aad: Aad<A>,
     done: bool,
@@ -158,15 +160,16 @@ where
     }
 }
 #[pin_project]
-pub struct DecryptTryStream<S, K, A>
+pub struct DecryptTryStream<S, K, A, Rand = SystemRandom>
 where
     S: TryStream + Sized,
     K: AsRef<Aead> + Send + Sync,
     A: AsRef<[u8]> + Send + Sync,
+    Rand: Random,
 {
     #[pin]
     stream: S,
-    decryptor: Option<Decryptor<K, Vec<u8>>>,
+    decryptor: Option<Decryptor<K, Vec<u8>, Rand>>,
     queue: VecDeque<Vec<u8>>,
     aad: Aad<A>,
     done: bool,
@@ -198,7 +201,7 @@ where
     K: AsRef<Aead> + Send + Sync,
     D: AsRef<[u8]> + Send + Sync,
 {
-    type Item = Result<Vec<u8>, DecryptTryStreamError<S::Error>>;
+    type Item = Result<Vec<u8>, DecryptStreamError<S::Error>>;
     fn poll_next(
         self: core::pin::Pin<&mut Self>,
         cx: &mut core::task::Context<'_>,
@@ -237,7 +240,7 @@ where
                         }
                         Err(err) => {
                             *this.done = true;
-                            return Ready(Some(Err(DecryptTryStreamError::Upstream(err))));
+                            return Ready(Some(Err(DecryptStreamError::Upstream(err))));
                         }
                     },
                     None => {
@@ -294,7 +297,8 @@ mod tests {
     #[tokio::test]
     async fn test_stream_with_aad_roundtrip() {
         let mut data = vec![0u8; 5556];
-        crate::rand::fill(&mut data);
+        let rand = SystemRandom::new();
+        rand.fill(&mut data);
         let data_stream = stream::iter(data.chunks(122).map(Vec::from)).map(to_try_stream);
         let algorithm = Algorithm::Aes256Gcm;
         let aead = Aead::new(algorithm, None);

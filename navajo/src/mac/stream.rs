@@ -239,8 +239,7 @@ mod tests {
 
         let key = hex::decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
             .unwrap();
-        let mac =
-            crate::mac::Mac::new_with_external_key(&key, Algorithm::Sha256, None, None).unwrap();
+        let mac = crate::mac::Mac::new_external_key(&key, Algorithm::Sha256, None, None).unwrap();
 
         let stream_data = stream::iter(hex_data);
         let computed = stream_data.compute_mac(&mac).await;

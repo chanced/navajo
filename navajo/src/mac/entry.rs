@@ -94,14 +94,17 @@ impl Entry {
 #[cfg(test)]
 mod tests {
 
+    use crate::SystemRandom;
+
     use super::Output;
     use super::*;
     #[test]
     fn test_verify_blake3() {
+        let rand = SystemRandom;
         let mut hash_arr = [0; 32];
-        let id = crate::keyring::gen_id();
+        let id = crate::keyring::gen_id(&rand);
         let id_bytes = id.to_be_bytes();
-        crate::rand::fill(&mut hash_arr);
+        rand.fill(&mut hash_arr);
         let hash = blake3::Hash::from(hash_arr);
         let output = Output::Blake3(crate::mac::output::Blake3Output::from(hash));
         let entry = Entry::new(id, true, id_bytes.to_vec(), output);

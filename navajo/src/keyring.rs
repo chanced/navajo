@@ -7,7 +7,7 @@ use crate::error::SealError;
 use crate::key::Key;
 use crate::key::KeyMaterial;
 use crate::primitive::Kind;
-use crate::rand;
+use crate::rand::Random;
 use crate::Aad;
 use crate::Origin;
 use crate::Status;
@@ -132,8 +132,13 @@ impl<M> Keyring<M>
 where
     M: KeyMaterial,
 {
-    pub(crate) fn new(material: M, origin: Origin, meta: Option<Value>) -> Self {
-        let id = gen_id();
+    pub(crate) fn new<Rand: Random>(
+        mut rand: &Rand,
+        material: M,
+        origin: Origin,
+        meta: Option<Value>,
+    ) -> Self {
+        let id = gen_id(rand);
         let key = Key::new(id, Status::Primary, origin, material, meta);
         let mut lookup = HashMap::new();
         lookup.insert(id, 0);
@@ -187,8 +192,17 @@ where
         key.ok_or(KeyNotFoundError(id)).map(|key| (idx, key))
     }
 
-    pub(crate) fn add(&mut self, material: M, origin: Origin, meta: Option<Value>) -> &Key<M> {
-        let id = self.gen_unique_id();
+    pub(crate) fn add<R>(
+        &mut self,
+        rand: &R,
+        material: M,
+        origin: Origin,
+        meta: Option<Value>,
+    ) -> &Key<M>
+    where
+        R: Random,
+    {
+        let id = self.gen_unique_id(rand);
         let key = Key::new(id, Status::Secondary, origin, material, meta);
         self.keys.push(key);
         self.lookup.insert(id, self.keys.len() - 1);
@@ -268,10 +282,13 @@ where
         &self.keys
     }
 
-    fn gen_unique_id(&self) -> u32 {
-        let mut id = gen_id();
+    fn gen_unique_id<R>(&self, rand: &R) -> u32
+    where
+        R: Random,
+    {
+        let mut id = gen_id(rand);
         while self.lookup.contains_key(&id) {
-            id = gen_id();
+            id = gen_id(rand);
         }
         id
     }
@@ -298,9 +315,9 @@ where
         // serialized = lz4_flex::compress_prepend_size(&serialized);
         use aes_gcm::aead::AeadInPlace;
         // Round 1: AES-256-GCM
-        let key = Aes256Gcm::generate_key(&mut crate::Random);
+        let key = Aes256Gcm::generate_key(&mut crate::SystemRandom);
         let cipher = Aes256Gcm::new(&key);
-        let nonce = Aes256Gcm::generate_nonce(&mut crate::Random);
+        let nonce = Aes256Gcm::generate_nonce(&mut crate::SystemRandom);
         serialized.reserve(AES_256_GCM_TAG_SIZE);
         cipher.encrypt_in_place(&nonce, aad, &mut serialized)?;
         let result = [key.as_slice(), nonce.as_slice(), serialized.as_slice()].concat();
@@ -308,9 +325,9 @@ where
     }
 
     fn seal_second_pass(&self, data: &mut Vec<u8>, aad: &[u8]) -> Result<Vec<u8>, SealError> {
-        let key = ChaCha20Poly1305::generate_key(&mut crate::Random);
+        let key = ChaCha20Poly1305::generate_key(&mut crate::SystemRandom);
         let cipher = ChaCha20Poly1305::new(&key);
-        let nonce = ChaCha20Poly1305::generate_nonce(&mut crate::Random);
+        let nonce = ChaCha20Poly1305::generate_nonce(&mut crate::SystemRandom);
         use chacha20poly1305::aead::AeadInPlace;
         data.reserve(CHACHA20_POLY1305_TAG_SIZE);
         cipher.encrypt_in_place(&nonce, aad, data)?;
@@ -443,13 +460,10 @@ fn get_kind(value: &Value) -> Result<Kind, OpenError> {
 
 impl<M> Keyring<M> where M: KeyMaterial + DeserializeOwned {}
 
-pub(crate) fn gen_id() -> u32 {
-    let mut data = [0; 4];
-    rand::fill(&mut data);
-    let mut value: u32 = u32::from_be_bytes(data);
+pub(crate) fn gen_id<Rand: Random>(rand: &Rand) -> u32 {
+    let mut value = rand.u32().unwrap();
     while value < 100_000_000 {
-        rand::fill(&mut data);
-        value = u32::from_be_bytes(data);
+        value = rand.u32().unwrap();
     }
     value
 }
@@ -524,11 +538,14 @@ mod tests {
     use super::*;
     use crate::key::test::Algorithm;
     use crate::key::test::Material;
+    use crate::SystemRandom;
 
     #[test]
     fn test_serde() {
+        let rand = crate::rand::SystemRandom::new(); // TODO: Replace with MockRandom.
+
         let material = Material::new(Algorithm::Waffles);
-        let keyring = Keyring::new(material, Origin::Navajo, Some("test".into()));
+        let keyring = Keyring::new(&rand, material, Origin::Navajo, Some("test".into()));
         let ser = serde_json::to_string(&keyring).unwrap();
         let de = serde_json::from_str::<Keyring<Material>>(&ser).unwrap();
         assert_eq!(keyring, de);
@@ -537,9 +554,19 @@ mod tests {
     #[cfg(feature = "std")]
     #[tokio::test]
     async fn test_seal_and_open() {
+        use crate::rand::SystemRandom;
+
+        let rand = SystemRandom::new(); // TODO: Replace with MockRandom.
+
         let material = Material::new(Algorithm::Waffles);
-        let mut keyring = Keyring::new(material, Origin::Navajo, Some("test".into()));
-        keyring.add(Material::new(Algorithm::Cereal), Origin::Navajo, None);
+        let mut keyring =
+            Keyring::new(&SystemRandom, material, Origin::Navajo, Some("test".into()));
+        keyring.add(
+            &SystemRandom,
+            Material::new(Algorithm::Cereal),
+            Origin::Navajo,
+            None,
+        );
         let ser = serde_json::to_vec(&keyring).unwrap();
         let de = serde_json::from_slice::<Keyring<Material>>(&ser).unwrap();
         assert_eq!(keyring, de);
@@ -558,7 +585,8 @@ mod tests {
     #[test]
     fn test_key_status() {
         let material = Material::new(Algorithm::Pancakes);
-        let mut keyring = Keyring::new(material, Origin::Navajo, Some("test".into()));
+        let mut keyring =
+            Keyring::new(&SystemRandom, material, Origin::Navajo, Some("test".into()));
         let first_id = {
             let first = keyring.primary();
             let first_id = first.id();
@@ -571,7 +599,12 @@ mod tests {
         };
 
         let second_id = {
-            let second = keyring.add(Material::new(Algorithm::Waffles), Origin::Navajo, None);
+            let second = keyring.add(
+                &SystemRandom,
+                Material::new(Algorithm::Waffles),
+                Origin::Navajo,
+                None,
+            );
             assert_eq!(second.status(), Status::Secondary);
             assert_eq!(second.meta(), None);
             assert_eq!(second.origin(), Origin::Navajo);

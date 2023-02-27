@@ -1,4 +1,4 @@
-use crate::{error::InvalidLengthError, NEW_ISSUE_URL};
+use crate::{error::InvalidLengthError, rand::Random, NEW_ISSUE_URL};
 use core::ops::Deref;
 
 use alloc::boxed::Box;
@@ -31,7 +31,10 @@ pub(crate) enum Nonce {
 }
 
 impl Nonce {
-    pub(crate) fn new(size: usize) -> Self {
+    pub(crate) fn new<R>(rand: R, size: usize) -> Self
+    where
+        R: Random,
+    {
         let mut result = match size {
             12 => Self::Twelve([0u8; 12]),
             24 => Self::TwentyFour(Box::new([0u8; 24])),
@@ -39,10 +42,10 @@ impl Nonce {
         };
         match result {
             Self::Twelve(ref mut seed) => {
-                crate::rand::fill(seed);
+                rand.fill(seed);
             }
             Self::TwentyFour(ref mut seed) => {
-                crate::rand::fill(seed.as_mut());
+                rand.fill(seed.as_mut());
             }
         };
         result
@@ -124,15 +127,18 @@ pub(crate) enum NonceSequence {
 }
 
 impl NonceSequence {
-    pub(crate) fn new(size: usize) -> Self {
+    pub(crate) fn new<R>(rand: R, size: usize) -> Self
+    where
+        R: Random,
+    {
         let mut result = match size {
             12 => Self::Twelve(0, [0u8; 12]),
             24 => Self::TwentyFour(0, Box::new([0u8; 24])),
             _ => panic!("NonceSequence must be 12 or 24 bytes\nthis is a bug!\n\nplease report it to {NEW_ISSUE_URL}"),
         };
         match result {
-            Self::Twelve(_, ref mut seed) => crate::rand::fill(&mut seed[..12 - 5]),
-            Self::TwentyFour(_, ref mut seed) => crate::rand::fill(&mut seed[..24 - 5]),
+            Self::Twelve(_, ref mut seed) => rand.fill(&mut seed[..12 - 5]).unwrap(),
+            Self::TwentyFour(_, ref mut seed) => rand.fill(&mut seed[..24 - 5]).unwrap(),
         }
         result
     }
@@ -274,11 +280,15 @@ impl NonceSequence {
 mod tests {
     use alloc::vec;
 
+    use crate::SystemRandom;
+
     use super::*;
 
     #[test]
     fn test_nonce_sequence_new() {
-        let mut seq = NonceSequence::new(12);
+        let rand = SystemRandom::new();
+
+        let mut seq = NonceSequence::new(rand, 12);
 
         assert_ne!(seq.seed()[..7], [0u8; 7]);
         assert_eq!(seq.seed()[7..], [0u8; 5]);
@@ -303,11 +313,11 @@ mod tests {
         let last = seq.last();
         assert_eq!(last.unwrap().as_ref()[7..], vec![0, 0, 0, 5, 1]);
 
-        let mut bounds_check = NonceSequence::new(12);
+        let mut bounds_check = NonceSequence::new(rand, 12);
         bounds_check.set_counter(u32::MAX);
         assert!(bounds_check.next().is_err());
 
-        let mut seq = NonceSequence::new(24);
+        let mut seq = NonceSequence::new(rand, 24);
         assert_ne!(seq.seed()[..19], [0u8; 19]);
         assert_eq!(seq.seed()[19..], [0u8; 5]);
 
@@ -330,8 +340,7 @@ mod tests {
 
         let last = seq.last();
         assert_eq!(last.unwrap().as_ref()[19..], vec![0, 0, 0, 5, 1]);
-
-        let mut bounds_check = NonceSequence::new(24);
+        let mut bounds_check = NonceSequence::new(rand, 24);
         bounds_check.set_counter(u32::MAX);
         assert!(bounds_check.next().is_err());
     }

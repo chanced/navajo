@@ -3,23 +3,25 @@ use std::io::Read;
 
 use alloc::collections::VecDeque;
 
-use crate::{error::DecryptError, Aad, Aead};
+use crate::{error::DecryptError, rand::Random, Aad, Aead, SystemRandom};
 
 use super::Decryptor;
 
-pub struct DecryptReader<R, A, K>
+pub struct DecryptReader<R, A, K, Rand = SystemRandom>
 where
     R: Read,
     A: AsRef<[u8]>,
     K: AsRef<Aead>,
+    Rand: Random,
 {
     reader: R,
     _marker: PhantomData<K>,
     aad: Aad<A>,
-    deserializer: Option<Decryptor<K, Vec<u8>>>,
+    deserializer: Option<Decryptor<K, Vec<u8>, Rand>>,
     buffer: VecDeque<u8>,
+    rand: Rand,
 }
-impl<R, A, K> DecryptReader<R, A, K>
+impl<R, A, K> DecryptReader<R, A, K, SystemRandom>
 where
     R: Read,
     A: AsRef<[u8]>,
@@ -32,6 +34,27 @@ where
             aad,
             deserializer: Some(Decryptor::new(key, Vec::new())),
             buffer: VecDeque::new(),
+            rand: SystemRandom,
+        }
+    }
+}
+
+impl<R, A, K, Rand> DecryptReader<R, A, K, Rand>
+where
+    R: Read,
+    A: AsRef<[u8]>,
+    K: AsRef<Aead>,
+    Rand: Random,
+{
+    #[cfg(test)]
+    pub fn new_with_rand(rand: Rand, reader: R, aad: Aad<A>, key: K) -> Self {
+        Self {
+            reader,
+            _marker: PhantomData,
+            aad,
+            deserializer: Some(Decryptor::new_with_rand(rand.clone(), key, Vec::new())),
+            buffer: VecDeque::new(),
+            rand,
         }
     }
     fn update(&mut self, mut ctr: usize, iter: impl Iterator<Item = u8>, buf: &mut [u8]) -> usize {
@@ -124,14 +147,18 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::aead::{Algorithm, Encryptor, Segment};
+    use crate::{
+        aead::{Algorithm, Encryptor, Segment},
+        SystemRandom,
+    };
 
     use super::*;
 
     #[test]
     fn test_read() {
         let mut data = vec![0u8; 6024];
-        crate::rand::fill(&mut data);
+        let rand = SystemRandom::new();
+        rand.fill(&mut data);
         let aead = Aead::new(Algorithm::ChaCha20Poly1305, None);
         let mut encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), Vec::new());
         encryptor.update(Aad::empty(), &data).unwrap();

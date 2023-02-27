@@ -18,7 +18,8 @@ mod try_stream;
 use crate::{
     error::{EncryptError, KeyNotFoundError, RemoveKeyError},
     keyring::Keyring,
-    Aad, Buffer,
+    rand::Random,
+    Aad, Buffer, SystemRandom,
 };
 use alloc::vec::Vec;
 use core::mem;
@@ -57,10 +58,20 @@ pub struct Aead {
 impl Aead {
     pub fn new(algorithm: Algorithm, meta: Option<Value>) -> Self {
         Self {
-            keyring: Keyring::new(Material::new(algorithm), crate::Origin::Navajo, meta),
+            keyring: Keyring::new(
+                &SystemRandom,
+                Material::new(algorithm),
+                crate::Origin::Navajo,
+                meta,
+            ),
         }
     }
 
+    fn generate<R>(rand: R)
+    where
+        R: Random,
+    {
+    }
     pub(crate) fn from_keyring(keyring: Keyring<Material>) -> Self {
         Self { keyring }
     }
@@ -208,8 +219,12 @@ impl Aead {
     }
 
     pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<Value>) -> &mut Self {
-        self.keyring
-            .add(Material::new(algorithm), crate::Origin::Navajo, meta);
+        self.keyring.add(
+            &SystemRandom,
+            Material::new(algorithm),
+            crate::Origin::Navajo,
+            meta,
+        );
         self
     }
 

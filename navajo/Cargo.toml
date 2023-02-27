@@ -31,6 +31,10 @@ default-features = false
 features = ["alloc"]
 version = "0.21"
 
+# inherent
+[dependencies.inherent]
+version = "1"
+
 # zeroize
 [dependencies.zeroize]
 version = "1.5"
@@ -41,10 +45,10 @@ features = ["alloc", "zeroize_derive", "serde"]
 version = "0.13"
 features = ["serde"]
 
-# rand
-[dependencies.random]
-package = "rand"
-version = "0.8"
+# rand_core
+[dependencies.rand_core]
+version = "0.6"
+features = ["getrandom"]
 
 # serde
 [dependencies.serde]
@@ -218,25 +222,26 @@ features = ["serde", "alloc"]
 version = "1.14"
 features = ["full"] # todo: reduce this.
 
+
 [features]
 default = [
-	# "ring",
+	"ring",
 	"std",       # todo: remove
-	"aead",      # todo: remove
+	"aead",
 	"aes",       # todo: remove
-	"signature", # todo: remove
-	"mac",       # todo: remove
-	"hmac",      # todo: remove
+	"signature",
+	"mac",
 	"cmac",      # todo: remove
 	"aes",       # todo remove
-	# "blake3",    # todo: remove
-	"sha2", # todo: remove
-	"sha3", # todoo: remove
+	"blake3",    # todo: remove
+	"sha3",      # todoo: remove
+	"daead",
 ]
 signature = ["ed25519", "p256", "p384"]
 mac = ["sha2", "hmac"]
 hkdf = ["sha2", "hmac"]
 aead = ["hkdf"]
+daead = ["aes-siv"]
 std = [
 	"ring?/std",
 	"hex/std",
@@ -246,6 +251,7 @@ std = [
 	"aes-gcm/std",
 	"aes-siv?/std",
 	"hmac?/std",
+	"rand_core/std",
 	"cmac?/std",
 	"chacha20poly1305/std",
 	"pkcs8/std",

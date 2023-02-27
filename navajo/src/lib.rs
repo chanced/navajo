@@ -91,7 +91,7 @@ pub use origin::Origin;
 pub mod primitive;
 
 pub mod rand;
-pub use rand::Random;
+pub use rand::SystemRandom;
 
 mod sensitive;
 
@@ -106,3 +106,5 @@ pub use signature::{Signer, Verifier};
 pub(crate) mod b64;
 
 pub(crate) const NEW_ISSUE_URL: &str = "https://github.com/chanced/navajo/issues/new";
+
+pub(crate) mod sealed;

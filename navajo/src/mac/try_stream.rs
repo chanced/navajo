@@ -6,7 +6,7 @@ use core::{
 use futures::{Future, TryStream};
 use pin_project::pin_project;
 
-use crate::error::VerifyTryStreamError;
+use crate::error::VerifyStreamError;
 
 use super::{verifier::Verifier, Computer, Mac, Tag};
 
@@ -133,7 +133,7 @@ where
     S::Error: Send + Sync,
     T: AsRef<Tag> + Send + Sync,
 {
-    type Output = Result<Tag, VerifyTryStreamError<S::Error>>;
+    type Output = Result<Tag, VerifyStreamError<S::Error>>;
     fn poll(
         self: core::pin::Pin<&mut Self>,
         cx: &mut core::task::Context<'_>,
@@ -146,7 +146,7 @@ where
                     Some(res) => match res {
                         Ok(data) => verifier.update(data.as_ref()),
                         Err(e) => {
-                            return Poll::Ready(Err(VerifyTryStreamError::Upstream(e)));
+                            return Poll::Ready(Err(VerifyStreamError::Upstream(e)));
                         }
                     },
                     None => return Poll::Ready(verifier.finalize().map_err(Into::into)),
@@ -264,8 +264,7 @@ mod tests {
 
         let key = hex::decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
             .unwrap();
-        let mac =
-            crate::mac::Mac::new_with_external_key(&key, Algorithm::Sha256, None, None).unwrap();
+        let mac = crate::mac::Mac::new_external_key(&key, Algorithm::Sha256, None, None).unwrap();
 
         fn to_try_stream(d: Vec<u8>) -> Result<Vec<u8>, String> {
             Ok(d)

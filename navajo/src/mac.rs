@@ -27,6 +27,7 @@ use crate::error::{
     KeyError, KeyNotFoundError, MacVerificationError, OpenError, RemoveKeyError, SealError,
 };
 use crate::primitive::Primitive;
+use crate::rand::{Random, SystemRandom};
 use crate::{Aad, Envelope, Keyring, Origin};
 use alloc::vec::Vec;
 use context::*;
@@ -178,15 +179,32 @@ impl Mac {
     /// Create a new MAC keyring by generating a key for the given [`Algorithm`]
     /// as the primary.
     pub fn new(algorithm: Algorithm, meta: Option<serde_json::value::Value>) -> Self {
-        let bytes = algorithm.generate_key();
-        // safe, the key is generated
-        let material = Material::new(&bytes, None, algorithm).unwrap();
-
-        Self {
-            keyring: Keyring::new(material, Origin::Navajo, meta),
-        }
+        Self::generate(SystemRandom, algorithm, meta)
     }
 
+    #[cfg(test)]
+    pub fn new_with_rand<R>(
+        rand: R,
+        algorithm: Algorithm,
+        meta: Option<serde_json::value::Value>,
+    ) -> Self
+    where
+        R: Random,
+    {
+        Self::generate(rand, algorithm, meta)
+    }
+
+    fn generate<R>(rand: R, algorithm: Algorithm, meta: Option<serde_json::value::Value>) -> Self
+    where
+        R: Random,
+    {
+        let bytes = algorithm.generate_key(rand.clone());
+        // safe, the key is generated
+        let material = Material::new(&bytes, None, algorithm).unwrap();
+        Self {
+            keyring: Keyring::new(&rand, material, Origin::Navajo, meta),
+        }
+    }
     /// Create a new MAC keyring by initializing it with the given key data as
     /// primary.
     ///
@@ -202,7 +220,7 @@ impl Mac {
     ///
     /// assert_eq!(encode(tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a");
     /// ```
-    pub fn new_with_external_key<K>(
+    pub fn new_external_key<K>(
         key: K,
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
@@ -211,10 +229,38 @@ impl Mac {
     where
         K: AsRef<[u8]>,
     {
+        Self::import_key(SystemRandom, key, algorithm, prefix, meta)
+    }
+    #[cfg(test)]
+    pub fn new_external_key_with_rand<R, K>(
+        rand: R,
+        key: K,
+        algorithm: Algorithm,
+        prefix: Option<&[u8]>,
+        meta: Option<serde_json::Value>,
+    ) -> Result<Self, KeyError>
+    where
+        K: AsRef<[u8]>,
+        R: Random,
+    {
+        Self::import_key(rand, key, algorithm, prefix, meta)
+    }
+
+    fn import_key<K, R>(
+        rand: R,
+        key: K,
+        algorithm: Algorithm,
+        prefix: Option<&[u8]>,
+        meta: Option<serde_json::Value>,
+    ) -> Result<Self, KeyError>
+    where
+        K: AsRef<[u8]>,
+        R: Random,
+    {
         // safe, the key is generated
         let material = Material::new(key.as_ref(), prefix, algorithm)?;
         Ok(Self {
-            keyring: Keyring::new(material, Origin::Navajo, meta),
+            keyring: Keyring::new(&rand, material, Origin::Navajo, meta),
         })
     }
 
@@ -424,19 +470,79 @@ impl Mac {
     }
 
     pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<serde_json::Value>) -> MacKeyInfo {
-        let bytes = algorithm.generate_key();
-        self.create_key(algorithm, &bytes, None, Origin::Navajo, meta)
+        self.generate_key(SystemRandom, algorithm, Origin::Navajo, meta)
+    }
+
+    #[cfg(test)]
+    pub fn add_key_with_rand<R>(
+        &mut self,
+        rand: R,
+        algorithm: Algorithm,
+        meta: Option<serde_json::Value>,
+    ) -> MacKeyInfo
+    where
+        R: Random,
+    {
+        self.generate_key(rand, algorithm, Origin::Navajo, meta)
+    }
+    fn generate_key<R>(
+        &mut self,
+        rand: R,
+        algorithm: Algorithm,
+        origin: Origin,
+        meta: Option<serde_json::Value>,
+    ) -> MacKeyInfo
+    where
+        R: Random,
+    {
+        let rand = SystemRandom::new();
+        let bytes = algorithm.generate_key(rand);
+        self.create_key(rand, algorithm, &bytes, None, origin, meta)
             .unwrap() // safe, the key is generated
     }
-    pub fn add_external_key(
+
+    pub fn add_external_key<K>(
         &mut self,
-        key: &[u8],
+        key: K,
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
         meta: Option<serde_json::Value>,
-    ) -> Result<MacKeyInfo, KeyError> {
-        self.create_key(algorithm, key, prefix, Origin::External, meta)
+    ) -> Result<MacKeyInfo, KeyError>
+    where
+        K: AsRef<[u8]>,
+    {
+        self.create_key(
+            SystemRandom,
+            algorithm,
+            key.as_ref(),
+            prefix,
+            Origin::External,
+            meta,
+        )
     }
+
+    pub fn add_external_key_with_rand<R, K>(
+        &mut self,
+        rand: R,
+        key: K,
+        algorithm: Algorithm,
+        prefix: Option<&[u8]>,
+        meta: Option<serde_json::Value>,
+    ) -> Result<MacKeyInfo, KeyError>
+    where
+        K: AsRef<[u8]>,
+        R: Random,
+    {
+        self.create_key(
+            SystemRandom,
+            algorithm,
+            key.as_ref(),
+            prefix,
+            Origin::External,
+            meta,
+        )
+    }
+
     /// Returns [`MacKeyInfo`] for the primary key.
     pub fn primary_key(&self) -> MacKeyInfo {
         self.keyring.primary().into()
@@ -486,16 +592,22 @@ impl Mac {
         Self { keyring }
     }
 
-    fn create_key(
+    fn create_key<R>(
         &mut self,
+        rand: R,
         algorithm: Algorithm,
         value: &[u8],
         prefix: Option<&[u8]>,
         origin: Origin,
         meta: Option<serde_json::Value>,
-    ) -> Result<MacKeyInfo, KeyError> {
+    ) -> Result<MacKeyInfo, KeyError>
+    where
+        R: Random,
+    {
         let material = Material::new(value, prefix, algorithm)?;
-        Ok(MacKeyInfo::new(self.keyring.add(material, origin, meta)))
+        Ok(MacKeyInfo::new(
+            self.keyring.add(&rand, material, origin, meta),
+        ))
     }
 }
 
