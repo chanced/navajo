@@ -8,9 +8,7 @@ use navajo::rand;
 use hex::{encode, decode};
 
 // generate a salt
-let mut salt: Vec<u8> = vec![0u8; 32];
-rand::fill(&mut salt);
-let salt = Salt::new(Algorithm::Sha256, &salt[..]);
+let salt = Salt::generate(Algorithm::Sha256);
 
 // secret key material
 let ikm = decode("c78bc83f190589c1f28772f9bb11b5773c2274de342933e9aa8521a5e09c7829")

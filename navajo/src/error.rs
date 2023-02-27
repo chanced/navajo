@@ -13,7 +13,7 @@ use alloc::{
 pub trait Error: core::fmt::Debug + core::fmt::Display {}
 
 #[cfg(feature = "std")]
-pub trait Error: core::fmt::Debug + core::fmt::Display + std::error::Error {}
+pub trait Error: std::error::Error {}
 
 #[derive(Debug)]
 pub struct RandomError(pub rand_core::Error);
@@ -157,6 +157,7 @@ pub enum EncryptTryStreamError<E> {
     Encrypt(EncryptError),
     Upstream(E),
 }
+#[cfg(feature = "std")]
 impl<E> Error for EncryptTryStreamError<E> where E: std::error::Error {}
 
 impl<E> Debug for EncryptTryStreamError<E>
@@ -259,6 +260,7 @@ pub enum DecryptStreamError<E> {
     Decrypt(DecryptError),
     Upstream(E),
 }
+#[cfg(feature = "std")]
 impl<E> Error for DecryptStreamError<E> where E: std::error::Error {}
 impl<E> Debug for DecryptStreamError<E>
 where
@@ -361,6 +363,7 @@ pub enum MacVerificationReadError {
     MacVerificationError,
     IoError(std::io::Error),
 }
+#[cfg(feature = "std")]
 impl Error for MacVerificationError {}
 
 #[cfg(feature = "std")]
@@ -387,6 +390,7 @@ impl From<MacVerificationError> for MacVerificationReadError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for MacVerificationReadError {}
+#[cfg(feature = "std")]
 impl Error for MacVerificationReadError {}
 
 #[derive(Debug, Clone)]

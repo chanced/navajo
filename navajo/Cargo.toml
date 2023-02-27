@@ -27,9 +27,9 @@ optional = true
 
 # base64
 [dependencies.base64]
+version = "0.21"
 default-features = false
 features = ["alloc"]
-version = "0.21"
 
 # inherent
 [dependencies.inherent]
@@ -102,7 +102,7 @@ version = "0.1.6"
 
 # chachapoly1305
 [dependencies.chacha20poly1305]
-version = "*"
+version = "0.10"
 
 # hmac 
 [dependencies.hmac]
@@ -124,24 +124,21 @@ features = ["zeroize"]
 # ed25519
 [dependencies.ed25519]
 version = "2.1"
+optional = true
 default-features = false
 features = ["pem", "zeroize", "serde"]
-optional = true
 
 # p256
 [dependencies.p256]
 version = "0.12"
-features = ["ecdsa", "pkcs8", "pem", "hash2curve"]
 optional = true
+features = ["ecdsa", "pkcs8", "pem", "hash2curve"]
 
 # p384
 [dependencies.p384]
 version = "0.12"
-features = ["ecdsa", "pkcs8", "pem", "hash2curve"]
 optional = true
-
-# [dependencies.ecdsa]
-# version = "0.15"
+features = ["ecdsa", "pkcs8", "pem", "hash2curve"]
 
 # sha2
 [dependencies.sha2]
@@ -156,20 +153,16 @@ default-features = false
 
 # pkcs8
 [dependencies.pkcs8]
-version = "0.9"
+version = "0.10"
 default-features = false
 features = ["alloc", "pem"]
-
-# # pbkdf2
-# [dependencies.pbkdf2]
-# version = "0.11"
 
 
 # cmac
 [dependencies.cmac]
 version = "0.7"
-features = ["zeroize"]
 optional = true
+features = ["zeroize"]
 
 # subtle
 [dependencies.subtle]
@@ -188,8 +181,8 @@ version = "0.12"
 # aes
 [dependencies.aes]
 version = "0.8.2"
-features = ["zeroize"]
 optional = true
+features = ["zeroize"]
 
 #digest
 [dependencies.digest]
@@ -199,13 +192,28 @@ features = ["alloc"]
 
 [dependencies.ed25519-dalek]
 version = "1"
+optional = true
 default-features = false
 features = ["alloc", "u64_backend"]
-optional = true
+
+# [dependencies.ecdsa]
+# version = "0.15"
+
+# # pbkdf2
+# [dependencies.pbkdf2]
+# version = "0.11"
+
 
 # -------------------------
 #    Test dependencies
 # -------------------------
+
+# quickcheck
+[dev-dependencies.quickcheck]
+version = "1.0"
+
+[dev-dependencies.quickcheck_macros]
+version = "1.0"
 
 # mockall
 [dev-dependencies.mockall]
@@ -237,6 +245,7 @@ default = [
 	"sha3",      # todoo: remove
 	"daead",
 ]
+
 signature = ["ed25519", "p256", "p384"]
 mac = ["sha2", "hmac"]
 hkdf = ["sha2", "hmac"]

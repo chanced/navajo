@@ -13,7 +13,6 @@ pub trait Random: Clone + Sealed {
     fn u128(&self) -> Result<u128, RandomError>;
     fn usize(&self) -> Result<usize, RandomError>;
 }
-#[cfg(feature = "ring")]
 
 /// A random number generator that uses [*ring*'s `SystemRandom`](`ring::rand::SystemRandom`) if the `"ring"`
 /// feature is enabled, otherwise it uses [rand's `OsRng`](`random::rngs::OsRng`).

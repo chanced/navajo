@@ -57,21 +57,24 @@ pub struct Aead {
 }
 impl Aead {
     pub fn new(algorithm: Algorithm, meta: Option<Value>) -> Self {
+        Self::generate(&SystemRandom, algorithm, meta)
+    }
+    #[cfg(test)]
+    pub fn new_with_rand<Rand>(rand: &Rand, algorithm: Algorithm, meta: Option<Value>) -> Self
+    where
+        Rand: Random,
+    {
+        Self::generate(rand, algorithm, meta)
+    }
+    fn generate<Rand>(rand: &Rand, algorithm: Algorithm, meta: Option<Value>) -> Self
+    where
+        Rand: Random,
+    {
         Self {
-            keyring: Keyring::new(
-                &SystemRandom,
-                Material::new(algorithm),
-                crate::Origin::Navajo,
-                meta,
-            ),
+            keyring: Keyring::new(rand, Material::new(algorithm), crate::Origin::Navajo, meta),
         }
     }
 
-    fn generate<R>(rand: R)
-    where
-        R: Random,
-    {
-    }
     pub(crate) fn from_keyring(keyring: Keyring<Material>) -> Self {
         Self { keyring }
     }

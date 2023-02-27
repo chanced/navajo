@@ -215,7 +215,7 @@ impl Mac {
     /// use hex::{decode, encode};
     /// let external_key = decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
     ///     .unwrap();    
-    /// let mac = Mac::new_with_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
+    /// let mac = Mac::new_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
     /// let tag = mac.compute(b"hello world").omit_header().unwrap();
     ///
     /// assert_eq!(encode(tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a");
@@ -271,7 +271,7 @@ impl Mac {
     /// use hex::{decode, encode};
     /// let external_key = decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
     ///     .unwrap();    
-    /// let mac = Mac::new_with_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
+    /// let mac = Mac::new_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
     /// let tag = mac.compute(b"hello world").omit_header().unwrap();
     ///
     /// assert_eq!(encode(tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a");
@@ -360,7 +360,7 @@ impl Mac {
     /// use hex::{decode, encode};
     /// let external_key = decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
     ///     .unwrap();    
-    /// let mac = Mac::new_with_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
+    /// let mac = Mac::new_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
     /// let tag = mac.compute(b"hello world").omit_header().unwrap();
     /// assert_eq!(encode(&tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a");
     /// assert!(mac.verify(tag, b"hello world").is_ok());
@@ -384,7 +384,7 @@ impl Mac {
     ///
     /// let external_key = decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
     ///     .unwrap();    
-    /// let mac = Mac::new_with_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
+    /// let mac = Mac::new_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
     /// let tag = mac.compute(b"hello world").omit_header().unwrap();
     /// assert_eq!(encode(&tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a");
     /// assert!(mac.verify_reader(tag, &mut Cursor::new(b"hello world")).is_ok());
@@ -418,7 +418,7 @@ impl Mac {
     /// async fn main() {
     ///     let external_key = decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
     ///         .unwrap();    
-    ///     let mac = Mac::new_with_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
+    ///     let mac = Mac::new_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
     ///     let tag = mac.compute(b"hello world").omit_header().unwrap();
     ///     assert_eq!(encode(&tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a");
     ///     let data = vec![&b"hello"[..], &b" "[..], &b"world"[..]];
@@ -449,7 +449,7 @@ impl Mac {
     /// async fn main() {
     ///     let external_key = decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
     ///         .unwrap();    
-    ///     let mac = Mac::new_with_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
+    ///     let mac = Mac::new_external_key(&external_key, Algorithm::Sha256, None, None).unwrap();
     ///     let tag = mac.compute(b"hello world").omit_header().unwrap();
     ///     assert_eq!(encode(&tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f82f55a82a");
     ///     let data = vec![&b"hello"[..], &b" "[..], &b"world"[..]];
