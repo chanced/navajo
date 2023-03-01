@@ -27,7 +27,7 @@ use crate::error::{
     KeyError, KeyNotFoundError, MacVerificationError, OpenError, RemoveKeyError, SealError,
 };
 use crate::primitive::Primitive;
-use crate::rand::{Random, SystemRandom};
+use crate::rand::{Rng, SystemRng};
 use crate::{Aad, Envelope, Keyring, Origin};
 use alloc::vec::Vec;
 use context::*;
@@ -179,24 +179,24 @@ impl Mac {
     /// Create a new MAC keyring by generating a key for the given [`Algorithm`]
     /// as the primary.
     pub fn new(algorithm: Algorithm, meta: Option<serde_json::value::Value>) -> Self {
-        Self::generate(SystemRandom, algorithm, meta)
+        Self::generate(SystemRng, algorithm, meta)
     }
 
     #[cfg(test)]
-    pub fn new_with_rand<R>(
+    pub fn new_with_rng<R>(
         rand: R,
         algorithm: Algorithm,
         meta: Option<serde_json::value::Value>,
     ) -> Self
     where
-        R: Random,
+        R: Rng,
     {
         Self::generate(rand, algorithm, meta)
     }
 
     fn generate<R>(rand: R, algorithm: Algorithm, meta: Option<serde_json::value::Value>) -> Self
     where
-        R: Random,
+        R: Rng,
     {
         let bytes = algorithm.generate_key(rand.clone());
         // safe, the key is generated
@@ -229,10 +229,10 @@ impl Mac {
     where
         K: AsRef<[u8]>,
     {
-        Self::import_key(SystemRandom, key, algorithm, prefix, meta)
+        Self::import_key(SystemRng, key, algorithm, prefix, meta)
     }
     #[cfg(test)]
-    pub fn new_external_key_with_rand<R, K>(
+    pub fn new_external_key_with_rng<R, K>(
         rand: R,
         key: K,
         algorithm: Algorithm,
@@ -241,7 +241,7 @@ impl Mac {
     ) -> Result<Self, KeyError>
     where
         K: AsRef<[u8]>,
-        R: Random,
+        R: Rng,
     {
         Self::import_key(rand, key, algorithm, prefix, meta)
     }
@@ -255,7 +255,7 @@ impl Mac {
     ) -> Result<Self, KeyError>
     where
         K: AsRef<[u8]>,
-        R: Random,
+        R: Rng,
     {
         // safe, the key is generated
         let material = Material::new(key.as_ref(), prefix, algorithm)?;
@@ -470,18 +470,18 @@ impl Mac {
     }
 
     pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<serde_json::Value>) -> MacKeyInfo {
-        self.generate_key(SystemRandom, algorithm, Origin::Navajo, meta)
+        self.generate_key(SystemRng, algorithm, Origin::Navajo, meta)
     }
 
     #[cfg(test)]
-    pub fn add_key_with_rand<R>(
+    pub fn add_key_with_rng<R>(
         &mut self,
         rand: R,
         algorithm: Algorithm,
         meta: Option<serde_json::Value>,
     ) -> MacKeyInfo
     where
-        R: Random,
+        R: Rng,
     {
         self.generate_key(rand, algorithm, Origin::Navajo, meta)
     }
@@ -493,9 +493,9 @@ impl Mac {
         meta: Option<serde_json::Value>,
     ) -> MacKeyInfo
     where
-        R: Random,
+        R: Rng,
     {
-        let rand = SystemRandom::new();
+        let rand = SystemRng::new();
         let bytes = algorithm.generate_key(rand);
         self.create_key(rand, algorithm, &bytes, None, origin, meta)
             .unwrap() // safe, the key is generated
@@ -512,7 +512,7 @@ impl Mac {
         K: AsRef<[u8]>,
     {
         self.create_key(
-            SystemRandom,
+            SystemRng,
             algorithm,
             key.as_ref(),
             prefix,
@@ -521,7 +521,7 @@ impl Mac {
         )
     }
 
-    pub fn add_external_key_with_rand<R, K>(
+    pub fn add_external_key_with_rng<R, K>(
         &mut self,
         rand: R,
         key: K,
@@ -531,10 +531,10 @@ impl Mac {
     ) -> Result<MacKeyInfo, KeyError>
     where
         K: AsRef<[u8]>,
-        R: Random,
+        R: Rng,
     {
         self.create_key(
-            SystemRandom,
+            SystemRng,
             algorithm,
             key.as_ref(),
             prefix,
@@ -602,7 +602,7 @@ impl Mac {
         meta: Option<serde_json::Value>,
     ) -> Result<MacKeyInfo, KeyError>
     where
-        R: Random,
+        R: Rng,
     {
         let material = Material::new(value, prefix, algorithm)?;
         Ok(MacKeyInfo::new(

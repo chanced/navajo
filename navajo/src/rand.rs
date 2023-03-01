@@ -4,7 +4,7 @@ use rand_core::{CryptoRng, RngCore};
 use crate::{error::RandomError, sealed::Sealed};
 
 /// Random number generator
-pub trait Random: Clone + Sealed {
+pub trait Rng: Clone + Sealed {
     fn fill(&self, dst: &mut [u8]) -> Result<(), RandomError>;
     fn u8(&self) -> Result<u8, RandomError>;
     fn u16(&self) -> Result<u16, RandomError>;
@@ -19,9 +19,17 @@ pub trait Random: Clone + Sealed {
 ///
 /// If *ring* fails, it will make a fallback attempt with [`rand::rngs::OsRng`](`random::rngs::OsRng`).
 #[derive(Clone, Copy, Default)]
-pub struct SystemRandom;
-impl Sealed for SystemRandom {}
-impl CryptoRng for SystemRandom {}
+pub struct SystemRng;
+impl Sealed for SystemRng {}
+impl CryptoRng for SystemRng {}
+
+/// reports whether or not a slice of bytes is fully repeating
+pub fn is_fully_repeating(key: &[u8]) -> bool {
+    if key.len() < 2 {
+        return false;
+    }
+    !key.iter().cloned().all(|b| b == key[0])
+}
 
 fn fill(dst: &mut [u8]) -> Result<(), RandomError> {
     #[cfg(feature = "ring")]
@@ -34,14 +42,14 @@ fn fill(dst: &mut [u8]) -> Result<(), RandomError> {
     Ok(())
 }
 
-impl SystemRandom {
+impl SystemRng {
     pub fn new() -> Self {
         Self
     }
 }
 
 #[inherent]
-impl Random for SystemRandom {
+impl Rng for SystemRng {
     pub fn fill(&self, dst: &mut [u8]) -> Result<(), RandomError> {
         fill(dst)
     }
@@ -96,7 +104,7 @@ impl Random for SystemRandom {
     }
 }
 
-impl RngCore for SystemRandom {
+impl RngCore for SystemRng {
     fn next_u32(&mut self) -> u32 {
         match self.u32() {
             Ok(v) => v,
@@ -136,7 +144,7 @@ impl RngCore for SystemRandom {
 #[cfg(all(test, feature = "std"))]
 mockall::mock! {
     pub RandomInner {}
-    impl Random for RandomInner {
+    impl Rng for RandomInner {
         fn fill(&self, dst: &mut [u8]) -> Result<(), RandomError>;
         fn u8(&self) -> Result<u8, RandomError>;
         fn u16(&self) -> Result<u16, RandomError>;

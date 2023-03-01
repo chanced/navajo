@@ -32,7 +32,7 @@ pub enum Algorithm {
     /// RSA SSA PKCS#1 v1.5 2048 8192 bits SHA-512
     Rs512,
     /// RSA PSS 2048-8192 bits SHA-256
-    Ps258,
+    Ps256,
     /// RSA PSS 2048-8192 bits SHA-384
     Ps384,
     /// RSA PSS 2048-8192 bits SHA-512
@@ -40,11 +40,42 @@ pub enum Algorithm {
 }
 impl Algorithm {
     #[cfg(feature = "ring")]
-    pub(super) fn ring_ecdsa_signing(&self) -> &'static ring::signature::EcdsaSigningAlgorithm {
+    pub(super) fn ring_ecdsa_signing_algorithm(
+        &self,
+    ) -> &'static ring::signature::EcdsaSigningAlgorithm {
         match self {
             Algorithm::Es256 => &ring::signature::ECDSA_P256_SHA256_FIXED_SIGNING,
             Algorithm::Es384 => &ring::signature::ECDSA_P384_SHA384_FIXED_SIGNING,
-            _ => panic!("Unsupported algorithm"),
+            _ => unreachable!("not an ecdsa algorithm: {}", self),
+        }
+    }
+    #[cfg(feature = "ring")]
+    pub(super) fn ring_ecdsa_verifying_algorithm(
+        &self,
+    ) -> &'static ring::signature::EcdsaVerificationAlgorithm {
+        match self {
+            Algorithm::Es256 => &ring::signature::ECDSA_P256_SHA256_ASN1,
+            Algorithm::Es384 => &ring::signature::ECDSA_P384_SHA384_ASN1,
+            _ => unreachable!("not an ecdsa algorithm: {}", self),
+        }
+    }
+    #[cfg(feature = "ring")]
+    pub(super) fn ring_rsa_signing_parameters(&self) -> &'static ring::signature::RsaParameters {
+        match self {
+            Algorithm::Rs256 => &ring::signature::RSA_PKCS1_2048_8192_SHA256,
+            Algorithm::Rs384 => &ring::signature::RSA_PKCS1_2048_8192_SHA384,
+            Algorithm::Rs512 => &ring::signature::RSA_PKCS1_2048_8192_SHA512,
+            Algorithm::Ps258 => &ring::signature::RSA_PSS_2048_8192_SHA256,
+            Algorithm::Ps384 => &ring::signature::RSA_PSS_2048_8192_SHA384,
+            Algorithm::Ps512 => &ring::signature::RSA_PSS_2048_8192_SHA512,
+            _ => unreachable!("not an rsa algorithm: {}", self),
+        }
+    }
+    #[cfg(feature = "ring")]
+    pub(super) fn ring_ed_dsa_parameters(&self) -> &'static ring::signature::EdDSAParameters {
+        match self {
+            Algorithm::Ed25519 => &ring::signature::ED25519,
+            _ => unreachable!("not an eddsa algorithm: {}", self),
         }
     }
 }

@@ -51,8 +51,8 @@ pub struct InMemory {
 }
 impl InMemory {
     pub fn new() -> Self {
-        let key = ChaCha20Poly1305::generate_key(crate::SystemRandom);
-        let nonce = ChaCha20Poly1305::generate_nonce(crate::SystemRandom);
+        let key = ChaCha20Poly1305::generate_key(crate::SystemRng);
+        let nonce = ChaCha20Poly1305::generate_nonce(crate::SystemRng);
         Self {
             key: key.into(),
             nonce: nonce.into(),

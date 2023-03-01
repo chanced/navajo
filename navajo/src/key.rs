@@ -177,7 +177,7 @@ pub(crate) mod test {
     impl Material {
         pub(crate) fn new(algorithm: Algorithm) -> Self {
             let mut value = [0u8; 32];
-            crate::SystemRandom.fill(&mut value);
+            crate::SystemRng.fill(&mut value);
             Self { algorithm, value }
         }
     }

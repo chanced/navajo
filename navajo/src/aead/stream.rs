@@ -9,8 +9,8 @@ use pin_project::pin_project;
 
 use crate::{
     error::{DecryptError, EncryptError},
-    rand::Random,
-    Aad, Aead, SystemRandom,
+    rand::Rng,
+    Aad, Aead, SystemRng,
 };
 
 use super::{Decryptor, Encryptor, Segment};
@@ -150,16 +150,16 @@ where
     }
 }
 #[pin_project]
-pub struct DecryptStream<S, K, A, Rand = SystemRandom>
+pub struct DecryptStream<S, K, A, G = SystemRng>
 where
     S: Stream + Sized,
     K: AsRef<Aead> + Send + Sync,
     A: AsRef<[u8]>,
-    Rand: Random,
+    G: Rng,
 {
     #[pin]
     stream: Fuse<S>,
-    decryptor: Option<Decryptor<K, Vec<u8>, Rand>>,
+    decryptor: Option<Decryptor<K, Vec<u8>, G>>,
     queue: VecDeque<Vec<u8>>,
     aad: Aad<A>,
     done: bool,
@@ -183,13 +183,13 @@ where
     }
 }
 
-impl<S, K, D, Rand> Stream for DecryptStream<S, K, D, Rand>
+impl<S, K, D, G> Stream for DecryptStream<S, K, D, G>
 where
     S: Stream,
     S::Item: AsRef<[u8]>,
     K: AsRef<Aead> + Send + Sync,
     D: AsRef<[u8]> + Send + Sync,
-    Rand: Random,
+    G: Rng,
 {
     type Item = Result<Vec<u8>, DecryptError>;
     fn poll_next(
@@ -276,8 +276,8 @@ mod tests {
     #[tokio::test]
     async fn test_stream_with_aad_roundtrip() {
         let mut data = vec![0u8; 5556];
-        let rand = SystemRandom::new();
-        rand.fill(&mut data);
+        let rng = SystemRng::new();
+        rng.fill(&mut data);
         let data_stream = stream::iter(data.chunks(122).map(Vec::from));
         let algorithm = Algorithm::Aes256Gcm;
         let aead = Aead::new(algorithm, None);

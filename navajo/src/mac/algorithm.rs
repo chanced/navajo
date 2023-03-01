@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoStaticStr};
 
-use crate::{error::KeyError, rand::Random};
+use crate::{error::KeyError, rand::Rng};
 
 const SHA2_256_KEY_LEN: usize = 32;
 const SHA2_224_KEY_LEN: usize = 32;
@@ -92,12 +92,12 @@ pub enum Algorithm {
 }
 
 impl Algorithm {
-    pub(super) fn generate_key<R>(&self, rand: R) -> Vec<u8>
+    pub(super) fn generate_key<R>(&self, rng: R) -> Vec<u8>
     where
-        R: Random,
+        R: Rng,
     {
         let mut key = alloc::vec![0u8; self.default_key_len()];
-        rand.fill(&mut key);
+        rng.fill(&mut key);
         key
     }
     pub fn tag_len(&self) -> usize {

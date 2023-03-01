@@ -7,7 +7,7 @@ use crate::error::SealError;
 use crate::key::Key;
 use crate::key::KeyMaterial;
 use crate::primitive::Kind;
-use crate::rand::Random;
+use crate::rand::Rng;
 use crate::Aad;
 use crate::Origin;
 use crate::Status;
@@ -132,7 +132,7 @@ impl<M> Keyring<M>
 where
     M: KeyMaterial,
 {
-    pub(crate) fn new<Rand: Random>(
+    pub(crate) fn new<Rand: Rng>(
         mut rand: &Rand,
         material: M,
         origin: Origin,
@@ -200,7 +200,7 @@ where
         meta: Option<Value>,
     ) -> &Key<M>
     where
-        R: Random,
+        R: Rng,
     {
         let id = self.gen_unique_id(rand);
         let key = Key::new(id, Status::Secondary, origin, material, meta);
@@ -284,7 +284,7 @@ where
 
     fn gen_unique_id<R>(&self, rand: &R) -> u32
     where
-        R: Random,
+        R: Rng,
     {
         let mut id = gen_id(rand);
         while self.lookup.contains_key(&id) {
@@ -315,9 +315,9 @@ where
         // serialized = lz4_flex::compress_prepend_size(&serialized);
         use aes_gcm::aead::AeadInPlace;
         // Round 1: AES-256-GCM
-        let key = Aes256Gcm::generate_key(&mut crate::SystemRandom);
+        let key = Aes256Gcm::generate_key(&mut crate::SystemRng);
         let cipher = Aes256Gcm::new(&key);
-        let nonce = Aes256Gcm::generate_nonce(&mut crate::SystemRandom);
+        let nonce = Aes256Gcm::generate_nonce(&mut crate::SystemRng);
         serialized.reserve(AES_256_GCM_TAG_SIZE);
         cipher.encrypt_in_place(&nonce, aad, &mut serialized)?;
         let result = [key.as_slice(), nonce.as_slice(), serialized.as_slice()].concat();
@@ -325,9 +325,9 @@ where
     }
 
     fn seal_second_pass(&self, data: &mut Vec<u8>, aad: &[u8]) -> Result<Vec<u8>, SealError> {
-        let key = ChaCha20Poly1305::generate_key(&mut crate::SystemRandom);
+        let key = ChaCha20Poly1305::generate_key(&mut crate::SystemRng);
         let cipher = ChaCha20Poly1305::new(&key);
-        let nonce = ChaCha20Poly1305::generate_nonce(&mut crate::SystemRandom);
+        let nonce = ChaCha20Poly1305::generate_nonce(&mut crate::SystemRng);
         use chacha20poly1305::aead::AeadInPlace;
         data.reserve(CHACHA20_POLY1305_TAG_SIZE);
         cipher.encrypt_in_place(&nonce, aad, data)?;
@@ -460,7 +460,7 @@ fn get_kind(value: &Value) -> Result<Kind, OpenError> {
 
 impl<M> Keyring<M> where M: KeyMaterial + DeserializeOwned {}
 
-pub(crate) fn gen_id<Rand: Random>(rand: &Rand) -> u32 {
+pub(crate) fn gen_id<Rand: Rng>(rand: &Rand) -> u32 {
     let mut value = rand.u32().unwrap();
     while value < 100_000_000 {
         value = rand.u32().unwrap();
@@ -538,11 +538,11 @@ mod tests {
     use super::*;
     use crate::key::test::Algorithm;
     use crate::key::test::Material;
-    use crate::SystemRandom;
+    use crate::SystemRng;
 
     #[test]
     fn test_serde() {
-        let rand = crate::rand::SystemRandom::new(); // TODO: Replace with MockRandom.
+        let rand = crate::rand::SystemRng::new(); // TODO: Replace with MockRandom.
 
         let material = Material::new(Algorithm::Waffles);
         let keyring = Keyring::new(&rand, material, Origin::Navajo, Some("test".into()));
@@ -554,15 +554,14 @@ mod tests {
     #[cfg(feature = "std")]
     #[tokio::test]
     async fn test_seal_and_open() {
-        use crate::rand::SystemRandom;
+        use crate::rand::SystemRng;
 
-        let rand = SystemRandom::new(); // TODO: Replace with MockRandom.
+        let rand = SystemRng::new(); // TODO: Replace with MockRandom.
 
         let material = Material::new(Algorithm::Waffles);
-        let mut keyring =
-            Keyring::new(&SystemRandom, material, Origin::Navajo, Some("test".into()));
+        let mut keyring = Keyring::new(&SystemRng, material, Origin::Navajo, Some("test".into()));
         keyring.add(
-            &SystemRandom,
+            &SystemRng,
             Material::new(Algorithm::Cereal),
             Origin::Navajo,
             None,
@@ -585,8 +584,7 @@ mod tests {
     #[test]
     fn test_key_status() {
         let material = Material::new(Algorithm::Pancakes);
-        let mut keyring =
-            Keyring::new(&SystemRandom, material, Origin::Navajo, Some("test".into()));
+        let mut keyring = Keyring::new(&SystemRng, material, Origin::Navajo, Some("test".into()));
         let first_id = {
             let first = keyring.primary();
             let first_id = first.id();
@@ -600,7 +598,7 @@ mod tests {
 
         let second_id = {
             let second = keyring.add(
-                &SystemRandom,
+                &SystemRng,
                 Material::new(Algorithm::Waffles),
                 Origin::Navajo,
                 None,

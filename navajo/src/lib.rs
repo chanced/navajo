@@ -91,7 +91,7 @@ pub use origin::Origin;
 pub mod primitive;
 
 pub mod rand;
-pub use rand::{Random, SystemRandom};
+pub use rand::{Rng, SystemRng};
 
 mod sensitive;
 

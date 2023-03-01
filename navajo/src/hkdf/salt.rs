@@ -30,12 +30,12 @@ impl Salt {
         Self::new(algorithm, &salt)
     }
     #[cfg(test)]
-    pub fn generate_with_rand<R>(rand: R, algorithm: Algorithm) -> Self
+    pub fn generate_with_rng<R>(rng: R, algorithm: Algorithm) -> Self
     where
-        R: crate::Random,
+        R: crate::Rng,
     {
         let mut salt = vec![0u8; algorithm.output_len()];
-        rand.fill(&mut salt).unwrap();
+        rng.fill(&mut salt).unwrap();
         Self::new(algorithm, &salt)
     }
     pub fn algorithm(&self) -> Algorithm {

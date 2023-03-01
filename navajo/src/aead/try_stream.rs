@@ -6,8 +6,8 @@ use pin_project::pin_project;
 
 use crate::{
     error::{DecryptStreamError, EncryptTryStreamError},
-    rand::Random,
-    Aad, Aead, SystemRandom,
+    rand::Rng,
+    Aad, Aead, SystemRng,
 };
 
 use super::{Decryptor, Encryptor, Segment};
@@ -43,17 +43,17 @@ where
 }
 
 #[pin_project]
-pub struct EncryptTryStream<S, A, Rand = SystemRandom>
+pub struct EncryptTryStream<S, A, G = SystemRng>
 where
     S: TryStream + Sized,
     S::Ok: AsRef<[u8]>,
     S::Error: Send + Sync,
+    G: Rng,
     A: AsRef<[u8]> + Send + Sync,
-    Rand: Random,
 {
     #[pin]
     stream: S,
-    encryptor: Option<Encryptor<Vec<u8>, Rand>>,
+    encryptor: Option<Encryptor<Vec<u8>, G>>,
     queue: VecDeque<Vec<u8>>,
     aad: Aad<A>,
     done: bool,
@@ -160,16 +160,16 @@ where
     }
 }
 #[pin_project]
-pub struct DecryptTryStream<S, K, A, Rand = SystemRandom>
+pub struct DecryptTryStream<S, K, A, G = SystemRng>
 where
     S: TryStream + Sized,
     K: AsRef<Aead> + Send + Sync,
     A: AsRef<[u8]> + Send + Sync,
-    Rand: Random,
+    G: Rng,
 {
     #[pin]
     stream: S,
-    decryptor: Option<Decryptor<K, Vec<u8>, Rand>>,
+    decryptor: Option<Decryptor<K, Vec<u8>, G>>,
     queue: VecDeque<Vec<u8>>,
     aad: Aad<A>,
     done: bool,
@@ -297,8 +297,8 @@ mod tests {
     #[tokio::test]
     async fn test_stream_with_aad_roundtrip() {
         let mut data = vec![0u8; 5556];
-        let rand = SystemRandom::new();
-        rand.fill(&mut data);
+        let rng = SystemRng::new();
+        rng.fill(&mut data);
         let data_stream = stream::iter(data.chunks(122).map(Vec::from)).map(to_try_stream);
         let algorithm = Algorithm::Aes256Gcm;
         let aead = Aead::new(algorithm, None);

@@ -5,8 +5,8 @@ use alloc::vec;
 use alloc::vec::Vec;
 use zeroize::ZeroizeOnDrop;
 
-use crate::rand::Random;
-use crate::SystemRandom;
+use crate::rand::Rng;
+use crate::SystemRng;
 use crate::{
     buffer::BufferZeroizer,
     error::{EncryptError, UnspecifiedError},
@@ -35,10 +35,10 @@ use super::{
 /// prepended.
 ///
 #[derive(ZeroizeOnDrop, Debug)]
-pub struct Encryptor<B, Rand = SystemRandom>
+pub struct Encryptor<B, G = SystemRng>
 where
     B: Buffer,
-    Rand: Random,
+    G: Rng,
 {
     key: Key<Material>,
     buf: BufferZeroizer<B>,
@@ -52,24 +52,24 @@ where
     segments: VecDeque<B>,
 
     #[zeroize(skip)]
-    rand: Rand,
+    rand: G,
 }
 
-impl<B> Encryptor<B, SystemRandom>
+impl<B> Encryptor<B, SystemRng>
 where
     B: Buffer,
 {
     pub fn new(aead: &Aead, segment: Option<Segment>, buf: B) -> Self {
-        Self::create(SystemRandom, aead, segment, buf)
+        Self::create(SystemRng, aead, segment, buf)
     }
 }
 impl<B, R> Encryptor<B, R>
 where
     B: Buffer,
-    R: Random,
+    R: Rng,
 {
     #[cfg(test)]
-    pub fn new_with_rand(rand: R, aead: &Aead, segment: Option<Segment>, buf: B) -> Self {
+    pub fn new_with_rng(rand: R, aead: &Aead, segment: Option<Segment>, buf: B) -> Self {
         Self::create(rand, aead, segment, buf)
     }
     fn create(rand: R, aead: &Aead, segment: Option<Segment>, buf: B) -> Self {
@@ -244,12 +244,12 @@ where
         Ok(segments.into_iter())
     }
 }
-fn derive_key<Rand>(rand: Rand, key: &Key<Material>, aad: &[u8]) -> (Vec<u8>, sensitive::Bytes)
+fn derive_key<G>(rng: G, key: &Key<Material>, aad: &[u8]) -> (Vec<u8>, sensitive::Bytes)
 where
-    Rand: Random,
+    G: Rng,
 {
     let mut salt_bytes = vec![0u8; key.algorithm().key_len()];
-    rand.fill(&mut salt_bytes);
+    rng.fill(&mut salt_bytes);
     let salt = hkdf::Salt::new(hkdf::Algorithm::Sha256, &salt_bytes);
     let prk = salt.extract(key.material().bytes());
     let mut derived_key = vec![0u8; key.algorithm().key_len()];
@@ -265,7 +265,7 @@ mod tests {
     use crate::{
         aead::{segment::FOUR_KB, Algorithm, Method, Segment},
         keyring::KEY_ID_LEN,
-        Aad, Aead, SystemRandom,
+        Aad, Aead, SystemRng,
     };
 
     use super::Encryptor;
@@ -275,8 +275,8 @@ mod tests {
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
         let key = aead.keyring.primary();
         let mut buf = vec![0u8; 100];
-        let rand = SystemRandom::new();
-        rand.fill(&mut buf);
+        let rng = SystemRng::new();
+        rng.fill(&mut buf);
         let encryptor = Encryptor::new(&aead, None, buf);
         let result = encryptor.finalize(Aad([])).unwrap().next().unwrap();
         assert!(result.len() > 100);
@@ -289,8 +289,8 @@ mod tests {
         let algorithm = Algorithm::Aes128Gcm;
         let aead = Aead::new(algorithm, None);
         let mut buf = vec![0u8; 65536];
-        let rand = SystemRandom::new();
-        rand.fill(&mut buf);
+        let rng = SystemRng::new();
+        rng.fill(&mut buf);
         let encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), buf);
 
         let expected = FOUR_KB
@@ -306,9 +306,9 @@ mod tests {
     fn test_streaming_adds_header() {
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
         let key = aead.keyring.primary();
-        let rand = SystemRandom::new();
+        let rng = SystemRng::new();
         let mut buf = vec![0u8; 65536];
-        rand.fill(&mut buf);
+        rng.fill(&mut buf);
         let encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), buf);
         let result: Vec<Vec<u8>> = encryptor.finalize(Aad::empty()).unwrap().collect();
         assert!(result.len() == 17);
@@ -351,8 +351,8 @@ mod tests {
     #[test]
     fn test_chunked_segment() {
         let mut data = vec![0u8; 5556];
-        let rand = SystemRandom::new();
-        rand.fill(&mut data);
+        let rng = SystemRng::new();
+        rng.fill(&mut data);
         let chunks = data.chunks(122).map(Vec::from);
         let algorithm = Algorithm::Aes256Gcm;
         let aead = Aead::new(algorithm, None);

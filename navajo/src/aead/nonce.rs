@@ -1,4 +1,4 @@
-use crate::{error::InvalidLengthError, rand::Random, NEW_ISSUE_URL};
+use crate::{error::InvalidLengthError, rand::Rng, NEW_ISSUE_URL};
 use core::ops::Deref;
 
 use alloc::boxed::Box;
@@ -33,7 +33,7 @@ pub(crate) enum Nonce {
 impl Nonce {
     pub(crate) fn new<R>(rand: R, size: usize) -> Self
     where
-        R: Random,
+        R: Rng,
     {
         let mut result = match size {
             12 => Self::Twelve([0u8; 12]),
@@ -129,7 +129,7 @@ pub(crate) enum NonceSequence {
 impl NonceSequence {
     pub(crate) fn new<R>(rand: R, size: usize) -> Self
     where
-        R: Random,
+        R: Rng,
     {
         let mut result = match size {
             12 => Self::Twelve(0, [0u8; 12]),
@@ -280,13 +280,13 @@ impl NonceSequence {
 mod tests {
     use alloc::vec;
 
-    use crate::SystemRandom;
+    use crate::SystemRng;
 
     use super::*;
 
     #[test]
     fn test_nonce_sequence_new() {
-        let rand = SystemRandom::new();
+        let rand = SystemRng::new();
 
         let mut seq = NonceSequence::new(rand, 12);
 

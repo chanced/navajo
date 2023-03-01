@@ -18,8 +18,8 @@ mod try_stream;
 use crate::{
     error::{EncryptError, KeyNotFoundError, RemoveKeyError},
     keyring::Keyring,
-    rand::Random,
-    Aad, Buffer, SystemRandom,
+    rand::Rng,
+    Aad, Buffer, SystemRng,
 };
 use alloc::vec::Vec;
 use core::mem;
@@ -57,21 +57,21 @@ pub struct Aead {
 }
 impl Aead {
     pub fn new(algorithm: Algorithm, meta: Option<Value>) -> Self {
-        Self::generate(&SystemRandom, algorithm, meta)
+        Self::generate(&SystemRng, algorithm, meta)
     }
     #[cfg(test)]
-    pub fn new_with_rand<Rand>(rand: &Rand, algorithm: Algorithm, meta: Option<Value>) -> Self
+    pub fn new_with_rng<G>(rng: &G, algorithm: Algorithm, meta: Option<Value>) -> Self
     where
-        Rand: Random,
+        G: Rng,
     {
-        Self::generate(rand, algorithm, meta)
+        Self::generate(rng, algorithm, meta)
     }
-    fn generate<Rand>(rand: &Rand, algorithm: Algorithm, meta: Option<Value>) -> Self
+    fn generate<G>(rng: &G, algorithm: Algorithm, meta: Option<Value>) -> Self
     where
-        Rand: Random,
+        G: Rng,
     {
         Self {
-            keyring: Keyring::new(rand, Material::new(algorithm), crate::Origin::Navajo, meta),
+            keyring: Keyring::new(rng, Material::new(algorithm), crate::Origin::Navajo, meta),
         }
     }
 
@@ -223,7 +223,7 @@ impl Aead {
 
     pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<Value>) -> &mut Self {
         self.keyring.add(
-            &SystemRandom,
+            &SystemRng,
             Material::new(algorithm),
             crate::Origin::Navajo,
             meta,
@@ -287,8 +287,34 @@ impl AsMut<Aead> for Aead {
 
 #[cfg(test)]
 mod tests {
+    use quickcheck_macros::quickcheck;
+    use strum::IntoEnumIterator;
 
     use super::*;
+
+    #[quickcheck]
+    fn encrypt_decrypt(mut data: Vec<u8>, aad: Vec<u8>) -> bool {
+        for algorithm in Algorithm::iter() {
+            let src = data.clone();
+            let aead = Aead::new(algorithm, None);
+            let result = aead.encrypt_in_place(Aad(&aad), &mut data);
+            if data.is_empty() {
+                if result.is_ok() {
+                    return false;
+                } else {
+                    continue;
+                }
+            }
+            if let Err(e) = aead.decrypt_in_place(Aad(&aad), &mut data) {
+                println!("{e:?}");
+                return false;
+            }
+            if src != data {
+                return false;
+            }
+        }
+        true
+    }
 
     #[test]
     fn test_encrypt_in_place() {

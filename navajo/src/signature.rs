@@ -1,8 +1,7 @@
 mod algorithm;
 mod material;
-mod private;
-mod public;
 mod signer;
+mod signing_key;
 mod verifier;
 
 pub use algorithm::Algorithm;

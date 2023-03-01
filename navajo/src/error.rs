@@ -703,3 +703,9 @@ impl From<digest::InvalidLength> for KeyError {
         Self(format!("invalid key length: {e}"))
     }
 }
+#[cfg(feature = "ed25519")]
+impl From<ed25519_dalek::SignatureError> for KeyError {
+    fn from(e: ed25519_dalek::SignatureError) -> Self {
+        Self(e.to_string())
+    }
+}

@@ -6,18 +6,18 @@ use crate::{
     error::DecryptError,
     hkdf::{self, Salt},
     key::Key,
-    rand::Random,
-    Aad, Buffer, SystemRandom,
+    rand::Rng,
+    Aad, Buffer, SystemRng,
 };
 use alloc::vec;
 use alloc::vec::{IntoIter, Vec};
 
 use super::{cipher::Cipher, nonce::NonceOrNonceSequence, Aead, Algorithm, Method};
 
-pub struct Decryptor<K, B, Rand>
+pub struct Decryptor<K, B, G>
 where
     K: AsRef<Aead>,
-    Rand: Random,
+    G: Rng,
 {
     aead: K,
     buf: B,
@@ -26,10 +26,10 @@ where
     nonce: Option<NonceOrNonceSequence>,
     cipher: Option<Cipher>,
     method: Option<Method>,
-    rand: Rand,
+    rand: G,
 }
 
-impl<K, B> Decryptor<K, B, SystemRandom>
+impl<K, B> Decryptor<K, B, SystemRng>
 where
     K: AsRef<Aead>,
     B: Buffer,
@@ -43,18 +43,18 @@ where
             nonce: None,
             cipher: None,
             method: None,
-            rand: SystemRandom,
+            rand: SystemRng,
         }
     }
 }
-impl<K, B, Rand> Decryptor<K, B, Rand>
+impl<K, B, G> Decryptor<K, B, G>
 where
     K: AsRef<Aead>,
     B: Buffer,
-    Rand: Random,
+    G: Rng,
 {
     #[cfg(test)]
-    pub fn new_with_rand(rand: Rand, aead: K, buf: B) -> Self {
+    pub fn new_with_rng(rng: G, aead: K, buf: B) -> Self {
         Self {
             aead,
             buf,
@@ -63,7 +63,7 @@ where
             nonce: None,
             cipher: None,
             method: None,
-            rand,
+            rand: rng,
         }
     }
     pub fn algorithm(&self) -> Option<Algorithm> {
@@ -345,7 +345,7 @@ mod tests {
 
     use crate::{
         aead::{Encryptor, Segment},
-        SystemRandom,
+        SystemRng,
     };
 
     use super::*;
@@ -356,8 +356,8 @@ mod tests {
         let key = aead.keyring.primary();
         let key_id = key.id();
         let mut nonce = vec![0u8; key.nonce_len()];
-        let rand = SystemRandom::new();
-        rand.fill(&mut nonce);
+        let rng = SystemRng::new();
+        rng.fill(&mut nonce);
         let buf = [
             &method.to_be_bytes()[..],
             &key_id.to_be_bytes()[..],
@@ -384,15 +384,15 @@ mod tests {
     }
     #[test]
     fn test_parsing_streaming_header() {
-        let rand = SystemRandom::new();
+        let rng = SystemRng::new();
         let method = Method::StreamingHmacSha256(Segment::FourMegabytes);
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
         let key_id = aead.primary_key().id;
         let mut seed = vec![0u8; aead.primary_key().algorithm.key_len()];
-        rand.fill(&mut seed);
+        rng.fill(&mut seed);
         // rand::fill(&mut seed);
         let mut nonce = vec![0u8; aead.primary_key().algorithm.nonce_prefix_len()];
-        rand.fill(&mut seed);
+        rng.fill(&mut seed);
         let buf = [
             &method.to_be_bytes()[..],
             &key_id.to_be_bytes()[..],
@@ -429,8 +429,8 @@ mod tests {
     fn test_one_shot() {
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
         let mut data = vec![0u8; 1024];
-        let rand = SystemRandom::new();
-        rand.fill(&mut data);
+        let rng = SystemRng::new();
+        rng.fill(&mut data);
         let encryptor = Encryptor::new(&aead, None, data.clone());
         let ciphertext = encryptor.finalize(Aad::empty()).unwrap().next().unwrap();
         let decryptor = Decryptor::new(&aead, ciphertext);
@@ -442,8 +442,8 @@ mod tests {
         let algorithm = Algorithm::Aes128Gcm;
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
         let mut data = vec![0u8; 65536];
-        let rand = SystemRandom::new();
-        rand.fill(&mut data);
+        let rng = SystemRng::new();
+        rng.fill(&mut data);
         let encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), data.clone());
         let enc_seg: Vec<Vec<u8>> = encryptor.finalize(Aad::empty()).unwrap().collect();
         let ciphertext = enc_seg.concat();
@@ -489,8 +489,8 @@ mod tests {
     #[test]
     fn test_with_aad_roundtrip() {
         let mut data = vec![0u8; 5556];
-        let rand = SystemRandom::default();
-        rand.fill(&mut data);
+        let rng = SystemRng::default();
+        rng.fill(&mut data);
         let chunks = data.chunks(122).map(Vec::from);
         let algorithm = Algorithm::Aes256Gcm;
         let aead = Aead::new(algorithm, None);

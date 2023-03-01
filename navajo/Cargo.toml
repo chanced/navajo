@@ -121,12 +121,12 @@ package = "aead"
 version = "0.10"
 features = ["zeroize"]
 
-# ed25519
-[dependencies.ed25519]
-version = "2.1"
-optional = true
-default-features = false
-features = ["pem", "zeroize", "serde"]
+# # ed25519
+# [dependencies.ed25519]
+# version = "2.1"
+# optional = true
+# default-features = false
+# features = ["pem", "pkcs8", "zeroize", "serde"]
 
 # p256
 [dependencies.p256]
@@ -156,7 +156,6 @@ default-features = false
 version = "0.10"
 default-features = false
 features = ["alloc", "pem"]
-
 
 # cmac
 [dependencies.cmac]
@@ -191,10 +190,18 @@ default-features = false
 features = ["alloc"]
 
 [dependencies.ed25519-dalek]
-version = "1"
+version = "2.0.0-pre.0"
 optional = true
 default-features = false
-features = ["alloc", "u64_backend"]
+features = ["alloc", "rand_core", "pkcs8", "pem", "zeroize", "serde"]
+
+# Rsa
+[dependencies.rsa]
+version = "0.8"
+optional = true
+default-features = false
+features = ["pem", "sha2"]
+
 
 # [dependencies.ecdsa]
 # version = "0.15"
@@ -208,22 +215,33 @@ features = ["alloc", "u64_backend"]
 #    Test dependencies
 # -------------------------
 
-# quickcheck
-[dev-dependencies.quickcheck]
-version = "1.0"
-
-[dev-dependencies.quickcheck_macros]
-version = "1.0"
 
 # mockall
 [dev-dependencies.mockall]
 version = "0.11"
+
+# quickcheck
+[dev-dependencies.quickcheck]
+version = "1.0"
+
+# quickcheck_macros
+[dev-dependencies.quickcheck_macros]
+version = "1.0"
+
+# quickcheck_async
+[dev-dependencies.quickcheck_async]
+version = "0.1"
 
 # hex
 [dev-dependencies.hex]
 version = "0.4"
 default-features = false
 features = ["serde", "alloc"]
+
+# hex-literal
+[dev-dependencies.hex-literal]
+version = "0.3"
+
 
 # tokio
 [dev-dependencies.tokio]
@@ -233,7 +251,7 @@ features = ["full"] # todo: reduce this.
 
 [features]
 default = [
-	"ring",
+	# "ring",
 	"std",       # todo: remove
 	"aead",
 	"aes",       # todo: remove
@@ -243,9 +261,10 @@ default = [
 	"aes",       # todo remove
 	"blake3",    # todo: remove
 	"sha3",      # todoo: remove
+	"rsa",       # todo: remove
 	"daead",
 ]
-
+ed25519 = ["ed25519-dalek"]
 signature = ["ed25519", "p256", "p384"]
 mac = ["sha2", "hmac"]
 hkdf = ["sha2", "hmac"]
@@ -268,4 +287,5 @@ std = [
 	"sha2/std",
 	"sha3/std",
 	"ed25519-dalek?/std",
+	"rsa?/std",
 ]
