@@ -372,7 +372,10 @@ impl AsMut<Aead> for Aead {
     }
 }
 
-impl<C> Envelope for C where C: Cipher {
+impl<T> Envelope for T
+where
+    T: Cipher + Send + Sync,
+{
     type EncryptError = crate::error::EncryptError;
 
     type DecryptError = crate::error::DecryptError;
@@ -403,16 +406,16 @@ impl<C> Envelope for C where C: Cipher {
         self.encrypt(aad, cleartext)
     }
 
-    fn decrypt_dek<'a, A, C>(
+    fn decrypt_dek<'a, A, B>(
         &'a self,
         aad: Aad<A>,
-        ciphertext: C,
+        ciphertext: B,
     ) -> core::pin::Pin<
         Box<dyn futures::Future<Output = Result<Vec<u8>, Self::DecryptError>> + Send + '_>,
     >
     where
         A: 'a + AsRef<[u8]> + Send + Sync,
-        C: 'a + AsRef<[u8]> + Send + Sync,
+        B: 'a + AsRef<[u8]> + Send + Sync,
     {
         Box::pin(async move { self.decrypt(aad, ciphertext) })
     }
