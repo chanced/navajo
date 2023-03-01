@@ -19,11 +19,12 @@ use crate::{
     error::{EncryptError, KeyNotFoundError, RemoveKeyError},
     keyring::Keyring,
     rand::Rng,
-    Aad, Buffer, SystemRng,
+    Aad, Buffer, Envelope, SystemRng,
 };
 use alloc::vec::Vec;
 use core::mem;
-use futures::{Stream, TryStream};
+use futures::{ready, Stream, TryStream};
+use inherent::inherent;
 pub(crate) use material::Material;
 use serde_json::Value;
 
@@ -55,49 +56,109 @@ pub use writer::EncryptWriter;
 pub struct Aead {
     keyring: Keyring<Material>,
 }
-impl Aead {
-    pub fn new(algorithm: Algorithm, meta: Option<Value>) -> Self {
-        Self::generate(&SystemRng, algorithm, meta)
-    }
-    #[cfg(test)]
-    pub fn new_with_rng<G>(rng: &G, algorithm: Algorithm, meta: Option<Value>) -> Self
-    where
-        G: Rng,
-    {
-        Self::generate(rng, algorithm, meta)
-    }
-    fn generate<G>(rng: &G, algorithm: Algorithm, meta: Option<Value>) -> Self
-    where
-        G: Rng,
-    {
-        Self {
-            keyring: Keyring::new(rng, Material::new(algorithm), crate::Origin::Navajo, meta),
-        }
-    }
 
-    pub(crate) fn from_keyring(keyring: Keyring<Material>) -> Self {
-        Self { keyring }
-    }
-    pub fn encrypt_in_place<B, A>(&self, aad: Aad<A>, data: &mut B) -> Result<(), EncryptError>
+pub trait Cipher {
+    fn encrypt_in_place<A, C>(&self, aad: Aad<A>, cleartext: &mut C) -> Result<(), EncryptError>
     where
         A: AsRef<[u8]>,
-        B: Buffer,
+        C: Buffer;
+
+    fn encrypt<A, C>(&self, aad: Aad<A>, cleartext: C) -> Result<Vec<u8>, EncryptError>
+    where
+        A: AsRef<[u8]>,
+        C: AsRef<[u8]>;
+
+    fn encrypt_stream<S, A>(&self, stream: S, aad: Aad<A>, segment: Segment) -> EncryptStream<S, A>
+    where
+        S: Stream,
+        S::Item: AsRef<[u8]>,
+        A: AsRef<[u8]> + Send + Sync;
+
+    fn encrypt_try_stream<S, A>(
+        &self,
+        stream: S,
+        segment: Segment,
+        aad: Aad<A>,
+    ) -> EncryptTryStream<S, A>
+    where
+        S: TryStream,
+        S::Ok: AsRef<[u8]>,
+        S::Error: Send + Sync,
+        A: AsRef<[u8]> + Send + Sync;
+
+    #[cfg(feature = "std")]
+    fn encrypt_writer<'w, F, W, A>(
+        &self,
+        writer: &'w mut W,
+        aad: Aad<A>,
+        segment: Segment,
+        f: F,
+    ) -> Result<usize, std::io::Error>
+    where
+        F: FnOnce(&mut EncryptWriter<'w, W, A>) -> Result<(), std::io::Error>,
+        W: std::io::Write,
+        A: 'w + AsRef<[u8]>;
+
+    fn decrypt_in_place<A, B>(
+        &self,
+        aad: Aad<A>,
+        ciphertext: &mut B,
+    ) -> Result<(), crate::error::DecryptError>
+    where
+        A: AsRef<[u8]>,
+        B: Buffer;
+
+    fn decrypt<A, C>(
+        &self,
+        aad: Aad<A>,
+        cleartext: C,
+    ) -> Result<Vec<u8>, crate::error::DecryptError>
+    where
+        A: AsRef<[u8]>,
+        C: AsRef<[u8]>;
+
+    fn decrypt_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptStream<S, Aead, A>
+    where
+        S: Stream,
+        S::Item: AsRef<[u8]>,
+        A: AsRef<[u8]> + Send + Sync;
+
+    fn decrypt_try_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptTryStream<S, Aead, A>
+    where
+        S: TryStream,
+        S::Ok: AsRef<[u8]>,
+        S::Error: Send + Sync,
+        A: AsRef<[u8]> + Send + Sync;
+
+    #[cfg(feature = "std")]
+    fn decrypt_reader<R, A>(&self, reader: R, aad: Aad<A>) -> DecryptReader<R, A, &Aead>
+    where
+        R: std::io::Read,
+        A: AsRef<[u8]>;
+}
+
+#[inherent]
+impl Cipher for Aead {
+    pub fn encrypt_in_place<A, C>(&self, aad: Aad<A>, cleartext: &mut C) -> Result<(), EncryptError>
+    where
+        A: AsRef<[u8]>,
+        C: Buffer,
     {
-        let encryptor = Encryptor::new(self, None, mem::take(data));
+        let encryptor = Encryptor::new(self, None, mem::take(cleartext));
         let result = encryptor
             .finalize(aad)?
             .next()
             .ok_or(EncryptError::Unspecified)?;
-        *data = result;
+        *cleartext = result;
         Ok(())
     }
-
-    pub fn encrypt<A, B>(&self, aad: Aad<A>, data: B) -> Result<Vec<u8>, EncryptError>
+    /// encrypt...
+    pub fn encrypt<A, B>(&self, aad: Aad<A>, cleartext: B) -> Result<Vec<u8>, EncryptError>
     where
         A: AsRef<[u8]>,
         B: AsRef<[u8]>,
     {
-        let encryptor = Encryptor::new(self, None, data.as_ref().to_vec());
+        let encryptor = Encryptor::new(self, None, cleartext.as_ref().to_vec());
         let result = encryptor
             .finalize(aad)?
             .next()
@@ -152,34 +213,16 @@ impl Aead {
         writer.finalize()
     }
 
-    pub fn decrypt_in_place<A, B>(
-        &self,
-        aad: Aad<A>,
-        data: &mut B,
-    ) -> Result<(), crate::error::DecryptError>
-    where
-        A: AsRef<[u8]>,
-        B: Buffer,
-    {
-        let decryptor = Decryptor::new(self, mem::take(data));
-        let result = decryptor
-            .finalize(aad)?
-            .next()
-            .ok_or(crate::error::DecryptError::Unspecified)?;
-        *data = result;
-        Ok(())
-    }
-
     pub fn decrypt<A, C>(
         &self,
         aad: Aad<A>,
-        cleartext: C,
+        ciphertext: C,
     ) -> Result<Vec<u8>, crate::error::DecryptError>
     where
         A: AsRef<[u8]>,
         C: AsRef<[u8]>,
     {
-        let data = cleartext.as_ref().to_vec();
+        let data = ciphertext.as_ref().to_vec();
         let decryptor = Decryptor::new(self, data);
         let mut result = Vec::new();
         for segment in decryptor.finalize(aad)? {
@@ -188,7 +231,25 @@ impl Aead {
         Ok(result)
     }
 
-    pub fn decrypt_steram<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptStream<S, Aead, A>
+    pub fn decrypt_in_place<A, B>(
+        &self,
+        aad: Aad<A>,
+        ciphertext: &mut B,
+    ) -> Result<(), crate::error::DecryptError>
+    where
+        A: AsRef<[u8]>,
+        B: Buffer,
+    {
+        let decryptor = Decryptor::new(self, mem::take(ciphertext));
+        let result = decryptor
+            .finalize(aad)?
+            .next()
+            .ok_or(crate::error::DecryptError::Unspecified)?;
+        *ciphertext = result;
+        Ok(())
+    }
+
+    pub fn decrypt_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptStream<S, Aead, A>
     where
         S: Stream,
         S::Item: AsRef<[u8]>,
@@ -197,7 +258,7 @@ impl Aead {
         DecryptStream::new(stream, self.clone(), aad)
     }
 
-    pub fn decrypt_try_steram<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptTryStream<S, Aead, A>
+    pub fn decrypt_try_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptTryStream<S, Aead, A>
     where
         S: TryStream,
         S::Ok: AsRef<[u8]>,
@@ -206,6 +267,7 @@ impl Aead {
     {
         DecryptTryStream::new(stream, self.clone(), aad)
     }
+
     #[cfg(feature = "std")]
     pub fn decrypt_reader<R, A>(&self, reader: R, aad: Aad<A>) -> DecryptReader<R, A, &Aead>
     where
@@ -213,6 +275,31 @@ impl Aead {
         A: AsRef<[u8]>,
     {
         DecryptReader::new(reader, aad, self)
+    }
+}
+
+impl Aead {
+    pub fn new(algorithm: Algorithm, meta: Option<Value>) -> Self {
+        Self::generate(&SystemRng, algorithm, meta)
+    }
+    #[cfg(test)]
+    pub fn new_with_rng<G>(rng: &G, algorithm: Algorithm, meta: Option<Value>) -> Self
+    where
+        G: Rng,
+    {
+        Self::generate(rng, algorithm, meta)
+    }
+    fn generate<G>(rng: &G, algorithm: Algorithm, meta: Option<Value>) -> Self
+    where
+        G: Rng,
+    {
+        Self {
+            keyring: Keyring::new(rng, Material::new(algorithm), crate::Origin::Navajo, meta),
+        }
+    }
+
+    pub(crate) fn from_keyring(keyring: Keyring<Material>) -> Self {
+        Self { keyring }
     }
 
     /// Returns a [`Vec`] containing [`AeadKeyInfo`] for each key in this
@@ -285,6 +372,64 @@ impl AsMut<Aead> for Aead {
     }
 }
 
+impl<C> Envelope for C where C: Cipher {
+    type EncryptError = crate::error::EncryptError;
+
+    type DecryptError = crate::error::DecryptError;
+
+    fn encrypt_dek<'a, A, P>(
+        &'a self,
+        aad: Aad<A>,
+        cleartext: P,
+    ) -> core::pin::Pin<
+        Box<dyn futures::Future<Output = Result<Vec<u8>, Self::EncryptError>> + Send + '_>,
+    >
+    where
+        A: 'a + AsRef<[u8]> + Send + Sync,
+        P: 'a + AsRef<[u8]> + Send + Sync,
+    {
+        Box::pin(async move { self.encrypt(aad, cleartext) })
+    }
+
+    fn encrypt_dek_sync<A, P>(
+        &self,
+        aad: Aad<A>,
+        cleartext: P,
+    ) -> Result<Vec<u8>, Self::EncryptError>
+    where
+        A: AsRef<[u8]>,
+        P: AsRef<[u8]>,
+    {
+        self.encrypt(aad, cleartext)
+    }
+
+    fn decrypt_dek<'a, A, C>(
+        &'a self,
+        aad: Aad<A>,
+        ciphertext: C,
+    ) -> core::pin::Pin<
+        Box<dyn futures::Future<Output = Result<Vec<u8>, Self::DecryptError>> + Send + '_>,
+    >
+    where
+        A: 'a + AsRef<[u8]> + Send + Sync,
+        C: 'a + AsRef<[u8]> + Send + Sync,
+    {
+        Box::pin(async move { self.decrypt(aad, ciphertext) })
+    }
+
+    fn decrypt_dek_sync<A, C>(
+        &self,
+        aad: Aad<A>,
+        ciphertext: C,
+    ) -> Result<Vec<u8>, Self::DecryptError>
+    where
+        A: AsRef<[u8]>,
+        C: AsRef<[u8]>,
+    {
+        self.decrypt(aad, ciphertext)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use quickcheck_macros::quickcheck;
@@ -293,23 +438,23 @@ mod tests {
     use super::*;
 
     #[quickcheck]
-    fn encrypt_decrypt(mut data: Vec<u8>, aad: Vec<u8>) -> bool {
+    fn encrypt_decrypt(mut cleartext: Vec<u8>, aad: Vec<u8>) -> bool {
         for algorithm in Algorithm::iter() {
-            let src = data.clone();
+            let src = cleartext.clone();
             let aead = Aead::new(algorithm, None);
-            let result = aead.encrypt_in_place(Aad(&aad), &mut data);
-            if data.is_empty() {
+            let result = aead.encrypt_in_place(Aad(&aad), &mut cleartext);
+            if cleartext.is_empty() {
                 if result.is_ok() {
                     return false;
                 } else {
                     continue;
                 }
             }
-            if let Err(e) = aead.decrypt_in_place(Aad(&aad), &mut data) {
+            if let Err(e) = aead.decrypt_in_place(Aad(&aad), &mut cleartext) {
                 println!("{e:?}");
                 return false;
             }
-            if src != data {
+            if src != cleartext {
                 return false;
             }
         }

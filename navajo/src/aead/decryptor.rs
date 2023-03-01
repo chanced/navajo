@@ -12,7 +12,7 @@ use crate::{
 use alloc::vec;
 use alloc::vec::{IntoIter, Vec};
 
-use super::{cipher::Cipher, nonce::NonceOrNonceSequence, Aead, Algorithm, Method};
+use super::{cipher::Backend, nonce::NonceOrNonceSequence, Aead, Algorithm, Method};
 
 pub struct Decryptor<K, B, G>
 where
@@ -24,7 +24,7 @@ where
     key_id: Option<u32>,
     key: Option<Key<Material>>,
     nonce: Option<NonceOrNonceSequence>,
-    cipher: Option<Cipher>,
+    cipher: Option<Backend>,
     method: Option<Method>,
     rand: G,
 }
@@ -317,7 +317,7 @@ where
                 } else {
                     let salt = &buf[idx..idx + key_len];
                     let derived_key = self.derive_key(salt, aad);
-                    self.cipher = Some(Cipher::new(algorithm, &derived_key));
+                    self.cipher = Some(Backend::new(algorithm, &derived_key));
                     Some(idx + key_len)
                 }
             }

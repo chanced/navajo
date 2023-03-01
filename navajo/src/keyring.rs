@@ -378,7 +378,7 @@ where
             self.serialize_and_seal_locally(aad.as_ref())?;
 
         let sealed_cipher_and_nonce = envelope
-            .encrypt(aad, &cipher_and_nonce)
+            .encrypt_dek(aad, &cipher_and_nonce)
             .await
             .map_err(|e| e.to_string())?;
 
@@ -397,7 +397,7 @@ where
             self.serialize_and_seal_locally(aad.as_ref())?;
 
         let sealed_cipher_and_nonce = envelope
-            .encrypt_sync(aad, &cipher_and_nonce)
+            .encrypt_dek_sync(aad, &cipher_and_nonce)
             .map_err(|e| e.to_string())?;
 
         self.encode_serialized(
@@ -420,7 +420,7 @@ where
 {
     let sealed_cipher_and_nonce = read_sealed_cipher_and_nonce(ciphertext.as_ref())?;
     let key = envelope
-        .decrypt(Aad(aad.as_ref()), sealed_cipher_and_nonce)
+        .decrypt_dek(Aad(aad.as_ref()), sealed_cipher_and_nonce)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -441,7 +441,7 @@ where
     let sealed = sealed.as_ref();
     let sealed_cipher_and_nonce = read_sealed_cipher_and_nonce(sealed)?;
     let key = envelope
-        .decrypt_sync(Aad(aad.as_ref()), sealed_cipher_and_nonce)
+        .decrypt_dek_sync(Aad(aad.as_ref()), sealed_cipher_and_nonce)
         .map_err(|e| e.to_string())?;
 
     let value = open_and_deserialize(key, aad, sealed, sealed_cipher_and_nonce)?;

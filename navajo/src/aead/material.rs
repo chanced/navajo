@@ -3,7 +3,7 @@ use alloc::vec;
 use serde::{Deserialize, Serialize};
 use zeroize::ZeroizeOnDrop;
 
-use super::cipher::Cipher;
+use super::cipher::Backend;
 use super::Algorithm;
 use crate::primitive::Kind;
 use crate::{
@@ -41,8 +41,8 @@ impl Material {
             algorithm,
         }
     }
-    pub(super) fn cipher(&self) -> Cipher {
-        Cipher::new(self.algorithm, &self.value)
+    pub(super) fn cipher(&self) -> Backend {
+        Backend::new(self.algorithm, &self.value)
     }
     pub(super) fn bytes(&self) -> &[u8] {
         &self.value
@@ -53,7 +53,7 @@ impl Key<Material> {
     pub(super) fn bytes(&self) -> &[u8] {
         &self.material().value
     }
-    pub(super) fn cipher(&self) -> Cipher {
+    pub(super) fn cipher(&self) -> Backend {
         self.material().cipher()
     }
 
