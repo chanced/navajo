@@ -21,7 +21,9 @@ use crate::{
     rand::Rng,
     Aad, Buffer, Envelope, SystemRng,
 };
+#[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
+
 use core::mem;
 use futures::{ready, Stream, TryStream};
 use inherent::inherent;
@@ -258,7 +260,7 @@ impl Cipher for Aead {
         DecryptStream::new(stream, self.clone(), aad)
     }
 
-    pub fn decrypt_try_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptTryStream<S, Aead, A>
+    fn decrypt_try_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptTryStream<S, Aead, A>
     where
         S: TryStream,
         S::Ok: AsRef<[u8]>,

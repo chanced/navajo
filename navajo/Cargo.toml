@@ -40,11 +40,6 @@ version = "1"
 version = "1.5"
 features = ["alloc", "zeroize_derive", "serde"]
 
-# hashbrown
-[dependencies.hashbrown]
-version = "0.13"
-features = ["serde"]
-
 # rand_core
 [dependencies.rand_core]
 version = "0.6"

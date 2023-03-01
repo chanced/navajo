@@ -9,8 +9,13 @@ use crate::{
     rand::Rng,
     Aad, Buffer, SystemRng,
 };
+#[cfg(not(feature = "std"))]
 use alloc::vec;
+#[cfg(not(feature = "std"))]
 use alloc::vec::{IntoIter, Vec};
+
+#[cfg(feature = "std")]
+use std::vec::IntoIter;
 
 use super::{cipher::Backend, nonce::NonceOrNonceSequence, Aead, Algorithm, Method};
 

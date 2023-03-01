@@ -1,13 +1,16 @@
-use core::{
-    array::TryFromSliceError,
-    fmt::{self, Debug, Display},
-};
-
+#[cfg(not(feature = "std"))]
 use alloc::{
     borrow::Cow,
     format,
     string::{String, ToString},
 };
+
+use core::{
+    array::TryFromSliceError,
+    fmt::{self, Debug, Display},
+};
+
+use std::borrow::Cow;
 
 #[cfg(not(feature = "std"))]
 pub trait Error: core::fmt::Debug + core::fmt::Display {}
@@ -60,6 +63,11 @@ impl std::error::Error for RandomError {}
 pub struct KeyNotFoundError(pub u32);
 
 impl Error for KeyNotFoundError {}
+impl From<u32> for KeyNotFoundError {
+    fn from(key: u32) -> Self {
+        Self(key)
+    }
+}
 
 impl fmt::Display for KeyNotFoundError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -503,11 +511,17 @@ pub enum RemoveKeyError<A> {
     feature = "mac",
     feature = "signature",
 ))]
+#[cfg(any(
+    feature = "aead",
+    feature = "daead",
+    feature = "mac",
+    feature = "signature",
+))]
 impl<A> fmt::Display for RemoveKeyError<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::IsPrimaryKey(_) => write!(f, "cannot remove primary key"),
-            Self::KeyNotFound(e) => write!(f, "{e}"),
+            Self::IsPrimaryKey(_) => write!(f, "navajo: cannot remove primary key"),
+            Self::KeyNotFound(e) => fmt::Display::fmt(e, f),
         }
     }
 }
@@ -558,7 +572,7 @@ impl<A> fmt::Display for DisableKeyError<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::IsPrimaryKey(_) => write!(f, "cannot Disable primary key"),
-            Self::KeyNotFound(e) => write!(f, "{e}"),
+            Self::KeyNotFound(e) => fmt::Display::fmt(e, f),
         }
     }
 }

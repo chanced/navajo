@@ -108,3 +108,9 @@ pub(crate) mod b64;
 pub(crate) const NEW_ISSUE_URL: &str = "https://github.com/chanced/navajo/issues/new";
 
 pub(crate) mod sealed;
+
+#[cfg(feature = "std")]
+pub(crate) type HashMap<K, V> = std::collections::HashMap<K, V>;
+
+#[cfg(all(not(feature = "std"), feature = "hashbrown"))]
+pub(crate) type HashMap<K, V> = hashbrown::HashMap<K, V>;

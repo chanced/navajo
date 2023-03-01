@@ -249,7 +249,7 @@ where
     G: Rng,
 {
     let mut salt_bytes = vec![0u8; key.algorithm().key_len()];
-    rng.fill(&mut salt_bytes);
+    rng.fill(&mut salt_bytes).unwrap();
     let salt = hkdf::Salt::new(hkdf::Algorithm::Sha256, &salt_bytes);
     let prk = salt.extract(key.material().bytes());
     let mut derived_key = vec![0u8; key.algorithm().key_len()];

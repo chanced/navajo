@@ -97,7 +97,7 @@ impl Algorithm {
         R: Rng,
     {
         let mut key = alloc::vec![0u8; self.default_key_len()];
-        rng.fill(&mut key);
+        rng.fill(&mut key).unwrap();
         key
     }
     pub fn tag_len(&self) -> usize {

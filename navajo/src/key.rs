@@ -1,6 +1,9 @@
+#[cfg(not(feature = "std"))]
 use alloc::sync::Arc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+#[cfg(feature = "std")]
+use std::sync::Arc;
 use zeroize::ZeroizeOnDrop;
 
 use crate::{error::DisableKeyError, primitive::Kind, KeyInfo, Origin, Status};

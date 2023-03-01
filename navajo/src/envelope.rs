@@ -1,6 +1,7 @@
 use core::{any::Any, fmt::Display, pin::Pin};
 
 use aes_gcm::{aead::Aead as RustCryptoAead, AeadCore};
+#[cfg(not(feature = "std"))]
 use alloc::{borrow::ToOwned, boxed::Box, string::String, vec, vec::Vec};
 use chacha20poly1305::{aead::Payload, ChaCha20Poly1305, KeyInit};
 

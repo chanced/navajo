@@ -31,7 +31,7 @@ pub(crate) enum Nonce {
 }
 
 impl Nonce {
-    pub(crate) fn new<R>(rand: R, size: usize) -> Self
+    pub(crate) fn new<R>(rng: R, size: usize) -> Self
     where
         R: Rng,
     {
@@ -42,10 +42,10 @@ impl Nonce {
         };
         match result {
             Self::Twelve(ref mut seed) => {
-                rand.fill(seed);
+                rng.fill(seed).unwrap();
             }
             Self::TwentyFour(ref mut seed) => {
-                rand.fill(seed.as_mut());
+                rng.fill(seed.as_mut()).unwrap();
             }
         };
         result
@@ -127,7 +127,7 @@ pub(crate) enum NonceSequence {
 }
 
 impl NonceSequence {
-    pub(crate) fn new<R>(rand: R, size: usize) -> Self
+    pub(crate) fn new<R>(rng: R, size: usize) -> Self
     where
         R: Rng,
     {
@@ -137,8 +137,8 @@ impl NonceSequence {
             _ => panic!("NonceSequence must be 12 or 24 bytes\nthis is a bug!\n\nplease report it to {NEW_ISSUE_URL}"),
         };
         match result {
-            Self::Twelve(_, ref mut seed) => rand.fill(&mut seed[..12 - 5]).unwrap(),
-            Self::TwentyFour(_, ref mut seed) => rand.fill(&mut seed[..24 - 5]).unwrap(),
+            Self::Twelve(_, ref mut seed) => rng.fill(&mut seed[..12 - 5]).unwrap(),
+            Self::TwentyFour(_, ref mut seed) => rng.fill(&mut seed[..24 - 5]).unwrap(),
         }
         result
     }

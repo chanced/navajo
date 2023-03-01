@@ -1,3 +1,4 @@
+#[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
 use rust_crypto_aead::Buffer as RustCryptoBuffer;
@@ -186,7 +187,9 @@ where
 #[cfg(test)]
 mod tests {
     use crate::Buffer;
+    #[cfg(not(feature = "std"))]
     use alloc::vec;
+    #[cfg(not(feature = "std"))]
     use alloc::vec::Vec;
 
     fn split_off<B: Buffer>(b: &mut B) -> B {

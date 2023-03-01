@@ -11,18 +11,14 @@ use crate::rand::Rng;
 use crate::Aad;
 use crate::Origin;
 use crate::Status;
-use crate::NEW_ISSUE_URL;
 
 use aes_gcm::Aes256Gcm;
-use alloc::format;
-use alloc::string::ToString;
-use alloc::vec;
-use alloc::vec::Vec;
+#[cfg(not(feature = "std"))]
+use alloc::{format, string::String, vec, vec::Vec};
 use chacha20poly1305::{
     aead::{AeadCore, KeyInit},
     ChaCha20Poly1305,
 };
-use hashbrown::HashMap;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
@@ -50,9 +46,6 @@ where
     keys: Vec<Key<M>>,
     #[serde(skip_serializing)]
     primary_key_idx: usize,
-    #[zeroize(skip)]
-    #[serde(skip_serializing)]
-    lookup: HashMap<u32, usize>,
 }
 impl<Material> PartialEq for Keyring<Material>
 where
@@ -91,11 +84,9 @@ where
                 "unsupported keyring version: {version}"
             )));
         }
-        let mut lookup = HashMap::new();
         let mut primary_key_idx = None;
         for idx in 0..keys.len() {
             let key = &keys[idx];
-            lookup.insert(key.id(), idx);
             if key.status().is_primary() {
                 if let Some(former_primary) = primary_key_idx {
                     let k: &mut Key<Material> = keys.get_mut(former_primary).unwrap();
@@ -123,7 +114,6 @@ where
             version: 0,
             keys,
             primary_key_idx,
-            lookup,
         })
     }
 }
@@ -140,12 +130,9 @@ where
     ) -> Self {
         let id = gen_id(rand);
         let key = Key::new(id, Status::Primary, origin, material, meta);
-        let mut lookup = HashMap::new();
-        lookup.insert(id, 0);
         Self {
             version: 0,
             keys: vec![key],
-            lookup,
             primary_key_idx: 0,
         }
     }
@@ -159,23 +146,29 @@ where
         if primary_key.id() == id {
             return Err(primary_key.info().into());
         }
-        let idx = self.lookup.remove(&id).ok_or(KeyNotFoundError(id))?;
+        let idx = self
+            .get_idx(id)
+            .ok_or(RemoveKeyError::KeyNotFound(id.into()))?;
         let key = self.keys.remove(idx);
         Ok(key)
     }
-
+    fn get_idx(&self, id: u32) -> Option<usize> {
+        self.keys
+            .iter()
+            .enumerate()
+            .find(|(_, k)| k.id() == id)
+            .map(|(i, _)| i)
+    }
     pub(crate) fn get(&self, id: impl Into<u32>) -> Result<&Key<M>, KeyNotFoundError> {
         let id = id.into();
-        self.lookup
-            .get(&id)
-            .and_then(|idx| self.keys.get(*idx))
+        self.get_idx(id)
+            .and_then(|idx| self.keys.get(idx))
             .ok_or(KeyNotFoundError(id))
     }
     pub(crate) fn get_mut(&mut self, id: impl Into<u32>) -> Result<&mut Key<M>, KeyNotFoundError> {
         let id = id.into();
-        self.lookup
-            .get(&id)
-            .and_then(|idx| self.keys.get_mut(*idx))
+        self.get_idx(id)
+            .and_then(|idx| self.keys.get_mut(idx))
             .ok_or(KeyNotFoundError(id))
     }
 
@@ -185,9 +178,8 @@ where
     ) -> Result<(usize, &mut Key<M>), KeyNotFoundError> {
         let id = id.into();
         let (idx, key) = self
-            .lookup
-            .get(&id)
-            .map(|idx| (*idx, self.keys.get_mut(*idx)))
+            .get_idx(id)
+            .map(|idx| (idx, self.keys.get_mut(idx)))
             .ok_or(KeyNotFoundError(id))?;
         key.ok_or(KeyNotFoundError(id)).map(|key| (idx, key))
     }
@@ -205,7 +197,6 @@ where
         let id = self.gen_unique_id(rand);
         let key = Key::new(id, Status::Secondary, origin, material, meta);
         self.keys.push(key);
-        self.lookup.insert(id, self.keys.len() - 1);
         self.keys.last().unwrap()
     }
 
@@ -265,17 +256,14 @@ where
     }
     pub(crate) fn promote(&mut self, key: impl Into<u32>) -> Result<&Key<M>, KeyNotFoundError> {
         let id = key.into();
-        if !self.lookup.contains_key(&id) {
-            return Err(KeyNotFoundError(id));
-        }
+        let idx = self.get_idx(id).ok_or(KeyNotFoundError(id))?;
+        self.keys
+            .get_mut(idx)
+            .ok_or(KeyNotFoundError(id))?
+            .promote_to_primary();
         self.primary_key_mut().demote();
-        let idx = {
-            let (idx, key) = self.get_mut_with_idx(id).unwrap();
-            key.promote_to_primary();
-            idx
-        };
         self.primary_key_idx = idx;
-        Ok(self.get(id).unwrap())
+        Ok(self.keys.get(idx).unwrap())
     }
 
     pub(crate) fn keys(&self) -> &[Key<M>] {
@@ -287,7 +275,8 @@ where
         R: Rng,
     {
         let mut id = gen_id(rand);
-        while self.lookup.contains_key(&id) {
+
+        while self.keys.iter().any(|k| k.id() == id) {
             id = gen_id(rand);
         }
         id
@@ -302,7 +291,8 @@ where
         let material = serde_json::to_value(&self.keys).unwrap();
         let kind = serde_json::to_value(M::kind()).unwrap();
         let version = serde_json::to_value(self.version).unwrap();
-        let mut data = hashbrown::HashMap::with_capacity(3);
+
+        let mut data = crate::HashMap::with_capacity(3);
         data.insert("k", kind);
         data.insert("v", version);
         data.insert("m", material);

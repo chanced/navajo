@@ -10,6 +10,7 @@ pub use salt::Salt;
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(feature="std"))]
     use alloc::vec;
 
     #[test]
