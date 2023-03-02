@@ -1,6 +1,6 @@
 #![doc = include_str!("./aead/README.md")]
 mod algorithm;
-mod backend;
+mod cipher;
 mod ciphertext_info;
 mod decryptor;
 mod encryptor;

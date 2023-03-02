@@ -8,17 +8,17 @@ use crate::{
 use super::Algorithm;
 
 #[allow(clippy::large_enum_variant)]
-pub(super) enum Backend {
+pub(super) enum Cipher {
     #[cfg(feature = "ring")]
     Ring(RingCipher),
     RustCrypto(RustCryptoCipher),
 }
-impl core::fmt::Debug for Backend {
+impl core::fmt::Debug for Cipher {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_tuple("Cipher").field(&self.algorithm()).finish()
     }
 }
-impl Backend {
+impl Cipher {
     pub(super) fn algorithm(&self) -> Algorithm {
         match self {
             Self::RustCrypto(rc) => rc.algorithm(),

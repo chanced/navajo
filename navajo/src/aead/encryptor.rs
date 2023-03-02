@@ -16,7 +16,7 @@ use crate::{
 };
 
 use super::{
-    backend::Backend,
+    cipher::Cipher,
     material::Material,
     nonce::{Nonce, NonceSequence},
     Algorithm, Method, Segment,
@@ -47,7 +47,7 @@ where
     #[zeroize(skip)]
     nonce_seq: Option<NonceSequence>,
     #[zeroize(skip)] // ring's aead keys do not implement Zeroize. Not sure about Rust Crypto's
-    cipher: Option<Backend>,
+    cipher: Option<Cipher>,
     #[zeroize(skip)]
     segments: VecDeque<B>,
 
@@ -121,7 +121,7 @@ where
                     let header_bytes = self.header(self.segment, nonce_seq.prefix(), &salt);
                     self.nonce_seq = Some(nonce_seq);
                     header = Some(header_bytes);
-                    self.cipher = Some(Backend::new(self.algorithm(), &derived_key))
+                    self.cipher = Some(Cipher::new(self.algorithm(), &derived_key))
                 }
                 let nonce = self.nonce_seq.as_mut().ok_or(UnspecifiedError)?.next()?;
                 let cipher = self.cipher.take().ok_or(EncryptError::Unspecified)?;

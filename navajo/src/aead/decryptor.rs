@@ -17,7 +17,7 @@ use alloc::vec::{IntoIter, Vec};
 #[cfg(feature = "std")]
 use std::vec::IntoIter;
 
-use super::{backend::Backend, nonce::NonceOrNonceSequence, Algorithm, Method};
+use super::{cipher::Cipher, nonce::NonceOrNonceSequence, Algorithm, Method};
 
 pub struct Decryptor<C, B, G>
 where
@@ -29,7 +29,7 @@ where
     key_id: Option<u32>,
     key: Option<Key<Material>>,
     nonce: Option<NonceOrNonceSequence>,
-    backend: Option<Backend>,
+    backend: Option<Cipher>,
     method: Option<Method>,
     rng: G,
 }
@@ -322,7 +322,7 @@ where
                 } else {
                     let salt = &buf[idx..idx + key_len];
                     let derived_key = self.derive_key(salt, aad);
-                    self.backend = Some(Backend::new(algorithm, &derived_key));
+                    self.backend = Some(Cipher::new(algorithm, &derived_key));
                     Some(idx + key_len)
                 }
             }
