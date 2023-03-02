@@ -17,7 +17,7 @@ use alloc::vec::{IntoIter, Vec};
 #[cfg(feature = "std")]
 use std::vec::IntoIter;
 
-use super::{cipher::Backend, nonce::NonceOrNonceSequence, Algorithm, Method};
+use super::{backend::Backend, nonce::NonceOrNonceSequence, Algorithm, Method};
 
 pub struct Decryptor<C, B, G>
 where

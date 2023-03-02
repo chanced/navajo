@@ -3,7 +3,7 @@ use alloc::vec;
 use serde::{Deserialize, Serialize};
 use zeroize::ZeroizeOnDrop;
 
-use super::cipher::Backend;
+use super::backend::Backend;
 use super::Algorithm;
 use crate::primitive::Kind;
 use crate::{

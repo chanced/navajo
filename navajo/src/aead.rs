@@ -1,6 +1,6 @@
 #![doc = include_str!("./aead/README.md")]
 mod algorithm;
-mod cipher;
+mod backend;
 mod ciphertext_info;
 mod decryptor;
 mod encryptor;
@@ -61,7 +61,7 @@ pub struct Aead {
     keyring: Keyring<Material>,
 }
 
-pub trait Cipher {
+pub trait Cipher: Clone {
     fn encrypt_in_place<A, C>(&self, aad: Aad<A>, cleartext: &mut C) -> Result<(), EncryptError>
     where
         A: AsRef<[u8]>,

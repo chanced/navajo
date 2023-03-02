@@ -16,7 +16,7 @@ use crate::{
 };
 
 use super::{
-    cipher::Backend,
+    backend::Backend,
     material::Material,
     nonce::{Nonce, NonceSequence},
     Algorithm, Method, Segment,
