@@ -13,7 +13,7 @@ use crate::{
     Aad, Aead, SystemRng,
 };
 
-use super::{Decryptor, Encryptor, Segment};
+use super::{Cipher, Decryptor, Encryptor, Segment};
 
 pub trait AeadStream: Stream {
     fn encrypt<T, A>(self, segment: Segment, aad: Aad<A>, aead: T) -> EncryptStream<Self, A>
@@ -25,7 +25,7 @@ pub trait AeadStream: Stream {
     {
         EncryptStream::new(self, segment, aad, aead)
     }
-    fn decrypt<K, A>(self, aad: Aad<A>, aead: K) -> DecryptStream<Self, K, A>
+    fn decrypt<K, A>(self, aad: Aad<A>, aead: K) -> DecryptStream<Self, K, A, SystemRng>
     where
         Self: Sized,
         Self::Item: AsRef<[u8]>,
@@ -150,29 +150,30 @@ where
     }
 }
 #[pin_project]
-pub struct DecryptStream<S, K, A, G = SystemRng>
+pub struct DecryptStream<S, C, A, G = SystemRng>
 where
     S: Stream + Sized,
-    K: AsRef<Aead> + Send + Sync,
+    C: Cipher + Send + Sync,
     A: AsRef<[u8]>,
     G: Rng,
 {
     #[pin]
     stream: Fuse<S>,
-    decryptor: Option<Decryptor<K, Vec<u8>, G>>,
+    decryptor: Option<Decryptor<C, Vec<u8>, G>>,
     queue: VecDeque<Vec<u8>>,
     aad: Aad<A>,
     done: bool,
 }
 
-impl<S, K, A> DecryptStream<S, K, A>
+impl<S, C, A, G> DecryptStream<S, C, A, G>
 where
     S: Stream,
-    K: AsRef<Aead> + Send + Sync,
+    C: Cipher + Send + Sync,
     A: AsRef<[u8]> + Send + Sync,
+    G: Rng,
 {
-    pub fn new(stream: S, aead: K, aad: Aad<A>) -> Self {
-        let decryptor = Decryptor::new(aead, vec![]);
+    pub fn new(stream: S, cipher: C, aad: Aad<A>) -> Self {
+        let decryptor = Decryptor::new(cipher, vec![]);
         Self {
             aad,
             stream: stream.fuse(),

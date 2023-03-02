@@ -10,7 +10,7 @@ pub use salt::Salt;
 
 #[cfg(test)]
 mod tests {
-    #[cfg(not(feature="std"))]
+    
     use alloc::vec;
 
     #[test]
@@ -35,7 +35,7 @@ mod tests {
 
         {
             use crate::hkdf::*;
-            let salt = Salt::generate(Algorithm::Sha256);
+            let salt = Salt::new(Algorithm::Sha256, &salt);
             let prk = salt.extract(&ikm);
             let mut okm = [0u8; 42];
             prk.expand(&[&info[..]], &mut okm)

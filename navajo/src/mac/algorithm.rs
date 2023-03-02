@@ -92,7 +92,7 @@ pub enum Algorithm {
 }
 
 impl Algorithm {
-    pub(super) fn generate_key<R>(&self, rng: R) -> Vec<u8>
+    pub(super) fn generate_key<R>(&self, rng: &R) -> Vec<u8>
     where
         R: Rng,
     {

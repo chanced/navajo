@@ -179,30 +179,30 @@ impl Mac {
     /// Create a new MAC keyring by generating a key for the given [`Algorithm`]
     /// as the primary.
     pub fn new(algorithm: Algorithm, meta: Option<serde_json::value::Value>) -> Self {
-        Self::generate(SystemRng, algorithm, meta)
+        Self::generate(&SystemRng, algorithm, meta)
     }
 
     #[cfg(test)]
     pub fn new_with_rng<R>(
-        rand: R,
+        rng: &R,
         algorithm: Algorithm,
         meta: Option<serde_json::value::Value>,
     ) -> Self
     where
         R: Rng,
     {
-        Self::generate(rand, algorithm, meta)
+        Self::generate(rng, algorithm, meta)
     }
 
-    fn generate<R>(rand: R, algorithm: Algorithm, meta: Option<serde_json::value::Value>) -> Self
+    fn generate<G>(rng: &G, algorithm: Algorithm, meta: Option<serde_json::value::Value>) -> Self
     where
-        R: Rng,
+        G: Rng,
     {
-        let bytes = algorithm.generate_key(rand.clone());
+        let bytes = algorithm.generate_key(rng);
         // safe, the key is generated
         let material = Material::new(&bytes, None, algorithm).unwrap();
         Self {
-            keyring: Keyring::new(&rand, material, Origin::Navajo, meta),
+            keyring: Keyring::new(rng, material, Origin::Navajo, meta),
         }
     }
     /// Create a new MAC keyring by initializing it with the given key data as
@@ -470,24 +470,24 @@ impl Mac {
     }
 
     pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<serde_json::Value>) -> MacKeyInfo {
-        self.generate_key(SystemRng, algorithm, Origin::Navajo, meta)
+        self.generate_key(&SystemRng, algorithm, Origin::Navajo, meta)
     }
 
     #[cfg(test)]
-    pub fn add_key_with_rng<R>(
+    pub fn add_key_with_rng<G>(
         &mut self,
-        rand: R,
+        rng: &G,
         algorithm: Algorithm,
         meta: Option<serde_json::Value>,
     ) -> MacKeyInfo
     where
-        R: Rng,
+        G: Rng,
     {
-        self.generate_key(rand, algorithm, Origin::Navajo, meta)
+        self.generate_key(rng, algorithm, Origin::Navajo, meta)
     }
     fn generate_key<R>(
         &mut self,
-        rand: R,
+        rng: &R,
         algorithm: Algorithm,
         origin: Origin,
         meta: Option<serde_json::Value>,
@@ -495,9 +495,8 @@ impl Mac {
     where
         R: Rng,
     {
-        let rand = SystemRng::new();
-        let bytes = algorithm.generate_key(rand);
-        self.create_key(rand, algorithm, &bytes, None, origin, meta)
+        let bytes = algorithm.generate_key(rng);
+        self.create_key(rng, algorithm, &bytes, None, origin, meta)
             .unwrap() // safe, the key is generated
     }
 
@@ -512,7 +511,7 @@ impl Mac {
         K: AsRef<[u8]>,
     {
         self.create_key(
-            SystemRng,
+            &SystemRng,
             algorithm,
             key.as_ref(),
             prefix,
@@ -534,7 +533,7 @@ impl Mac {
         R: Rng,
     {
         self.create_key(
-            SystemRng,
+            &SystemRng,
             algorithm,
             key.as_ref(),
             prefix,
@@ -594,7 +593,7 @@ impl Mac {
 
     fn create_key<R>(
         &mut self,
-        rand: R,
+        rng: &R,
         algorithm: Algorithm,
         value: &[u8],
         prefix: Option<&[u8]>,
@@ -606,7 +605,7 @@ impl Mac {
     {
         let material = Material::new(value, prefix, algorithm)?;
         Ok(MacKeyInfo::new(
-            self.keyring.add(&rand, material, origin, meta),
+            self.keyring.add(rng, material, origin, meta),
         ))
     }
 }

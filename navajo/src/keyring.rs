@@ -122,13 +122,8 @@ impl<M> Keyring<M>
 where
     M: KeyMaterial,
 {
-    pub(crate) fn new<Rand: Rng>(
-        mut rand: &Rand,
-        material: M,
-        origin: Origin,
-        meta: Option<Value>,
-    ) -> Self {
-        let id = gen_id(rand);
+    pub(crate) fn new<G: Rng>(rng: &G, material: M, origin: Origin, meta: Option<Value>) -> Self {
+        let id = gen_id(rng);
         let key = Key::new(id, Status::Primary, origin, material, meta);
         Self {
             version: 0,
@@ -184,17 +179,17 @@ where
         key.ok_or(KeyNotFoundError(id)).map(|key| (idx, key))
     }
 
-    pub(crate) fn add<R>(
+    pub(crate) fn add<G>(
         &mut self,
-        rand: &R,
+        rng: &G,
         material: M,
         origin: Origin,
         meta: Option<Value>,
     ) -> &Key<M>
     where
-        R: Rng,
+        G: Rng,
     {
-        let id = self.gen_unique_id(rand);
+        let id = self.gen_unique_id(rng);
         let key = Key::new(id, Status::Secondary, origin, material, meta);
         self.keys.push(key);
         self.keys.last().unwrap()
@@ -270,14 +265,14 @@ where
         &self.keys
     }
 
-    fn gen_unique_id<R>(&self, rand: &R) -> u32
+    fn gen_unique_id<G>(&self, rng: &G) -> u32
     where
-        R: Rng,
+        G: Rng,
     {
-        let mut id = gen_id(rand);
+        let mut id = gen_id(rng);
 
         while self.keys.iter().any(|k| k.id() == id) {
-            id = gen_id(rand);
+            id = gen_id(rng);
         }
         id
     }
@@ -291,12 +286,23 @@ where
         let material = serde_json::to_value(&self.keys).unwrap();
         let kind = serde_json::to_value(M::kind()).unwrap();
         let version = serde_json::to_value(self.version).unwrap();
-
-        let mut data = crate::HashMap::with_capacity(3);
-        data.insert("k", kind);
-        data.insert("v", version);
-        data.insert("m", material);
-        let result = serde_json::to_vec(&data)?;
+        let result: Vec<u8>;
+        #[cfg(feature = "std")]
+        {
+            let mut data = std::collections::HashMap::with_capacity(3);
+            data.insert("k", kind);
+            data.insert("v", version);
+            data.insert("m", material);
+            result = serde_json::to_vec(&data)?;
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            let mut data = alloc::collections::BTreeMap::new();
+            data.insert("k", kind);
+            data.insert("v", version);
+            data.insert("m", material);
+            result = serde_json::to_vec(&data)?;
+        }
         Ok(result)
     }
 
@@ -450,10 +456,10 @@ fn get_kind(value: &Value) -> Result<Kind, OpenError> {
 
 impl<M> Keyring<M> where M: KeyMaterial + DeserializeOwned {}
 
-pub(crate) fn gen_id<Rand: Rng>(rand: &Rand) -> u32 {
-    let mut value = rand.u32().unwrap();
+pub(crate) fn gen_id<G: Rng>(rng: &G) -> u32 {
+    let mut value = rng.u32().unwrap();
     while value < 100_000_000 {
-        value = rand.u32().unwrap();
+        value = rng.u32().unwrap();
     }
     value
 }

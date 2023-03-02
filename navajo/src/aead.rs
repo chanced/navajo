@@ -8,12 +8,14 @@ mod key_info;
 mod material;
 mod method;
 mod nonce;
-
 mod seed;
 mod segment;
 mod size;
 mod stream;
 mod try_stream;
+
+#[cfg(feature = "hkdf")]
+mod derived_aead;
 
 use crate::{
     error::{EncryptError, KeyNotFoundError, RemoveKeyError},
@@ -23,13 +25,11 @@ use crate::{
 };
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-
 use core::mem;
-use futures::{ready, Stream, TryStream};
+use futures::{Stream, TryStream};
 use inherent::inherent;
 pub(crate) use material::Material;
 use serde_json::Value;
-
 use size::Size;
 use zeroize::ZeroizeOnDrop;
 
@@ -43,6 +43,8 @@ pub use segment::Segment;
 pub use stream::{AeadStream, DecryptStream, EncryptStream};
 pub use try_stream::{AeadTryStream, DecryptTryStream, EncryptTryStream};
 
+#[cfg(feature = "hkdf")]
+pub use derived_aead::DerivedAead;
 #[cfg(feature = "std")]
 mod reader;
 #[cfg(feature = "std")]
@@ -119,13 +121,14 @@ pub trait Cipher {
         A: AsRef<[u8]>,
         C: AsRef<[u8]>;
 
-    fn decrypt_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptStream<S, Aead, A>
+    fn decrypt_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptStream<S, Self, A>
     where
+        Self: Sized,
         S: Stream,
         S::Item: AsRef<[u8]>,
         A: AsRef<[u8]> + Send + Sync;
 
-    fn decrypt_try_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptTryStream<S, Aead, A>
+    fn decrypt_try_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptTryStream<S, Self, A>
     where
         S: TryStream,
         S::Ok: AsRef<[u8]>,
@@ -133,18 +136,26 @@ pub trait Cipher {
         A: AsRef<[u8]> + Send + Sync;
 
     #[cfg(feature = "std")]
-    fn decrypt_reader<R, A>(&self, reader: R, aad: Aad<A>) -> DecryptReader<R, A, &Aead>
+    fn decrypt_reader<R, A>(&self, reader: R, aad: Aad<A>) -> DecryptReader<R, Self, A, &Aead>
     where
         R: std::io::Read,
         A: AsRef<[u8]>;
 }
 
+// impl<T, C> Cipher for T
+// where
+//     T: AsRef<C>,
+//     C: Cipher,
+// {
+
+// }
+
 #[inherent]
 impl Cipher for Aead {
-    pub fn encrypt_in_place<A, C>(&self, aad: Aad<A>, cleartext: &mut C) -> Result<(), EncryptError>
+    pub fn encrypt_in_place<A, T>(&self, aad: Aad<A>, cleartext: &mut T) -> Result<(), EncryptError>
     where
         A: AsRef<[u8]>,
-        C: Buffer,
+        T: Buffer,
     {
         let encryptor = Encryptor::new(self, None, mem::take(cleartext));
         let result = encryptor
@@ -155,10 +166,10 @@ impl Cipher for Aead {
         Ok(())
     }
     /// encrypt...
-    pub fn encrypt<A, B>(&self, aad: Aad<A>, cleartext: B) -> Result<Vec<u8>, EncryptError>
+    pub fn encrypt<A, T>(&self, aad: Aad<A>, cleartext: T) -> Result<Vec<u8>, EncryptError>
     where
         A: AsRef<[u8]>,
-        B: AsRef<[u8]>,
+        T: AsRef<[u8]>,
     {
         let encryptor = Encryptor::new(self, None, cleartext.as_ref().to_vec());
         let result = encryptor
@@ -215,14 +226,14 @@ impl Cipher for Aead {
         writer.finalize()
     }
 
-    pub fn decrypt<A, C>(
+    pub fn decrypt<A, T>(
         &self,
         aad: Aad<A>,
-        ciphertext: C,
+        ciphertext: T,
     ) -> Result<Vec<u8>, crate::error::DecryptError>
     where
         A: AsRef<[u8]>,
-        C: AsRef<[u8]>,
+        T: AsRef<[u8]>,
     {
         let data = ciphertext.as_ref().to_vec();
         let decryptor = Decryptor::new(self, data);
@@ -233,14 +244,14 @@ impl Cipher for Aead {
         Ok(result)
     }
 
-    pub fn decrypt_in_place<A, B>(
+    pub fn decrypt_in_place<A, T>(
         &self,
         aad: Aad<A>,
-        ciphertext: &mut B,
+        ciphertext: &mut T,
     ) -> Result<(), crate::error::DecryptError>
     where
         A: AsRef<[u8]>,
-        B: Buffer,
+        T: Buffer,
     {
         let decryptor = Decryptor::new(self, mem::take(ciphertext));
         let result = decryptor
@@ -250,8 +261,11 @@ impl Cipher for Aead {
         *ciphertext = result;
         Ok(())
     }
-
-    pub fn decrypt_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptStream<S, Aead, A>
+    pub fn decrypt_stream<S, A>(
+        &self,
+        stream: S,
+        aad: Aad<A>,
+    ) -> DecryptStream<S, Self, A, SystemRng>
     where
         S: Stream,
         S::Item: AsRef<[u8]>,
@@ -260,7 +274,11 @@ impl Cipher for Aead {
         DecryptStream::new(stream, self.clone(), aad)
     }
 
-    fn decrypt_try_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptTryStream<S, Aead, A>
+    pub fn decrypt_try_stream<S, A>(
+        &self,
+        stream: S,
+        aad: Aad<A>,
+    ) -> DecryptTryStream<S, Self, A, SystemRng>
     where
         S: TryStream,
         S::Ok: AsRef<[u8]>,
@@ -271,7 +289,11 @@ impl Cipher for Aead {
     }
 
     #[cfg(feature = "std")]
-    pub fn decrypt_reader<R, A>(&self, reader: R, aad: Aad<A>) -> DecryptReader<R, A, &Aead>
+    pub fn decrypt_reader<R, A>(
+        &self,
+        reader: R,
+        aad: Aad<A>,
+    ) -> DecryptReader<R, A, Self, SystemRng>
     where
         R: std::io::Read,
         A: AsRef<[u8]>,

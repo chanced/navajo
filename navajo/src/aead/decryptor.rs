@@ -1,6 +1,6 @@
 use super::{
     nonce::{Nonce, NonceSequence},
-    Material,
+    Cipher, Material,
 };
 use crate::{
     error::DecryptError,
@@ -17,56 +17,56 @@ use alloc::vec::{IntoIter, Vec};
 #[cfg(feature = "std")]
 use std::vec::IntoIter;
 
-use super::{cipher::Backend, nonce::NonceOrNonceSequence, Aead, Algorithm, Method};
+use super::{cipher::Backend, nonce::NonceOrNonceSequence, Algorithm, Method};
 
-pub struct Decryptor<K, B, G>
+pub struct Decryptor<C, B, G>
 where
-    K: AsRef<Aead>,
+    C: Cipher,
     G: Rng,
 {
-    aead: K,
+    cipher: C,
     buf: B,
     key_id: Option<u32>,
     key: Option<Key<Material>>,
     nonce: Option<NonceOrNonceSequence>,
-    cipher: Option<Backend>,
+    backend: Option<Backend>,
     method: Option<Method>,
     rand: G,
 }
 
-impl<K, B> Decryptor<K, B, SystemRng>
+impl<C, B> Decryptor<C, B, SystemRng>
 where
-    K: AsRef<Aead>,
+    C: Cipher,
     B: Buffer,
 {
-    pub fn new(aead: K, buf: B) -> Self {
+    pub fn new(cipher: C, buf: B) -> Self {
         Self {
-            aead,
+            cipher,
             buf,
             key: None,
             key_id: None,
             nonce: None,
-            cipher: None,
+            backend: None,
             method: None,
             rand: SystemRng,
         }
     }
 }
-impl<K, B, G> Decryptor<K, B, G>
+impl<C, B, G> Decryptor<C, B, G>
 where
-    K: AsRef<Aead>,
+    C: Cipher,
     B: Buffer,
     G: Rng,
 {
     #[cfg(test)]
-    pub fn new_with_rng(rng: G, aead: K, buf: B) -> Self {
+    pub fn new_with_rng(rng: G, cipher: C, buf: B) -> Self {
         Self {
-            aead,
+            cipher,
             buf,
             key: None,
             key_id: None,
             nonce: None,
-            cipher: None,
+            backend: None,
             method: None,
             rand: rng,
         }
@@ -103,7 +103,7 @@ where
         if !self.header_is_complete() {
             self.parse_header(aad)?;
         }
-        if self.cipher.is_none() {
+        if self.backend.is_none() {
             return Ok(None);
         }
         let seg_end = self.next_segment_end();
@@ -118,7 +118,7 @@ where
             NonceOrNonceSequence::NonceSequence(seq) => seq.next()?,
         };
         let mut data = self.extract_segment(seg_end);
-        self.cipher
+        self.backend
             .as_ref()
             .unwrap()
             .decrypt_in_place(nonce, aad, &mut data)?;
@@ -134,7 +134,7 @@ where
         }
         let method = self.method.ok_or(DecryptError::EmptyCiphertext)?;
         if method.is_online() {
-            let cipher = self.cipher.ok_or(DecryptError::Unspecified)?;
+            let cipher = self.backend.ok_or(DecryptError::Unspecified)?;
             let nonce = match self.nonce.ok_or(DecryptError::Unspecified)? {
                 NonceOrNonceSequence::Nonce(nonce) => Ok(nonce),
                 NonceOrNonceSequence::NonceSequence(_) => Err(DecryptError::Unspecified),
@@ -146,7 +146,7 @@ where
             while let Some(segment) = self.next(Aad(aad.as_ref()))? {
                 segments.push(segment);
             }
-            let cipher = self.cipher.ok_or(DecryptError::Unspecified)?;
+            let cipher = self.backend.ok_or(DecryptError::Unspecified)?;
             let nonce_seq = match self.nonce.ok_or(DecryptError::Unspecified)? {
                 NonceOrNonceSequence::NonceSequence(seq) => Ok(seq),
                 NonceOrNonceSequence::Nonce(_) => Err(DecryptError::Unspecified),
@@ -196,7 +196,7 @@ where
         let method = self.method.unwrap();
         match method {
             Method::Online => self.nonce.is_some(),
-            Method::StreamingHmacSha256(_) => self.nonce.is_some() && self.cipher.is_some(),
+            Method::StreamingHmacSha256(_) => self.nonce.is_some() && self.backend.is_some(),
         }
     }
 
@@ -215,14 +215,14 @@ where
         if self.key_id.is_none() {
             if let Some((i, key_id)) = self.parse_key_id(idx) {
                 idx = i;
-                self.key = Some(self.aead.as_ref().keyring.get(key_id)?.clone());
+                self.key = Some(self.cipher.as_ref().keyring.get(key_id)?.clone());
             } else {
                 self.move_cursor(idx);
                 return Ok(false);
             }
         }
         let key = self.key.clone().unwrap();
-        if self.cipher.is_none() {
+        if self.backend.is_none() {
             if let Some(i) = self.parse_cipher(idx, &key, method, aad) {
                 idx = i;
             } else {
@@ -312,7 +312,7 @@ where
         let algorithm = self.algorithm().unwrap();
         match method {
             Method::Online => {
-                self.cipher = Some(key.cipher());
+                self.backend = Some(key.cipher());
                 Some(idx)
             }
             Method::StreamingHmacSha256(_) => {
@@ -322,7 +322,7 @@ where
                 } else {
                     let salt = &buf[idx..idx + key_len];
                     let derived_key = self.derive_key(salt, aad);
-                    self.cipher = Some(Backend::new(algorithm, &derived_key));
+                    self.backend = Some(Backend::new(algorithm, &derived_key));
                     Some(idx + key_len)
                 }
             }
@@ -350,7 +350,7 @@ mod tests {
 
     use crate::{
         aead::{Encryptor, Segment},
-        SystemRng,
+        Aead, SystemRng,
     };
 
     use super::*;
@@ -383,7 +383,7 @@ mod tests {
                 panic!("expected nonce, got nonce sequence");
             }
         }
-        assert!(dec.cipher.is_some());
+        assert!(dec.backend.is_some());
         assert!(dec.key.is_some());
         assert!(dec.buf.is_empty());
     }
@@ -425,7 +425,7 @@ mod tests {
                 );
             }
         }
-        assert!(dec.cipher.is_some());
+        assert!(dec.backend.is_some());
         assert!(dec.key.is_some());
         assert!(dec.buf.is_empty());
     }

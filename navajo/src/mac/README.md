@@ -50,11 +50,11 @@ use std::io::BufReader;
 use std::io::prelude::*;
 
 let mac = Mac::new(Algorithm::Sha256, None);
-let file = File::open("LICENSE").unwrap();
+let file = File::open("../LICENSE-MIT").unwrap();
 let mut buf_reader = BufReader::new(file);
 let tag = mac.compute_reader(&mut buf_reader).unwrap();
 
-let other_file = File::open("Cargo.toml").unwrap();
+let other_file = File::open("../LICENSE-APACHE").unwrap();
 let mut buf_reader = BufReader::new(other_file);
 let verified = mac.verify_reader(&tag, &mut buf_reader);
 ```

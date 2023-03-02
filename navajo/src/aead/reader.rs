@@ -3,56 +3,57 @@ use std::io::Read;
 
 use alloc::collections::VecDeque;
 
-use crate::{error::DecryptError, rand::Rng, Aad, Aead, SystemRng};
+use crate::{error::DecryptError, rand::Rng, Aad, SystemRng};
 
-use super::Decryptor;
+use super::{Cipher, Decryptor};
 
-pub struct DecryptReader<R, A, K, G = SystemRng>
+pub struct DecryptReader<R, A, C, G = SystemRng>
 where
     R: Read,
     A: AsRef<[u8]>,
-    K: AsRef<Aead>,
+    C: Cipher,
     G: Rng,
 {
     reader: R,
-    _marker: PhantomData<K>,
+    _marker: PhantomData<C>,
     aad: Aad<A>,
-    deserializer: Option<Decryptor<K, Vec<u8>, G>>,
+    deserializer: Option<Decryptor<C, Vec<u8>, G>>,
     buffer: VecDeque<u8>,
     rng: G,
 }
-impl<R, A, K> DecryptReader<R, A, K, SystemRng>
+impl<R, A, C, G> DecryptReader<R, A, C, G>
 where
     R: Read,
     A: AsRef<[u8]>,
-    K: AsRef<Aead>,
+    C: Cipher,
+    G: Rng,
 {
-    pub fn new(reader: R, aad: Aad<A>, key: K) -> Self {
+    pub fn new(reader: R, aad: Aad<A>, cipher: C) -> Self {
         Self {
             reader,
             _marker: PhantomData,
             aad,
-            deserializer: Some(Decryptor::new(key, Vec::new())),
+            deserializer: Some(Decryptor::new(cipher, Vec::new())),
             buffer: VecDeque::new(),
             rng: SystemRng,
         }
     }
 }
 
-impl<R, A, K, G> DecryptReader<R, A, K, G>
+impl<R, A, C, G> DecryptReader<R, A, C, G>
 where
     R: Read,
     A: AsRef<[u8]>,
-    K: AsRef<Aead>,
+    C: Cipher,
     G: Rng,
 {
     #[cfg(test)]
-    pub fn new_with_rng(rng: G, reader: R, aad: Aad<A>, key: K) -> Self {
+    pub fn new_with_rng(rng: G, reader: R, aad: Aad<A>, cipher: C) -> Self {
         Self {
             reader,
             _marker: PhantomData,
             aad,
-            deserializer: Some(Decryptor::new_with_rng(rng.clone(), key, Vec::new())),
+            deserializer: Some(Decryptor::new_with_rng(rng.clone(), cipher, Vec::new())),
             buffer: VecDeque::new(),
             rng,
         }
@@ -69,11 +70,11 @@ where
         ctr
     }
 }
-impl<R, D, K> Read for DecryptReader<R, D, K>
+impl<R, A, C> Read for DecryptReader<R, A, C>
 where
     R: Read,
-    K: AsRef<Aead>,
-    D: AsRef<[u8]>,
+    A: AsRef<[u8]>,
+    C: Cipher,
 {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let mut ctr = 0;
@@ -149,7 +150,7 @@ where
 mod tests {
     use crate::{
         aead::{Algorithm, Encryptor, Segment},
-        SystemRng,
+        Aead, SystemRng,
     };
 
     use super::*;

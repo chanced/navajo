@@ -1,8 +1,11 @@
+use crate::Rng;
+
 use super::{
     prk::{PrkInner, RustCryptoPrk},
     Algorithm, Prk,
 };
 /// A salt for HKDF.
+#[derive(Clone)]
 pub struct Salt {
     inner: SaltInner,
     algorithm: Algorithm,
@@ -26,18 +29,16 @@ impl Salt {
     }
 
     pub fn generate(algorithm: Algorithm) -> Self {
-        let salt = vec![0u8; algorithm.output_len()];
-        Self::new(algorithm, &salt)
+        Self::gen(&crate::SystemRng, algorithm)
     }
     #[cfg(test)]
-    pub fn generate_with_rng<R>(rng: R, algorithm: Algorithm) -> Self
+    pub fn generate_with_rng<R>(rng: &R, algorithm: Algorithm) -> Self
     where
         R: crate::Rng,
     {
-        let mut salt = vec![0u8; algorithm.output_len()];
-        rng.fill(&mut salt).unwrap();
-        Self::new(algorithm, &salt)
+        Self::gen(rng, algorithm)
     }
+
     pub fn algorithm(&self) -> Algorithm {
         self.algorithm
     }
@@ -48,14 +49,21 @@ impl Salt {
             SaltInner::RustCrypto(rust_crypto) => rust_crypto.extract(secret),
         }
     }
+    fn gen(rng: &impl Rng, algorithm: Algorithm) -> Salt {
+        let mut salt = vec![0u8; algorithm.output_len()];
+        rng.fill(&mut salt).unwrap();
+        Salt::new(algorithm, &salt)
+    }
 }
 
 #[allow(clippy::large_enum_variant)]
+#[derive(Clone)]
 enum SaltInner {
     #[cfg(feature = "ring")]
     Ring(RingSalt),
     RustCrypto(RustCryptoSalt),
 }
+#[derive(Clone)]
 #[cfg(feature = "ring")]
 struct RingSalt {
     salt: ring::hkdf::Salt,
@@ -77,6 +85,7 @@ impl RingSalt {
     }
 }
 
+#[derive(Clone)]
 enum RustCryptoSalt {
     #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
     Sha256(hmac::Hmac<sha2::Sha256>),
