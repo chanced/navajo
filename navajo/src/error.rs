@@ -1,16 +1,11 @@
-#[cfg(not(feature = "std"))]
+use core::array::TryFromSliceError;
+
 use alloc::{
     borrow::Cow,
+    fmt::{self, Debug, Display},
     format,
     string::{String, ToString},
 };
-
-use core::{
-    array::TryFromSliceError,
-    fmt::{self, Debug, Display},
-};
-
-use std::borrow::Cow;
 
 #[cfg(not(feature = "std"))]
 pub trait Error: core::fmt::Debug + core::fmt::Display {}
@@ -35,8 +30,8 @@ impl RandomError {
 
 impl Error for RandomError {}
 
-impl Display for RandomError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Display for RandomError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "navajo: error generating random bytes\n\ncaused by: {}",
@@ -168,9 +163,9 @@ pub enum EncryptTryStreamError<E> {
 #[cfg(feature = "std")]
 impl<E> Error for EncryptTryStreamError<E> where E: std::error::Error {}
 
-impl<E> Debug for EncryptTryStreamError<E>
+impl<E> core::fmt::Debug for EncryptTryStreamError<E>
 where
-    E: Debug,
+    E: core::fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
