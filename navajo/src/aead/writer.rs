@@ -29,17 +29,11 @@ where
     W: Write,
     A: AsRef<[u8]>,
 {
-    pub fn new(
-        writer: &'write mut W,
-        segment: Segment,
-        aad: Aad<A>,
-        aead: impl AsRef<Aead>,
-    ) -> Self {
-        let encryptor = Encryptor::new(
-            aead.as_ref(),
-            Some(segment),
-            Vec::with_capacity(segment.into()),
-        );
+    pub fn new<C>(writer: &'write mut W, segment: Segment, aad: Aad<A>, cipher: C) -> Self
+    where
+        C: AsRef<Aead>,
+    {
+        let encryptor = Encryptor::new(cipher, Some(segment), Vec::with_capacity(segment.into()));
         Self {
             encryptor,
             writer,

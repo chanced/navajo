@@ -3,15 +3,15 @@ use std::io::Read;
 
 use alloc::collections::VecDeque;
 
-use crate::{error::DecryptError, rand::Rng, Aad, SystemRng};
+use crate::{error::DecryptError, rand::Rng, Aad, Aead, SystemRng};
 
-use super::{Cipher, Decryptor};
+use super::Decryptor;
 
 pub struct DecryptReader<R, A, C, G = SystemRng>
 where
     R: Read,
     A: AsRef<[u8]>,
-    C: Cipher,
+    C: AsRef<Aead>,
     G: Rng,
 {
     reader: R,
@@ -21,12 +21,11 @@ where
     buffer: VecDeque<u8>,
     rng: G,
 }
-impl<R, A, C, G> DecryptReader<R, A, C, G>
+impl<R, A, C> DecryptReader<R, A, C, SystemRng>
 where
     R: Read,
     A: AsRef<[u8]>,
-    C: Cipher,
-    G: Rng,
+    C: AsRef<Aead>,
 {
     pub fn new(reader: R, aad: Aad<A>, cipher: C) -> Self {
         Self {
@@ -44,7 +43,7 @@ impl<R, A, C, G> DecryptReader<R, A, C, G>
 where
     R: Read,
     A: AsRef<[u8]>,
-    C: Cipher,
+    C: AsRef<Aead>,
     G: Rng,
 {
     #[cfg(test)]
@@ -74,7 +73,7 @@ impl<R, A, C> Read for DecryptReader<R, A, C>
 where
     R: Read,
     A: AsRef<[u8]>,
-    C: Cipher,
+    C: AsRef<Aead>,
 {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let mut ctr = 0;

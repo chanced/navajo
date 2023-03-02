@@ -15,7 +15,6 @@ pub(crate) trait KeyMaterial:
     fn algorithm(&self) -> Self::Algorithm;
     fn kind() -> Kind;
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize, ZeroizeOnDrop)]
 pub(crate) struct Key<M>
 where
@@ -74,7 +73,7 @@ where
         }
     }
 
-    pub(crate) fn promote_to_primary(&mut self) -> KeyInfo<M::Algorithm> {
+    pub(crate) fn promote(&mut self) -> KeyInfo<M::Algorithm> {
         self.status = Status::Primary;
         self.info()
     }
@@ -221,12 +220,12 @@ pub(crate) mod test {
         key.demote();
         assert_eq!(key.status(), Status::Secondary);
 
-        key.promote_to_primary();
+        key.promote();
         assert_eq!(key.status(), Status::Primary);
         assert!(key.disable().is_err());
         key.demote();
         assert!(key.disable().is_ok());
-        key.promote_to_primary();
+        key.promote();
         assert!(!key.can_delete());
         key.demote();
         assert!(key.can_delete());

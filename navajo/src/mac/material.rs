@@ -1,5 +1,5 @@
 use crate::NEW_ISSUE_URL;
-use alloc::{boxed::Box, vec::Vec};
+use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 use zeroize::ZeroizeOnDrop;
 

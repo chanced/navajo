@@ -1,3 +1,6 @@
+use core::ops::Deref;
+use core::ops::Index;
+
 use crate::envelope::Envelope;
 use crate::error::DisableKeyError;
 use crate::error::KeyNotFoundError;
@@ -13,6 +16,7 @@ use crate::Origin;
 use crate::Status;
 
 use aes_gcm::Aes256Gcm;
+use alloc::sync::Arc;
 #[cfg(not(feature = "std"))]
 use alloc::{format, string::String, vec, vec::Vec};
 use chacha20poly1305::{
@@ -37,47 +41,142 @@ const PRIMARY_KEY_NOT_FOUND_MSG: &str =
 
 pub(crate) const KEY_ID_LEN: usize = 4;
 
-#[derive(Clone, Debug, ZeroizeOnDrop, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Keys<M>(Arc<[Key<M>]>)
+where
+    M: KeyMaterial;
+
+impl<M, R> From<R> for Keys<M>
+where
+    M: KeyMaterial,
+    R: AsRef<[Key<M>]>,
+{
+    fn from(r: R) -> Self {
+        Self(Arc::from(r.as_ref()))
+    }
+}
+impl<M> PartialEq for Keys<M>
+where
+    M: KeyMaterial,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.0.iter().eq(other.0.iter())
+    }
+}
+
+impl<M> Keys<M>
+where
+    M: KeyMaterial,
+{
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+    fn get(&self, id: u32) -> Option<(usize, &Key<M>)> {
+        self.position(id).map(|idx| (idx, &self.0[idx]))
+    }
+    fn get_by_idx(&self, idx: usize) -> Option<&Key<M>> {
+        self.0.get(idx)
+    }
+    fn position(&self, id: u32) -> Option<usize> {
+        self.0.iter().position(|k| k.id() == id)
+    }
+    fn push(&mut self, key: Key<M>) -> &Key<M> {
+        let mut keys = self.0.iter().cloned().collect::<Vec<_>>();
+        keys.push(key);
+        self.0 = Arc::from(keys);
+        self.0.last().unwrap()
+    }
+    fn remove(&mut self, id: u32) -> Result<Key<M>, KeyNotFoundError> {
+        let idx = self.position(id).ok_or(KeyNotFoundError(id))?;
+        let mut keys = self.0.iter().cloned().collect::<Vec<_>>();
+        let key = keys.remove(idx);
+        self.0 = Arc::from(keys);
+        Ok(key)
+    }
+    fn iter(&self) -> impl Iterator<Item = &Key<M>> {
+        self.0.iter()
+    }
+    fn update(&mut self, key: Key<M>) -> Result<&Key<M>, KeyNotFoundError> {
+        let idx = self.position(key.id()).ok_or(KeyNotFoundError(key.id()))?;
+        let mut keys = self.0.iter().cloned().collect::<Vec<_>>();
+        keys[idx] = key;
+        self.0 = Arc::from(keys);
+        Ok(&self.0[idx])
+    }
+    fn demote(&mut self, id: u32) -> Result<&Key<M>, KeyNotFoundError> {
+        let idx = self.position(id).ok_or(KeyNotFoundError(id))?;
+        let mut keys = self.0.iter().cloned().collect::<Vec<_>>();
+        let key = keys.get_mut(idx).unwrap();
+        key.demote();
+        self.0 = Arc::from(keys);
+        Ok(&self.0[idx])
+    }
+}
+impl<M> Deref for Keys<M>
+where
+    M: KeyMaterial,
+{
+    type Target = [Key<M>];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl<Material> ZeroizeOnDrop for Keys<Material> where Material: KeyMaterial {}
+impl<Material> Index<usize> for Keys<Material>
+where
+    Material: KeyMaterial,
+{
+    type Output = Key<Material>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub(crate) struct Keyring<M>
 where
     M: KeyMaterial,
 {
     version: u8,
-    keys: Vec<Key<M>>,
+    keys: Keys<M>,
     #[serde(skip_serializing)]
     primary_key_idx: usize,
 }
-impl<Material> PartialEq for Keyring<Material>
+
+impl<M> PartialEq for Keyring<M>
 where
-    Material: KeyMaterial + PartialEq,
+    M: KeyMaterial + PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         self.keys == other.keys
     }
 }
+
 impl<Material> Eq for Keyring<Material> where Material: KeyMaterial + Eq {}
 
 #[derive(Serialize, Deserialize)]
-struct KeyringData<Material>
+struct KeyringData<M>
 where
-    Material: KeyMaterial,
+    M: KeyMaterial,
 {
     #[serde(alias = "v")]
     version: u32,
     #[serde(alias = "m")]
-    keys: Vec<Key<Material>>,
+    keys: Vec<Key<M>>,
 }
+impl<Material> ZeroizeOnDrop for Keyring<Material> where Material: KeyMaterial {}
 
-impl<'de, Material> Deserialize<'de> for Keyring<Material>
+impl<'de, M> Deserialize<'de> for Keyring<M>
 where
-    Material: KeyMaterial + Deserialize<'de>,
+    M: KeyMaterial + Deserialize<'de>,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        let KeyringData::<Material> { mut keys, version } =
-            KeyringData::<Material>::deserialize(deserializer)?;
+        let KeyringData::<M> { mut keys, version } = KeyringData::<M>::deserialize(deserializer)?;
 
         if version != 0 {
             return Err(serde::de::Error::custom(format!(
@@ -89,7 +188,7 @@ where
             let key = &keys[idx];
             if key.status().is_primary() {
                 if let Some(former_primary) = primary_key_idx {
-                    let k: &mut Key<Material> = keys.get_mut(former_primary).unwrap();
+                    let k: &mut Key<M> = keys.get_mut(former_primary).unwrap();
                     k.demote();
                 }
                 primary_key_idx = Some(idx);
@@ -112,7 +211,7 @@ where
         };
         Ok(Self {
             version: 0,
-            keys,
+            keys: Keys::from(keys),
             primary_key_idx,
         })
     }
@@ -127,7 +226,7 @@ where
         let key = Key::new(id, Status::Primary, origin, material, meta);
         Self {
             version: 0,
-            keys: vec![key],
+            keys: [key].into(),
             primary_key_idx: 0,
         }
     }
@@ -141,42 +240,16 @@ where
         if primary_key.id() == id {
             return Err(primary_key.info().into());
         }
-        let idx = self
-            .get_idx(id)
-            .ok_or(RemoveKeyError::KeyNotFound(id.into()))?;
-        let key = self.keys.remove(idx);
+        let key = self.keys.remove(id)?;
         Ok(key)
     }
-    fn get_idx(&self, id: u32) -> Option<usize> {
-        self.keys
-            .iter()
-            .enumerate()
-            .find(|(_, k)| k.id() == id)
-            .map(|(i, _)| i)
-    }
+
     pub(crate) fn get(&self, id: impl Into<u32>) -> Result<&Key<M>, KeyNotFoundError> {
         let id = id.into();
-        self.get_idx(id)
-            .and_then(|idx| self.keys.get(idx))
+        self.keys
+            .get(id)
+            .map(|(_, key)| key)
             .ok_or(KeyNotFoundError(id))
-    }
-    pub(crate) fn get_mut(&mut self, id: impl Into<u32>) -> Result<&mut Key<M>, KeyNotFoundError> {
-        let id = id.into();
-        self.get_idx(id)
-            .and_then(|idx| self.keys.get_mut(idx))
-            .ok_or(KeyNotFoundError(id))
-    }
-
-    pub(crate) fn get_mut_with_idx(
-        &mut self,
-        id: impl Into<u32>,
-    ) -> Result<(usize, &mut Key<M>), KeyNotFoundError> {
-        let id = id.into();
-        let (idx, key) = self
-            .get_idx(id)
-            .map(|idx| (idx, self.keys.get_mut(idx)))
-            .ok_or(KeyNotFoundError(id))?;
-        key.ok_or(KeyNotFoundError(id)).map(|key| (idx, key))
     }
 
     pub(crate) fn add<G>(
@@ -191,8 +264,7 @@ where
     {
         let id = self.gen_unique_id(rng);
         let key = Key::new(id, Status::Secondary, origin, material, meta);
-        self.keys.push(key);
-        self.keys.last().unwrap()
+        self.keys.push(key)
     }
 
     pub(crate) fn update_meta(
@@ -200,7 +272,9 @@ where
         id: impl Into<u32>,
         meta: Option<Value>,
     ) -> Result<&Key<M>, KeyNotFoundError> {
-        self.get_mut(id).map(|key| key.update_meta(meta))
+        let mut key = self.get(id.into())?.clone();
+        key.update_meta(meta);
+        self.keys.update(key)
     }
 
     pub(crate) fn primary(&self) -> &Key<M> {
@@ -217,12 +291,7 @@ where
         // Panicing here rather than attempting to restore to ensure that the
         // user is aware of the corrupt state.
         self.keys
-            .get(self.primary_key_idx)
-            .expect(PRIMARY_KEY_NOT_FOUND_MSG)
-    }
-    pub(crate) fn primary_key_mut(&mut self) -> &mut Key<M> {
-        self.keys
-            .get_mut(self.primary_key_idx)
+            .get_by_idx(self.primary_key_idx)
             .expect(PRIMARY_KEY_NOT_FOUND_MSG)
     }
 
@@ -231,34 +300,42 @@ where
         id: impl Into<u32>,
     ) -> Result<&Key<M>, DisableKeyError<M::Algorithm>> {
         let id = id.into();
-        let primary_key_idx = self.primary_key_idx;
-        let (idx, key) = self.get_mut_with_idx(id)?;
-        if idx == primary_key_idx {
-            return Err(DisableKeyError::IsPrimaryKey(key.info()));
+        let primary = self.primary();
+        if id == primary.id() {
+            return Err(DisableKeyError::IsPrimaryKey(primary.info()));
         }
+        let mut key = self.get(id)?.clone();
         key.disable()?;
-        Ok(key)
+        Ok(self.keys.update(key).unwrap())
     }
 
     pub(crate) fn enable(&mut self, id: impl Into<u32>) -> Result<&Key<M>, KeyNotFoundError> {
         let id = id.into();
-        let key = self.get_mut(id)?;
-        if key.status() != Status::Disabled {
-            return Ok(key);
-        }
+        let mut key = self.get(id)?.clone();
         key.enable();
-        Ok(key)
+        self.keys.update(key)
     }
-    pub(crate) fn promote(&mut self, key: impl Into<u32>) -> Result<&Key<M>, KeyNotFoundError> {
-        let id = key.into();
-        let idx = self.get_idx(id).ok_or(KeyNotFoundError(id))?;
-        self.keys
-            .get_mut(idx)
-            .ok_or(KeyNotFoundError(id))?
-            .promote_to_primary();
-        self.primary_key_mut().demote();
+
+    // Returns the previous primary key
+    pub(crate) fn promote(&mut self, id: impl Into<u32>) -> Result<&Key<M>, KeyNotFoundError> {
+        let id = id.into();
+        let (idx, mut key) = self
+            .keys
+            .get(id)
+            .map(|(idx, key)| (idx, key.clone()))
+            .ok_or(KeyNotFoundError(id))?;
+        let prev_primary = self.primary_key_idx;
+        if key.status() == Status::Primary {
+            return Ok(self.keys.get_by_idx(prev_primary).unwrap());
+        }
+        let mut primary = self.primary().clone();
+
+        primary.demote();
+        key.promote();
+        self.keys.update(key).unwrap();
+        self.keys.update(primary).unwrap();
         self.primary_key_idx = idx;
-        Ok(self.keys.get(idx).unwrap())
+        Ok(self.keys.get_by_idx(prev_primary).unwrap())
     }
 
     pub(crate) fn keys(&self) -> &[Key<M>] {

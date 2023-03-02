@@ -93,7 +93,7 @@ pub mod primitive;
 pub mod rand;
 pub use rand::{Rng, SystemRng};
 
-mod sensitive;
+pub mod sensitive;
 
 mod status;
 pub use status::Status;

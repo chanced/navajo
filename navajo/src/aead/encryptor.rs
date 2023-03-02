@@ -59,20 +59,23 @@ impl<B> Encryptor<B, SystemRng>
 where
     B: Buffer,
 {
-    pub fn new(aead: &Aead, segment: Option<Segment>, buf: B) -> Self {
-        Self::create(SystemRng, aead, segment, buf)
+    pub fn new<C>(cipher: C, segment: Option<Segment>, buf: B) -> Self
+    where
+        C: AsRef<Aead>,
+    {
+        Self::create(SystemRng, cipher.as_ref(), segment, buf)
     }
 }
-impl<B, R> Encryptor<B, R>
+impl<B, G> Encryptor<B, G>
 where
     B: Buffer,
-    R: Rng,
+    G: Rng,
 {
     #[cfg(test)]
-    pub fn new_with_rng(rand: R, aead: &Aead, segment: Option<Segment>, buf: B) -> Self {
+    pub fn new_with_rng(rand: G, aead: &Aead, segment: Option<Segment>, buf: B) -> Self {
         Self::create(rand, aead, segment, buf)
     }
-    fn create(rand: R, aead: &Aead, segment: Option<Segment>, buf: B) -> Self {
+    fn create(rand: G, aead: &Aead, segment: Option<Segment>, buf: B) -> Self {
         let key = aead.keyring.primary().clone();
         Self {
             key,

@@ -1,11 +1,12 @@
 use core::ops::Deref;
 
+use crate::b64;
 use alloc::{sync::Arc, vec::Vec};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 #[derive(Clone, Serialize, Deserialize)]
-pub(crate) struct Bytes(#[serde(with = "crate::b64::standard")] Arc<[u8]>);
+pub struct Bytes(#[serde(with = "b64::standard")] Arc<[u8]>);
 
 impl Bytes {
     pub(crate) fn new(bytes: &[u8]) -> Self {
@@ -64,6 +65,13 @@ impl AsRef<[u8]> for Bytes {
         &self.0
     }
 }
+
+impl Zeroize for Bytes {
+    fn zeroize(&mut self) {
+        self.0 = Arc::from([]);
+    }
+}
+
 impl Drop for Bytes {
     fn drop(&mut self) {
         if let Some(bytes) = Arc::get_mut(&mut self.0) {

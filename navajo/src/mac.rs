@@ -33,8 +33,6 @@ use alloc::vec::Vec;
 use context::*;
 pub(crate) use material::Material;
 
-use output::Output;
-
 /// Message Authentication Code Keyring (HMAC & CMAC)
 #[derive(Clone, Debug, ZeroizeOnDrop)]
 pub struct Mac {

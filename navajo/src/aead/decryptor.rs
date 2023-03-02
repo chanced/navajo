@@ -1,13 +1,13 @@
 use super::{
     nonce::{Nonce, NonceSequence},
-    Cipher, Material,
+    Material,
 };
 use crate::{
     error::DecryptError,
     hkdf::{self, Salt},
     key::Key,
     rand::Rng,
-    Aad, Buffer, SystemRng,
+    Aad, Aead, Buffer, SystemRng,
 };
 #[cfg(not(feature = "std"))]
 use alloc::vec;
@@ -21,7 +21,7 @@ use super::{backend::Backend, nonce::NonceOrNonceSequence, Algorithm, Method};
 
 pub struct Decryptor<C, B, G>
 where
-    C: Cipher,
+    C: AsRef<Aead>,
     G: Rng,
 {
     cipher: C,
@@ -31,12 +31,12 @@ where
     nonce: Option<NonceOrNonceSequence>,
     backend: Option<Backend>,
     method: Option<Method>,
-    rand: G,
+    rng: G,
 }
 
 impl<C, B> Decryptor<C, B, SystemRng>
 where
-    C: Cipher,
+    C: AsRef<Aead>,
     B: Buffer,
 {
     pub fn new(cipher: C, buf: B) -> Self {
@@ -48,13 +48,13 @@ where
             nonce: None,
             backend: None,
             method: None,
-            rand: SystemRng,
+            rng: SystemRng,
         }
     }
 }
 impl<C, B, G> Decryptor<C, B, G>
 where
-    C: Cipher,
+    C: AsRef<Aead>,
     B: Buffer,
     G: Rng,
 {
@@ -68,7 +68,7 @@ where
             nonce: None,
             backend: None,
             method: None,
-            rand: rng,
+            rng,
         }
     }
     pub fn algorithm(&self) -> Option<Algorithm> {

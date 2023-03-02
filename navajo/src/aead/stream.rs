@@ -13,26 +13,26 @@ use crate::{
     Aad, Aead, SystemRng,
 };
 
-use super::{Cipher, Decryptor, Encryptor, Segment};
+use super::{Decryptor, Encryptor, Segment};
 
 pub trait AeadStream: Stream {
-    fn encrypt<T, A>(self, segment: Segment, aad: Aad<A>, aead: T) -> EncryptStream<Self, A>
+    fn encrypt<C, A>(self, segment: Segment, aad: Aad<A>, aead: C) -> EncryptStream<Self, A>
     where
         Self: Sized,
         Self::Item: AsRef<[u8]>,
-        T: AsRef<Aead>,
+        C: AsRef<Aead> + Send + Sync,
         A: AsRef<[u8]> + Send + Sync,
     {
         EncryptStream::new(self, segment, aad, aead)
     }
-    fn decrypt<K, A>(self, aad: Aad<A>, aead: K) -> DecryptStream<Self, K, A, SystemRng>
+    fn decrypt<C, A>(self, aad: Aad<A>, cipher: C) -> DecryptStream<Self, C, A, SystemRng>
     where
         Self: Sized,
         Self::Item: AsRef<[u8]>,
-        K: AsRef<Aead> + Send + Sync,
+        C: AsRef<Aead> + Send + Sync,
         A: AsRef<[u8]> + Send + Sync,
     {
-        DecryptStream::new(self, aead, aad)
+        DecryptStream::new(self, cipher, aad)
     }
 }
 impl<T> AeadStream for T
@@ -61,9 +61,9 @@ where
     S: Stream + Sized,
     A: AsRef<[u8]> + Send + Sync,
 {
-    pub fn new<K>(stream: S, segment: Segment, aad: Aad<A>, aead: K) -> Self
+    pub fn new<C>(stream: S, segment: Segment, aad: Aad<A>, aead: C) -> Self
     where
-        K: AsRef<Aead>,
+        C: AsRef<Aead> + Send + Sync,
     {
         let encryptor = Encryptor::new(aead.as_ref(), Some(segment), vec![]);
         Self {
@@ -153,7 +153,7 @@ where
 pub struct DecryptStream<S, C, A, G = SystemRng>
 where
     S: Stream + Sized,
-    C: Cipher + Send + Sync,
+    C: AsRef<Aead> + Send + Sync,
     A: AsRef<[u8]>,
     G: Rng,
 {
@@ -165,12 +165,11 @@ where
     done: bool,
 }
 
-impl<S, C, A, G> DecryptStream<S, C, A, G>
+impl<S, C, A> DecryptStream<S, C, A, SystemRng>
 where
     S: Stream,
-    C: Cipher + Send + Sync,
+    C: AsRef<Aead> + Send + Sync,
     A: AsRef<[u8]> + Send + Sync,
-    G: Rng,
 {
     pub fn new(stream: S, cipher: C, aad: Aad<A>) -> Self {
         let decryptor = Decryptor::new(cipher, vec![]);
@@ -183,12 +182,25 @@ where
         }
     }
 }
-
-impl<S, K, D, G> Stream for DecryptStream<S, K, D, G>
+#[cfg(not(feature = "std"))]
+impl<S, C, D, G> DecryptStream<S, C, D, G> {
+    pub fn new_with_rng(rng: G, stream: S, cipher: C, aad: Aad<A>) -> Self {
+        let decryptor = Decryptor::new(cipher, vec![]);
+        Self {
+            aad,
+            stream: stream.fuse(),
+            decryptor: Some(decryptor),
+            queue: VecDeque::new(),
+            done: false,
+            rng: G,
+        }
+    }
+}
+impl<S, C, D, G> Stream for DecryptStream<S, C, D, G>
 where
     S: Stream,
     S::Item: AsRef<[u8]>,
-    K: AsRef<Aead> + Send + Sync,
+    C: AsRef<Aead> + Send + Sync,
     D: AsRef<[u8]> + Send + Sync,
     G: Rng,
 {

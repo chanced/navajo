@@ -31,7 +31,7 @@ use inherent::inherent;
 pub(crate) use material::Material;
 use serde_json::Value;
 use size::Size;
-use zeroize::ZeroizeOnDrop;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 pub use algorithm::Algorithm;
 pub use ciphertext_info::CiphertextInfo;
@@ -61,97 +61,7 @@ pub struct Aead {
     keyring: Keyring<Material>,
 }
 
-pub trait Cipher: Clone {
-    fn encrypt_in_place<A, C>(&self, aad: Aad<A>, cleartext: &mut C) -> Result<(), EncryptError>
-    where
-        A: AsRef<[u8]>,
-        C: Buffer;
-
-    fn encrypt<A, C>(&self, aad: Aad<A>, cleartext: C) -> Result<Vec<u8>, EncryptError>
-    where
-        A: AsRef<[u8]>,
-        C: AsRef<[u8]>;
-
-    fn encrypt_stream<S, A>(&self, stream: S, aad: Aad<A>, segment: Segment) -> EncryptStream<S, A>
-    where
-        S: Stream,
-        S::Item: AsRef<[u8]>,
-        A: AsRef<[u8]> + Send + Sync;
-
-    fn encrypt_try_stream<S, A>(
-        &self,
-        stream: S,
-        segment: Segment,
-        aad: Aad<A>,
-    ) -> EncryptTryStream<S, A>
-    where
-        S: TryStream,
-        S::Ok: AsRef<[u8]>,
-        S::Error: Send + Sync,
-        A: AsRef<[u8]> + Send + Sync;
-
-    #[cfg(feature = "std")]
-    fn encrypt_writer<'w, F, W, A>(
-        &self,
-        writer: &'w mut W,
-        aad: Aad<A>,
-        segment: Segment,
-        f: F,
-    ) -> Result<usize, std::io::Error>
-    where
-        F: FnOnce(&mut EncryptWriter<'w, W, A>) -> Result<(), std::io::Error>,
-        W: std::io::Write,
-        A: 'w + AsRef<[u8]>;
-
-    fn decrypt_in_place<A, B>(
-        &self,
-        aad: Aad<A>,
-        ciphertext: &mut B,
-    ) -> Result<(), crate::error::DecryptError>
-    where
-        A: AsRef<[u8]>,
-        B: Buffer;
-
-    fn decrypt<A, C>(
-        &self,
-        aad: Aad<A>,
-        cleartext: C,
-    ) -> Result<Vec<u8>, crate::error::DecryptError>
-    where
-        A: AsRef<[u8]>,
-        C: AsRef<[u8]>;
-
-    fn decrypt_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptStream<S, Self, A>
-    where
-        Self: Sized,
-        S: Stream,
-        S::Item: AsRef<[u8]>,
-        A: AsRef<[u8]> + Send + Sync;
-
-    fn decrypt_try_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptTryStream<S, Self, A>
-    where
-        S: TryStream,
-        S::Ok: AsRef<[u8]>,
-        S::Error: Send + Sync,
-        A: AsRef<[u8]> + Send + Sync;
-
-    #[cfg(feature = "std")]
-    fn decrypt_reader<R, A>(&self, reader: R, aad: Aad<A>) -> DecryptReader<R, Self, A, &Aead>
-    where
-        R: std::io::Read,
-        A: AsRef<[u8]>;
-}
-
-// impl<T, C> Cipher for T
-// where
-//     T: AsRef<C>,
-//     C: Cipher,
-// {
-
-// }
-
-#[inherent]
-impl Cipher for Aead {
+impl Aead {
     pub fn encrypt_in_place<A, T>(&self, aad: Aad<A>, cleartext: &mut T) -> Result<(), EncryptError>
     where
         A: AsRef<[u8]>,
@@ -293,7 +203,7 @@ impl Cipher for Aead {
         &self,
         reader: R,
         aad: Aad<A>,
-    ) -> DecryptReader<R, A, Self, SystemRng>
+    ) -> DecryptReader<R, A, &Self, SystemRng>
     where
         R: std::io::Read,
         A: AsRef<[u8]>,
@@ -384,11 +294,6 @@ impl Aead {
         &self.keyring
     }
 }
-impl AsRef<Aead> for Aead {
-    fn as_ref(&self) -> &Aead {
-        self
-    }
-}
 
 impl AsMut<Aead> for Aead {
     fn as_mut(&mut self) -> &mut Aead {
@@ -396,10 +301,7 @@ impl AsMut<Aead> for Aead {
     }
 }
 
-impl<T> Envelope for T
-where
-    T: Cipher + Send + Sync,
-{
+impl Envelope for Aead {
     type EncryptError = crate::error::EncryptError;
 
     type DecryptError = crate::error::DecryptError;
@@ -454,6 +356,12 @@ where
         C: AsRef<[u8]>,
     {
         self.decrypt(aad, ciphertext)
+    }
+}
+
+impl AsRef<Aead> for Aead {
+    fn as_ref(&self) -> &Aead {
+        self
     }
 }
 

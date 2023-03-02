@@ -10,10 +10,6 @@ pub(crate) use material::Material;
 pub use signer::Signer;
 pub use verifier::Verifier;
 
-use zeroize::ZeroizeOnDrop;
-
-use crate::keyring::Keyring;
-
 // #[derive(Clone, Debug, ZeroizeOnDrop)]
 // pub struct Signature {
 //     keyring: Keyring<Material>,

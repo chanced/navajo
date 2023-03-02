@@ -10,15 +10,15 @@ use crate::{
     Aad, Aead, SystemRng,
 };
 
-use super::{Cipher, Decryptor, Encryptor, Segment};
+use super::{Decryptor, Encryptor, Segment};
 
 pub trait AeadTryStream: TryStream {
-    fn encrypt<T, A>(self, segment: Segment, aad: Aad<A>, cipher: T) -> EncryptTryStream<Self, A>
+    fn encrypt<C, A>(self, segment: Segment, aad: Aad<A>, cipher: C) -> EncryptTryStream<Self, A>
     where
         Self: Sized,
         Self::Ok: AsRef<[u8]>,
         Self::Error: Send + Sync,
-        T: AsRef<Aead>,
+        C: AsRef<Aead> + Send + Sync,
         A: AsRef<[u8]> + Send + Sync,
     {
         EncryptTryStream::new(self, segment, aad, cipher)
@@ -28,7 +28,7 @@ pub trait AeadTryStream: TryStream {
         Self: Sized,
         Self::Ok: AsRef<[u8]>,
         Self::Error: Send + Sync,
-        C: Cipher + Send + Sync,
+        C: AsRef<Aead> + Send + Sync,
         A: AsRef<[u8]> + Send + Sync,
     {
         DecryptTryStream::new(self, cipher, aad)
@@ -68,7 +68,7 @@ where
 {
     pub fn new<C>(stream: S, segment: Segment, aad: Aad<A>, cipher: C) -> Self
     where
-        C: Cipher,
+        C: AsRef<Aead>,
     {
         let encryptor = Encryptor::new(cipher.as_ref(), Some(segment), vec![]);
         Self {
@@ -163,7 +163,7 @@ where
 pub struct DecryptTryStream<S, C, A, G = SystemRng>
 where
     S: TryStream + Sized,
-    C: Cipher + Send + Sync,
+    C: AsRef<Aead> + Send + Sync,
     A: AsRef<[u8]> + Send + Sync,
     G: Rng,
 {
@@ -178,7 +178,7 @@ where
 impl<S, C, A> DecryptTryStream<S, C, A>
 where
     S: TryStream + Sized,
-    C: Cipher + Send + Sync,
+    C: AsRef<Aead> + Send + Sync,
     A: AsRef<[u8]> + Send + Sync,
 {
     pub fn new(stream: S, cipher: C, aad: Aad<A>) -> Self {
@@ -198,7 +198,7 @@ where
     S: TryStream,
     S::Ok: AsRef<[u8]>,
     S::Error: Send + Sync,
-    C: Cipher + Send + Sync,
+    C: AsRef<Aead> + Send + Sync,
     D: AsRef<[u8]> + Send + Sync,
 {
     type Item = Result<Vec<u8>, DecryptStreamError<S::Error>>;
