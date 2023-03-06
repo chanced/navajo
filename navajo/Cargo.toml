@@ -57,6 +57,7 @@ version = "1.0"
 default-features = false
 features = ["alloc", "raw_value"]
 
+
 # strum
 [dependencies.strum]
 version = "0.24"
@@ -122,6 +123,7 @@ features = ["zeroize"]
 # optional = true
 # default-features = false
 # features = ["pem", "pkcs8", "zeroize", "serde"]
+
 
 # p256
 [dependencies.p256]
@@ -195,7 +197,7 @@ features = ["alloc", "rand_core", "pkcs8", "pem", "zeroize", "serde"]
 version = "0.8"
 optional = true
 default-features = false
-features = ["pem", "sha2"]
+features = ["pem", "pkcs5", "sha2"]
 
 
 # [dependencies.ecdsa]
@@ -246,7 +248,7 @@ features = ["full"] # todo: reduce this.
 
 [features]
 default = [
-	# "ring",
+	"ring",
 	"std",       # todo: remove
 	"aead",
 	"aes",       # todo: remove

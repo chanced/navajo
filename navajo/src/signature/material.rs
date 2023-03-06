@@ -10,7 +10,7 @@ use super::Algorithm;
 pub struct Material {
     #[zeroize(skip)]
     algorithm: Algorithm,
-    value: sensitive::Bytes,
+    value: KeyPair,
     #[zeroize(skip)]
     pub_id: String,
 }
@@ -34,7 +34,17 @@ impl Material {
     pub(super) fn new(algorithm: Algorithm, pub_id: String) -> Self {
         todo!()
     }
-    pub(super) fn bytes(&self) -> &[u8] {
-        &self.value
+}
+
+#[derive(Serialize, Deserialize, Clone, ZeroizeOnDrop, Debug, Eq, PartialEq)]
+pub(super) struct KeyPair {
+    #[serde(rename = "pvt")]
+    pub(super) private: sensitive::Bytes,
+    #[serde(rename = "pub")]
+    pub(super) public: sensitive::Bytes,
+}
+impl KeyPair {
+    pub(super) fn concat(&self) -> Vec<u8> {
+        [self.private.as_ref(), self.public.as_ref()].concat()
     }
 }

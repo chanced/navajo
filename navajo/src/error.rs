@@ -718,3 +718,5 @@ impl From<ed25519_dalek::SignatureError> for KeyError {
         Self(e.to_string())
     }
 }
+
+pub enum VerificationError {}

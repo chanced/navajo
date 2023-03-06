@@ -23,12 +23,16 @@ pub struct SystemRng;
 impl Sealed for SystemRng {}
 impl CryptoRng for SystemRng {}
 
-/// reports whether or not a slice of bytes is fully repeating
-pub fn is_fully_repeating(key: &[u8]) -> bool {
+/// Reports whether or not a slice of bytes is fully repeating
+pub(crate) fn is_fully_repeating(key: &[u8]) -> bool {
     if key.len() < 2 {
         return false;
     }
     !key.iter().cloned().all(|b| b == key[0])
+}
+
+pub(crate) fn is_zero(key: &[u8]) -> bool {
+    key.iter().cloned().all(|b| b == 0)
 }
 
 fn fill(dst: &mut [u8]) -> Result<(), RandomError> {

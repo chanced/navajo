@@ -65,7 +65,7 @@ impl Algorithm {
             Algorithm::Rs256 => &ring::signature::RSA_PKCS1_2048_8192_SHA256,
             Algorithm::Rs384 => &ring::signature::RSA_PKCS1_2048_8192_SHA384,
             Algorithm::Rs512 => &ring::signature::RSA_PKCS1_2048_8192_SHA512,
-            Algorithm::Ps258 => &ring::signature::RSA_PSS_2048_8192_SHA256,
+            Algorithm::Ps256 => &ring::signature::RSA_PSS_2048_8192_SHA256,
             Algorithm::Ps384 => &ring::signature::RSA_PSS_2048_8192_SHA384,
             Algorithm::Ps512 => &ring::signature::RSA_PSS_2048_8192_SHA512,
             _ => unreachable!("not an rsa algorithm: {}", self),

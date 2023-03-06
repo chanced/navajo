@@ -1,5 +1,5 @@
 use super::{
-    nonce::{Nonce, NonceSequence},
+    nonce::{NonceSequence, SingleNonce},
     Material,
 };
 use crate::{
@@ -17,7 +17,7 @@ use alloc::vec::{IntoIter, Vec};
 #[cfg(feature = "std")]
 use std::vec::IntoIter;
 
-use super::{cipher::Cipher, nonce::NonceOrNonceSequence, Algorithm, Method};
+use super::{cipher::Cipher, nonce::Nonce, Algorithm, Method};
 
 pub struct Decryptor<C, B, G>
 where
@@ -28,7 +28,7 @@ where
     buf: B,
     key_id: Option<u32>,
     key: Option<Key<Material>>,
-    nonce: Option<NonceOrNonceSequence>,
+    nonce: Option<Nonce>,
     backend: Option<Cipher>,
     method: Option<Method>,
     rng: G,
@@ -112,10 +112,10 @@ where
         }
         let seg_end = seg_end.unwrap();
         let nonce = match self.nonce.as_mut().unwrap() {
-            NonceOrNonceSequence::Nonce(_) => {
+            Nonce::Single(_) => {
                 unreachable!("nonce must be a nonce sequence for streams")
             }
-            NonceOrNonceSequence::NonceSequence(seq) => seq.next()?,
+            Nonce::Sequence(seq) => seq.next()?,
         };
         let mut data = self.extract_segment(seg_end);
         self.backend
@@ -136,8 +136,8 @@ where
         if method.is_online() {
             let cipher = self.backend.ok_or(DecryptError::Unspecified)?;
             let nonce = match self.nonce.ok_or(DecryptError::Unspecified)? {
-                NonceOrNonceSequence::Nonce(nonce) => Ok(nonce),
-                NonceOrNonceSequence::NonceSequence(_) => Err(DecryptError::Unspecified),
+                Nonce::Single(nonce) => Ok(nonce),
+                Nonce::Sequence(_) => Err(DecryptError::Unspecified),
             }?;
             cipher.decrypt_in_place(nonce, aad.as_ref(), &mut self.buf)?;
             Ok(vec![self.buf].into_iter())
@@ -148,8 +148,8 @@ where
             }
             let cipher = self.backend.ok_or(DecryptError::Unspecified)?;
             let nonce_seq = match self.nonce.ok_or(DecryptError::Unspecified)? {
-                NonceOrNonceSequence::NonceSequence(seq) => Ok(seq),
-                NonceOrNonceSequence::Nonce(_) => Err(DecryptError::Unspecified),
+                Nonce::Sequence(seq) => Ok(seq),
+                Nonce::Single(_) => Err(DecryptError::Unspecified),
             }?;
             cipher.decrypt_in_place(nonce_seq.last()?, aad.as_ref(), &mut self.buf)?;
             segments.push(self.buf);
@@ -263,9 +263,9 @@ where
                     return Ok(None);
                 }
                 let nonce = &buf[idx..idx + algorithm.nonce_len()];
-                let nonce = Nonce::new_from_slice(algorithm.nonce_len(), nonce)
+                let nonce = SingleNonce::new_from_slice(algorithm.nonce_len(), nonce)
                     .map_err(|_| DecryptError::Unspecified)?;
-                self.nonce = Some(NonceOrNonceSequence::Nonce(nonce));
+                self.nonce = Some(Nonce::Single(nonce));
 
                 Ok(Some(idx + algorithm.nonce_len()))
             }
@@ -276,7 +276,7 @@ where
                 let nonce_prefix = &buf[idx..idx + algorithm.nonce_prefix_len()];
                 let nonce_seq = NonceSequence::new_with_prefix(algorithm.nonce_len(), nonce_prefix)
                     .map_err(|_| DecryptError::Unspecified)?;
-                self.nonce = Some(NonceOrNonceSequence::NonceSequence(nonce_seq));
+                self.nonce = Some(Nonce::Sequence(nonce_seq));
                 Ok(Some(idx + algorithm.nonce_prefix_len()))
             }
         }
@@ -339,8 +339,8 @@ where
 
     pub fn counter(&self) -> u32 {
         self.nonce.as_ref().map_or(0, |n| match n {
-            NonceOrNonceSequence::Nonce(_) => 0,
-            NonceOrNonceSequence::NonceSequence(n) => n.counter(),
+            Nonce::Single(_) => 0,
+            Nonce::Sequence(n) => n.counter(),
         })
     }
 }
@@ -376,10 +376,10 @@ mod tests {
         assert!(dec.nonce.is_some());
         let n = dec.nonce.as_ref().unwrap();
         match n {
-            NonceOrNonceSequence::Nonce(n) => {
+            Nonce::Single(n) => {
                 assert_eq!(n.bytes(), &nonce[..]);
             }
-            NonceOrNonceSequence::NonceSequence(_) => {
+            Nonce::Sequence(_) => {
                 panic!("expected nonce, got nonce sequence");
             }
         }
@@ -415,10 +415,10 @@ mod tests {
 
         let n = dec.nonce.as_ref().unwrap();
         match n {
-            NonceOrNonceSequence::Nonce(_) => {
+            Nonce::Single(_) => {
                 panic!("expected nonce nonce sequence, got nonce");
             }
-            NonceOrNonceSequence::NonceSequence(n) => {
+            Nonce::Sequence(n) => {
                 assert_eq!(
                     n.bytes(),
                     &[&nonce[..], &0u32.to_be_bytes()[..], &[0]].concat()

@@ -1,5 +1,5 @@
 use crate::{
-    aead::nonce::Nonce,
+    aead::nonce::SingleNonce,
     buffer::RcBuffer,
     error::{DecryptError, EncryptError},
     Buffer,
@@ -69,7 +69,7 @@ impl Cipher {
     }
     pub(super) fn decrypt_in_place<B>(
         &self,
-        nonce: Nonce,
+        nonce: SingleNonce,
         aad: &[u8],
         data: &mut B,
     ) -> Result<(), DecryptError>
@@ -84,7 +84,7 @@ impl Cipher {
     }
     pub(super) fn encrypt_in_place<B>(
         &self,
-        nonce: Nonce,
+        nonce: SingleNonce,
         aad: &[u8],
         data: &mut B,
     ) -> Result<(), EncryptError>
@@ -121,7 +121,7 @@ impl RingCipher {
     }
     pub(super) fn encrypt_in_place<B>(
         &self,
-        nonce: Nonce,
+        nonce: SingleNonce,
         aad: &[u8],
         data: &mut B,
     ) -> Result<(), EncryptError>
@@ -134,7 +134,7 @@ impl RingCipher {
     }
     pub(super) fn decrypt_in_place<B>(
         &self,
-        nonce: Nonce,
+        nonce: SingleNonce,
         aad: &[u8],
         data: &mut B,
     ) -> Result<(), DecryptError>
@@ -185,7 +185,7 @@ impl RustCryptoCipher {
     }
     pub(super) fn encrypt_in_place<B>(
         &self,
-        nonce: Nonce,
+        nonce: SingleNonce,
         aad: &[u8],
         data: &mut B,
     ) -> Result<(), EncryptError>
@@ -218,7 +218,7 @@ impl RustCryptoCipher {
     }
     pub(super) fn decrypt_in_place<B>(
         &self,
-        nonce: Nonce,
+        nonce: SingleNonce,
         aad: &[u8],
         data: &mut B,
     ) -> Result<(), DecryptError>

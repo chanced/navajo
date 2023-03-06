@@ -18,7 +18,7 @@ use crate::{
 use super::{
     cipher::Cipher,
     material::Material,
-    nonce::{Nonce, NonceSequence},
+    nonce::{NonceSequence, SingleNonce},
     Algorithm, Method, Segment,
 };
 /// Used internally to encrypt data. Exposed as a public type for edge-cases
@@ -174,7 +174,7 @@ where
     }
 
     fn finalize_one_shot(mut self, aad: &[u8]) -> Result<IntoIter<B>, EncryptError> {
-        let nonce = Nonce::new(self.rand.clone(), self.algorithm().nonce_len());
+        let nonce = SingleNonce::new(self.rand.clone(), self.algorithm().nonce_len());
         let header = self.header(None, &nonce, &[]);
         let cipher = self.key.cipher();
         let mut buf = mem::take(&mut self.buf.0);

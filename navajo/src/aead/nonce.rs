@@ -8,21 +8,28 @@ use typenum::{U12, U24};
 
 use crate::error::UnspecifiedError;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum NonceOrNonceSequence {
-    Nonce(Nonce),
-    NonceSequence(NonceSequence),
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NonceSize {
+    Twelve,
+    TwentyFour,
 }
-impl NonceOrNonceSequence {
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Nonce {
+    Single(SingleNonce),
+    Sequence(NonceSequence),
+}
+impl Nonce {
     pub(crate) fn bytes(&self) -> &[u8] {
         match self {
-            Self::Nonce(nonce) => nonce.bytes(),
-            Self::NonceSequence(nonce_sequence) => nonce_sequence.bytes(),
+            Self::Single(nonce) => nonce.bytes(),
+            Self::Sequence(nonce_sequence) => nonce_sequence.bytes(),
         }
     }
 }
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Nonce {
+pub(crate) enum SingleNonce {
     Twelve([u8; 12]),
     /// Used for XChaCha20Poly1305. Given that all others are 12 bytes, this is
     /// going to be the least common but twice the size. As such, the value gets
@@ -30,7 +37,7 @@ pub(crate) enum Nonce {
     TwentyFour(Box<[u8; 24]>),
 }
 
-impl Nonce {
+impl SingleNonce {
     pub(crate) fn new<R>(rng: R, size: usize) -> Self
     where
         R: Rng,
@@ -67,23 +74,23 @@ impl Nonce {
         }
     }
 }
-impl Deref for Nonce {
+impl Deref for SingleNonce {
     type Target = [u8];
     fn deref(&self) -> &Self::Target {
         self.as_ref()
     }
 }
 
-impl AsRef<[u8]> for Nonce {
+impl AsRef<[u8]> for SingleNonce {
     fn as_ref(&self) -> &[u8] {
         match self {
-            Nonce::Twelve(nonce) => &nonce[..],
-            Nonce::TwentyFour(nonce) => &nonce[..],
+            SingleNonce::Twelve(nonce) => &nonce[..],
+            SingleNonce::TwentyFour(nonce) => &nonce[..],
         }
     }
 }
 
-impl TryFrom<&[u8]> for Nonce {
+impl TryFrom<&[u8]> for SingleNonce {
     type Error = UnspecifiedError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
@@ -94,29 +101,29 @@ impl TryFrom<&[u8]> for Nonce {
         }
     }
 }
-impl From<Nonce> for GenericArray<u8, U12> {
-    fn from(nonce: Nonce) -> Self {
+impl From<SingleNonce> for GenericArray<u8, U12> {
+    fn from(nonce: SingleNonce) -> Self {
         match nonce {
-            Nonce::Twelve(nonce) => GenericArray::clone_from_slice(&nonce[..]),
-            Nonce::TwentyFour(_) => panic!("attempted to convert a 24 byte nonce to a 12 byte nonce\nthis is a bug!\n\nplease report it to "),
+            SingleNonce::Twelve(nonce) => GenericArray::clone_from_slice(&nonce[..]),
+            SingleNonce::TwentyFour(_) => panic!("attempted to convert a 24 byte nonce to a 12 byte nonce\nthis is a bug!\n\nplease report it to "),
         }
     }
 }
-impl From<Nonce> for GenericArray<u8, U24> {
-    fn from(nonce: Nonce) -> Self {
+impl From<SingleNonce> for GenericArray<u8, U24> {
+    fn from(nonce: SingleNonce) -> Self {
         match nonce {
-            Nonce::TwentyFour(nonce) => GenericArray::clone_from_slice(&nonce[..]),
-            Nonce::Twelve(_) => panic!("attempted to convert a 12 byte nonce to a 24 byte nonce\nthis is a bug!\n\nplease report it to {NEW_ISSUE_URL}"),
+            SingleNonce::TwentyFour(nonce) => GenericArray::clone_from_slice(&nonce[..]),
+            SingleNonce::Twelve(_) => panic!("attempted to convert a 12 byte nonce to a 24 byte nonce\nthis is a bug!\n\nplease report it to {NEW_ISSUE_URL}"),
         }
     }
 }
 
 #[cfg(feature = "ring")]
-impl From<Nonce> for ring::aead::Nonce {
-    fn from(nonce: Nonce) -> Self {
+impl From<SingleNonce> for ring::aead::Nonce {
+    fn from(nonce: SingleNonce) -> Self {
         match nonce {
-            Nonce::Twelve(nonce) => ring::aead::Nonce::assume_unique_for_key(nonce),
-            Nonce::TwentyFour(_) => unreachable!("ring does not support 24 byte nonces\nthis is a bug!\n\nplease report it to {NEW_ISSUE_URL}"),
+            SingleNonce::Twelve(nonce) => ring::aead::Nonce::assume_unique_for_key(nonce),
+            SingleNonce::TwentyFour(_) => unreachable!("ring does not support 24 byte nonces\nthis is a bug!\n\nplease report it to {NEW_ISSUE_URL}"),
         }
     }
 }
@@ -208,14 +215,14 @@ impl NonceSequence {
             Self::TwentyFour { .. } => 24,
         }
     }
-    fn nonce(&self) -> Nonce {
+    fn nonce(&self) -> SingleNonce {
         match self {
-            Self::Twelve(_, seed) => Nonce::Twelve(*seed),
-            Self::TwentyFour(_, seed) => Nonce::TwentyFour(seed.clone()),
+            Self::Twelve(_, seed) => SingleNonce::Twelve(*seed),
+            Self::TwentyFour(_, seed) => SingleNonce::TwentyFour(seed.clone()),
         }
     }
 
-    pub(crate) fn next(&mut self) -> Result<Nonce, crate::error::SegmentLimitExceededError> {
+    pub(crate) fn next(&mut self) -> Result<SingleNonce, crate::error::SegmentLimitExceededError> {
         if self.counter() == u32::MAX {
             return Err(crate::error::SegmentLimitExceededError);
         }
@@ -224,7 +231,7 @@ impl NonceSequence {
         Ok(nonce)
     }
 
-    pub(crate) fn last(mut self) -> Result<Nonce, crate::error::SegmentLimitExceededError> {
+    pub(crate) fn last(mut self) -> Result<SingleNonce, crate::error::SegmentLimitExceededError> {
         if self.counter() == u32::MAX {
             return Err(crate::error::SegmentLimitExceededError);
         }
