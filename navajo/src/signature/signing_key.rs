@@ -269,7 +269,7 @@ enum Rsa {
 }
 
 impl Rsa {
-    fn generate_key_pair<G>(rng: G, algorithm: Algorithm) -> KeyPair
+    fn generate_key_pair<G>(mut rng: G, algorithm: Algorithm) -> KeyPair
     where
         G: Rng + CryptoRng + CryptoRngCore,
     {

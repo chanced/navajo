@@ -17,7 +17,7 @@ use material::KeyPair;
 
 pub use signature::Signature;
 
-pub use verifying_key::VerifyingKey;
+use verifying_key::VerifyingKey;
 
 // #[derive(Clone, Debug, ZeroizeOnDrop)]
 // pub struct Signature {

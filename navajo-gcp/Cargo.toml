@@ -7,3 +7,5 @@ authors = ["Chance Dinkins"]
 description = "Navajo GCP KMS integration"
 
 [dependencies]
+kms-aead = { version = "0.12", features = ["gcp-kms-encryption"] }
+navajo = { path = "../navajo" }

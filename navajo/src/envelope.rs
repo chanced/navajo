@@ -21,15 +21,6 @@ pub trait Envelope {
         A: 'a + AsRef<[u8]> + Send + Sync,
         P: 'a + AsRef<[u8]> + Send + Sync;
 
-    fn encrypt_dek_sync<A, P>(
-        &self,
-        aad: Aad<A>,
-        plaintext: P,
-    ) -> Result<Vec<u8>, Self::EncryptError>
-    where
-        A: AsRef<[u8]>,
-        P: AsRef<[u8]>;
-
     fn decrypt_dek<'a, A, C>(
         &'a self,
         aad: Aad<A>,
@@ -39,14 +30,23 @@ pub trait Envelope {
         A: 'a + AsRef<[u8]> + Send + Sync,
         C: 'a + AsRef<[u8]> + Send + Sync;
 
-    fn decrypt_dek_sync<A, C>(
-        &self,
-        aad: Aad<A>,
-        ciphertext: C,
-    ) -> Result<Vec<u8>, Self::DecryptError>
-    where
-        A: AsRef<[u8]>,
-        C: AsRef<[u8]>;
+    // fn encrypt_dek_sync<A, P>(
+    //     &self,
+    //     aad: Aad<A>,
+    //     plaintext: P,
+    // ) -> Result<Vec<u8>, Self::EncryptError>
+    // where
+    //     A: AsRef<[u8]>,
+    //     P: AsRef<[u8]>;
+
+    // fn decrypt_dek_sync<A, C>(
+    //     &self,
+    //     aad: Aad<A>,
+    //     ciphertext: C,
+    // ) -> Result<Vec<u8>, Self::DecryptError>
+    // where
+    //     A: AsRef<[u8]>,
+    //     C: AsRef<[u8]>;
 }
 
 /// `InMemory` is an in-memory [`Envelope`] implementation that is not meant to be used outside of testing.
@@ -129,49 +129,49 @@ impl Envelope for InMemory {
         })
     }
 
-    fn encrypt_dek_sync<A, P>(
-        &self,
-        aad: Aad<A>,
-        plaintext: P,
-    ) -> Result<Vec<u8>, Self::EncryptError>
-    where
-        A: AsRef<[u8]>,
-        P: AsRef<[u8]>,
-    {
-        let nonce = self.nonce;
-        let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
-        let cipher = ChaCha20Poly1305::new(&self.key.into());
-        let ciphertext = cipher.encrypt(
-            &nonce,
-            Payload {
-                aad: aad.as_ref(),
-                msg: plaintext.as_ref(),
-            },
-        )?;
-        Ok(ciphertext)
-    }
+    // fn encrypt_dek_sync<A, P>(
+    //     &self,
+    //     aad: Aad<A>,
+    //     plaintext: P,
+    // ) -> Result<Vec<u8>, Self::EncryptError>
+    // where
+    //     A: AsRef<[u8]>,
+    //     P: AsRef<[u8]>,
+    // {
+    //     let nonce = self.nonce;
+    //     let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
+    //     let cipher = ChaCha20Poly1305::new(&self.key.into());
+    //     let ciphertext = cipher.encrypt(
+    //         &nonce,
+    //         Payload {
+    //             aad: aad.as_ref(),
+    //             msg: plaintext.as_ref(),
+    //         },
+    //     )?;
+    //     Ok(ciphertext)
+    // }
 
-    fn decrypt_dek_sync<A, C>(
-        &self,
-        aad: Aad<A>,
-        ciphertext: C,
-    ) -> Result<Vec<u8>, Self::DecryptError>
-    where
-        A: AsRef<[u8]>,
-        C: AsRef<[u8]>,
-    {
-        let nonce = self.nonce;
-        let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
-        let cipher = ChaCha20Poly1305::new(&self.key.into());
-        let plaintext = cipher.decrypt(
-            &nonce,
-            Payload {
-                aad: aad.as_ref(),
-                msg: ciphertext.as_ref(),
-            },
-        )?;
-        Ok(plaintext)
-    }
+    // fn decrypt_dek_sync<A, C>(
+    //     &self,
+    //     aad: Aad<A>,
+    //     ciphertext: C,
+    // ) -> Result<Vec<u8>, Self::DecryptError>
+    // where
+    //     A: AsRef<[u8]>,
+    //     C: AsRef<[u8]>,
+    // {
+    //     let nonce = self.nonce;
+    //     let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
+    //     let cipher = ChaCha20Poly1305::new(&self.key.into());
+    //     let plaintext = cipher.decrypt(
+    //         &nonce,
+    //         Payload {
+    //             aad: aad.as_ref(),
+    //             msg: ciphertext.as_ref(),
+    //         },
+    //     )?;
+    //     Ok(plaintext)
+    // }
 }
 
 /// `CleartextJson` implements [`Envelope`] but does not encrypt or decrypt the
@@ -209,29 +209,29 @@ impl Envelope for CleartextJson {
         Box::pin(async move { Ok(vec![]) })
     }
 
-    fn encrypt_dek_sync<A, P>(
-        &self,
-        _aad: Aad<A>,
-        _plaintext: P,
-    ) -> Result<Vec<u8>, Self::EncryptError>
-    where
-        A: AsRef<[u8]>,
-        P: AsRef<[u8]>,
-    {
-        Ok(vec![])
-    }
+    // fn encrypt_dek_sync<A, P>(
+    //     &self,
+    //     _aad: Aad<A>,
+    //     _plaintext: P,
+    // ) -> Result<Vec<u8>, Self::EncryptError>
+    // where
+    //     A: AsRef<[u8]>,
+    //     P: AsRef<[u8]>,
+    // {
+    //     Ok(vec![])
+    // }
 
-    fn decrypt_dek_sync<A, C>(
-        &self,
-        _aad: Aad<A>,
-        _ciphertext: C,
-    ) -> Result<Vec<u8>, Self::DecryptError>
-    where
-        A: AsRef<[u8]>,
-        C: AsRef<[u8]>,
-    {
-        Ok(vec![])
-    }
+    // fn decrypt_dek_sync<A, C>(
+    //     &self,
+    //     _aad: Aad<A>,
+    //     _ciphertext: C,
+    // ) -> Result<Vec<u8>, Self::DecryptError>
+    // where
+    //     A: AsRef<[u8]>,
+    //     C: AsRef<[u8]>,
+    // {
+    //     Ok(vec![])
+    // }
 }
 
 pub(crate) fn is_cleartext<'a, T: Envelope + Any + 'a>(envelope: &T) -> bool {
