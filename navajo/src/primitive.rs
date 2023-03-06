@@ -107,7 +107,7 @@ pub enum Primitive {
 impl Primitive {
     pub async fn seal<'a, A, E>(&self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
     where
-        A: AsRef<[u8]> + Send + Sync,
+        A: 'static + AsRef<[u8]> + Send + Sync,
         E: Envelope + 'static,
     {
         if is_cleartext(envelope) {
@@ -151,8 +151,8 @@ impl Primitive {
     }
     pub async fn open<A, C, E>(aad: Aad<A>, ciphertext: C, envelope: &E) -> Result<Self, OpenError>
     where
-        A: AsRef<[u8]> + Send + Sync,
-        C: AsRef<[u8]> + Send + Sync,
+        A: 'static + AsRef<[u8]> + Send + Sync,
+        C: 'static + AsRef<[u8]> + Send + Sync,
         E: Envelope + 'static,
     {
         if ciphertext.as_ref().is_empty() {
@@ -371,9 +371,7 @@ mod tests {
         // InMemory is only suitable for testing.
         let in_mem = InMemory::default();
         let data = crate::Mac::seal(&mac, Aad::empty(), &in_mem).await.unwrap();
-        let mac = crate::Mac::open(Aad::empty(), &data, &in_mem)
-            .await
-            .unwrap();
+        let mac = crate::Mac::open(Aad::empty(), data, &in_mem).await.unwrap();
         assert_eq!(mac.primary_key(), primary_key);
     }
 }

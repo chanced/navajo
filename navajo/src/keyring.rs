@@ -444,14 +444,14 @@ where
 
     pub(crate) async fn seal<A, E>(&self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
     where
-        A: AsRef<[u8]> + Send + Sync,
+        A: 'static + AsRef<[u8]> + Send + Sync,
         E: Envelope,
     {
         let (locally_serialized_and_sealed, cipher_and_nonce) =
             self.serialize_and_seal_locally(aad.as_ref())?;
 
         let sealed_cipher_and_nonce = envelope
-            .encrypt_dek(aad, &cipher_and_nonce)
+            .encrypt_dek(aad, cipher_and_nonce.clone())
             .await
             .map_err(|e| e.to_string())?;
 
@@ -487,17 +487,18 @@ pub(crate) async fn open_keyring_value<A, C, E>(
     envelope: &E,
 ) -> Result<(Kind, Value), OpenError>
 where
-    A: AsRef<[u8]>,
-    C: AsRef<[u8]>,
+    A: 'static + Send + Sync + AsRef<[u8]>,
+    C: 'static + Send + Sync + AsRef<[u8]>,
     E: Envelope,
 {
-    let sealed_cipher_and_nonce = read_sealed_cipher_and_nonce(ciphertext.as_ref())?;
+    let c = ciphertext.as_ref();
+    let sealed_cipher_and_nonce = read_sealed_cipher_and_nonce(c)?;
     let key = envelope
-        .decrypt_dek(Aad(aad.as_ref()), sealed_cipher_and_nonce)
+        .decrypt_dek(Aad(aad.as_ref().to_vec()), sealed_cipher_and_nonce.clone())
         .await
         .map_err(|e| e.to_string())?;
 
-    let value = open_and_deserialize(key, aad, ciphertext.as_ref(), sealed_cipher_and_nonce)?;
+    let value = open_and_deserialize(key, aad, ciphertext.as_ref(), &sealed_cipher_and_nonce)?;
     let kind = get_kind(&value)?;
     Ok((kind, value))
 }
@@ -514,10 +515,10 @@ where
     let sealed = sealed.as_ref();
     let sealed_cipher_and_nonce = read_sealed_cipher_and_nonce(sealed)?;
     let key = envelope
-        .decrypt_dek_sync(Aad(aad.as_ref()), sealed_cipher_and_nonce)
+        .decrypt_dek_sync(Aad(aad.as_ref()), sealed_cipher_and_nonce.clone())
         .map_err(|e| e.to_string())?;
 
-    let value = open_and_deserialize(key, aad, sealed, sealed_cipher_and_nonce)?;
+    let value = open_and_deserialize(key, aad, sealed, &sealed_cipher_and_nonce)?;
     let kind = get_kind(&value)?;
     Ok((kind, value))
 }
@@ -560,10 +561,10 @@ fn read_sealed_cipher_nonce_len(sealed: &[u8]) -> Result<usize, OpenError> {
     Ok(sealed_cipher_and_nonce_len)
 }
 
-fn read_sealed_cipher_and_nonce(sealed: &[u8]) -> Result<&[u8], OpenError> {
+fn read_sealed_cipher_and_nonce(sealed: &[u8]) -> Result<Vec<u8>, OpenError> {
     let sealed_cipher_and_nonce_len = read_sealed_cipher_nonce_len(sealed)?;
     let sealed_cipher_and_nonce = &sealed[4..4 + sealed_cipher_and_nonce_len];
-    Ok(sealed_cipher_and_nonce)
+    Ok(sealed_cipher_and_nonce.to_vec())
 }
 
 fn open_first_pass(mut key: Vec<u8>, buffer: &mut Vec<u8>, aad: &[u8]) -> Result<usize, OpenError> {
@@ -646,7 +647,7 @@ mod tests {
         let in_mem = crate::envelope::InMemory::new();
         let sealed = keyring.seal(Aad(&[]), &in_mem).await.unwrap();
         assert_ne!(ser, sealed);
-        let (kind, opened) = open_keyring_value(Aad(&[]), &sealed, &in_mem)
+        let (kind, opened) = open_keyring_value(Aad(&[]), sealed.clone(), &in_mem)
             .await
             .unwrap();
         assert_eq!(kind, Kind::Aead);

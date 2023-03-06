@@ -65,10 +65,11 @@ impl Mac {
     ///     assert_eq!(mac.primary_key(), primary_key);
     /// }
     /// ```
-    pub async fn open<A, E>(aad: Aad<A>, data: &[u8], envelope: &E) -> Result<Self, OpenError>
+    pub async fn open<A, D, E>(aad: Aad<A>, data: D, envelope: &E) -> Result<Self, OpenError>
     where
-        E: Envelope + 'static,
-        A: AsRef<[u8]> + Send + Sync,
+        E: 'static + Envelope,
+        D: 'static + AsRef<[u8]> + Send + Sync,
+        A: 'static + AsRef<[u8]> + Send + Sync,
     {
         let primitive = Primitive::open(aad, data, envelope).await?;
         if let Some(mac) = primitive.mac() {
@@ -140,7 +141,7 @@ impl Mac {
     /// ```
     pub async fn seal<A, E>(mac: &Self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
     where
-        A: AsRef<[u8]> + Send + Sync,
+        A: 'static + AsRef<[u8]> + Send + Sync,
         E: Envelope + 'static,
     {
         Primitive::Mac(mac.clone()).seal(aad, envelope).await

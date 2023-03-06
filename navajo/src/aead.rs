@@ -27,7 +27,6 @@ use crate::{
 use alloc::vec::Vec;
 use core::mem;
 use futures::{Stream, TryStream};
-use inherent::inherent;
 pub(crate) use material::Material;
 use serde_json::Value;
 use size::Size;
@@ -314,23 +313,23 @@ impl Envelope for Aead {
         Box<dyn futures::Future<Output = Result<Vec<u8>, Self::EncryptError>> + Send + '_>,
     >
     where
-        A: 'a + AsRef<[u8]> + Send + Sync,
-        P: 'a + AsRef<[u8]> + Send + Sync,
+        A: 'static + AsRef<[u8]> + Send + Sync,
+        P: 'static + AsRef<[u8]> + Send + Sync,
     {
         Box::pin(async move { self.encrypt(aad, cleartext) })
     }
 
-    // fn encrypt_dek_sync<A, P>(
-    //     &self,
-    //     aad: Aad<A>,
-    //     cleartext: P,
-    // ) -> Result<Vec<u8>, Self::EncryptError>
-    // where
-    //     A: AsRef<[u8]>,
-    //     P: AsRef<[u8]>,
-    // {
-    //     self.encrypt(aad, cleartext)
-    // }
+    fn encrypt_dek_sync<A, P>(
+        &self,
+        aad: Aad<A>,
+        cleartext: P,
+    ) -> Result<Vec<u8>, Self::EncryptError>
+    where
+        A: AsRef<[u8]>,
+        P: AsRef<[u8]>,
+    {
+        self.encrypt(aad, cleartext)
+    }
 
     fn decrypt_dek<'a, A, B>(
         &'a self,
@@ -340,23 +339,23 @@ impl Envelope for Aead {
         Box<dyn futures::Future<Output = Result<Vec<u8>, Self::DecryptError>> + Send + '_>,
     >
     where
-        A: 'a + AsRef<[u8]> + Send + Sync,
-        B: 'a + AsRef<[u8]> + Send + Sync,
+        A: 'static + AsRef<[u8]> + Send + Sync,
+        B: 'static + AsRef<[u8]> + Send + Sync,
     {
         Box::pin(async move { self.decrypt(aad, ciphertext) })
     }
 
-    // fn decrypt_dek_sync<A, C>(
-    //     &self,
-    //     aad: Aad<A>,
-    //     ciphertext: C,
-    // ) -> Result<Vec<u8>, Self::DecryptError>
-    // where
-    //     A: AsRef<[u8]>,
-    //     C: AsRef<[u8]>,
-    // {
-    //     self.decrypt(aad, ciphertext)
-    // }
+    fn decrypt_dek_sync<A, C>(
+        &self,
+        aad: Aad<A>,
+        ciphertext: C,
+    ) -> Result<Vec<u8>, Self::DecryptError>
+    where
+        A: AsRef<[u8]>,
+        C: AsRef<[u8]>,
+    {
+        self.decrypt(aad, ciphertext)
+    }
 }
 
 impl AsRef<Aead> for Aead {

@@ -15,11 +15,20 @@ pub trait Envelope {
     fn encrypt_dek<'a, A, P>(
         &'a self,
         aad: Aad<A>,
-        plaintext: P,
+        cleartext: P,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::EncryptError>> + Send + '_>>
     where
-        A: 'a + AsRef<[u8]> + Send + Sync,
-        P: 'a + AsRef<[u8]> + Send + Sync;
+        A: 'static + AsRef<[u8]> + Send + Sync,
+        P: 'static + AsRef<[u8]> + Send + Sync;
+
+    fn encrypt_dek_sync<A, P>(
+        &self,
+        aad: Aad<A>,
+        cleartext: P,
+    ) -> Result<Vec<u8>, Self::EncryptError>
+    where
+        A: AsRef<[u8]>,
+        P: AsRef<[u8]>;
 
     fn decrypt_dek<'a, A, C>(
         &'a self,
@@ -27,26 +36,17 @@ pub trait Envelope {
         ciphertext: C,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::DecryptError>> + Send + '_>>
     where
-        A: 'a + AsRef<[u8]> + Send + Sync,
-        C: 'a + AsRef<[u8]> + Send + Sync;
+        A: 'static + AsRef<[u8]> + Send + Sync,
+        C: 'static + AsRef<[u8]> + Send + Sync;
 
-    // fn encrypt_dek_sync<A, P>(
-    //     &self,
-    //     aad: Aad<A>,
-    //     plaintext: P,
-    // ) -> Result<Vec<u8>, Self::EncryptError>
-    // where
-    //     A: AsRef<[u8]>,
-    //     P: AsRef<[u8]>;
-
-    // fn decrypt_dek_sync<A, C>(
-    //     &self,
-    //     aad: Aad<A>,
-    //     ciphertext: C,
-    // ) -> Result<Vec<u8>, Self::DecryptError>
-    // where
-    //     A: AsRef<[u8]>,
-    //     C: AsRef<[u8]>;
+    fn decrypt_dek_sync<A, C>(
+        &self,
+        aad: Aad<A>,
+        ciphertext: C,
+    ) -> Result<Vec<u8>, Self::DecryptError>
+    where
+        A: AsRef<[u8]>,
+        C: AsRef<[u8]>;
 }
 
 /// `InMemory` is an in-memory [`Envelope`] implementation that is not meant to be used outside of testing.
@@ -83,11 +83,11 @@ impl Envelope for InMemory {
     fn encrypt_dek<'a, A, P>(
         &'a self,
         aad: Aad<A>,
-        plaintext: P,
+        cleartext: P,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::EncryptError>> + Send + '_>>
     where
-        A: 'a + AsRef<[u8]> + Send + Sync,
-        P: 'a + AsRef<[u8]> + Send + Sync,
+        A: 'static + AsRef<[u8]> + Send + Sync,
+        P: 'static + AsRef<[u8]> + Send + Sync,
     {
         let nonce = self.nonce;
         let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
@@ -97,7 +97,7 @@ impl Envelope for InMemory {
                 &nonce,
                 Payload {
                     aad: aad.as_ref(),
-                    msg: plaintext.as_ref(),
+                    msg: cleartext.as_ref(),
                 },
             )?;
             Ok(ciphertext)
@@ -110,68 +110,68 @@ impl Envelope for InMemory {
         ciphertext: C,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::DecryptError>> + Send + '_>>
     where
-        A: 'a + AsRef<[u8]> + Send + Sync,
-        C: 'a + AsRef<[u8]> + Send + Sync,
+        A: 'static + AsRef<[u8]> + Send + Sync,
+        C: 'static + AsRef<[u8]> + Send + Sync,
     {
         let nonce = self.nonce;
         let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
         let cipher = ChaCha20Poly1305::new(&self.key.into());
         let aad = aad.as_ref().to_vec();
         Box::pin(async move {
-            let plaintext = cipher.decrypt(
+            let cleartext = cipher.decrypt(
                 &nonce,
                 Payload {
                     aad: aad.as_ref(),
                     msg: ciphertext.as_ref(),
                 },
             )?;
-            Ok(plaintext)
+            Ok(cleartext)
         })
     }
 
-    // fn encrypt_dek_sync<A, P>(
-    //     &self,
-    //     aad: Aad<A>,
-    //     plaintext: P,
-    // ) -> Result<Vec<u8>, Self::EncryptError>
-    // where
-    //     A: AsRef<[u8]>,
-    //     P: AsRef<[u8]>,
-    // {
-    //     let nonce = self.nonce;
-    //     let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
-    //     let cipher = ChaCha20Poly1305::new(&self.key.into());
-    //     let ciphertext = cipher.encrypt(
-    //         &nonce,
-    //         Payload {
-    //             aad: aad.as_ref(),
-    //             msg: plaintext.as_ref(),
-    //         },
-    //     )?;
-    //     Ok(ciphertext)
-    // }
+    fn encrypt_dek_sync<A, P>(
+        &self,
+        aad: Aad<A>,
+        cleartext: P,
+    ) -> Result<Vec<u8>, Self::EncryptError>
+    where
+        A: AsRef<[u8]>,
+        P: AsRef<[u8]>,
+    {
+        let nonce = self.nonce;
+        let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
+        let cipher = ChaCha20Poly1305::new(&self.key.into());
+        let ciphertext = cipher.encrypt(
+            &nonce,
+            Payload {
+                aad: aad.as_ref(),
+                msg: cleartext.as_ref(),
+            },
+        )?;
+        Ok(ciphertext)
+    }
 
-    // fn decrypt_dek_sync<A, C>(
-    //     &self,
-    //     aad: Aad<A>,
-    //     ciphertext: C,
-    // ) -> Result<Vec<u8>, Self::DecryptError>
-    // where
-    //     A: AsRef<[u8]>,
-    //     C: AsRef<[u8]>,
-    // {
-    //     let nonce = self.nonce;
-    //     let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
-    //     let cipher = ChaCha20Poly1305::new(&self.key.into());
-    //     let plaintext = cipher.decrypt(
-    //         &nonce,
-    //         Payload {
-    //             aad: aad.as_ref(),
-    //             msg: ciphertext.as_ref(),
-    //         },
-    //     )?;
-    //     Ok(plaintext)
-    // }
+    fn decrypt_dek_sync<A, C>(
+        &self,
+        aad: Aad<A>,
+        ciphertext: C,
+    ) -> Result<Vec<u8>, Self::DecryptError>
+    where
+        A: AsRef<[u8]>,
+        C: AsRef<[u8]>,
+    {
+        let nonce = self.nonce;
+        let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
+        let cipher = ChaCha20Poly1305::new(&self.key.into());
+        let cleartext = cipher.decrypt(
+            &nonce,
+            Payload {
+                aad: aad.as_ref(),
+                msg: ciphertext.as_ref(),
+            },
+        )?;
+        Ok(cleartext)
+    }
 }
 
 /// `CleartextJson` implements [`Envelope`] but does not encrypt or decrypt the
@@ -191,8 +191,8 @@ impl Envelope for CleartextJson {
         _plaintext: P,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::EncryptError>> + Send + '_>>
     where
-        A: 'a + AsRef<[u8]>,
-        P: 'a + AsRef<[u8]>,
+        A: 'static + AsRef<[u8]>,
+        P: 'static + AsRef<[u8]>,
     {
         Box::pin(async move { Ok(vec![]) })
     }
@@ -203,35 +203,35 @@ impl Envelope for CleartextJson {
         _cleartext: C,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::DecryptError>> + Send + '_>>
     where
-        A: 'a + AsRef<[u8]>,
-        C: 'a + AsRef<[u8]>,
+        A: 'static + AsRef<[u8]>,
+        C: 'static + AsRef<[u8]>,
     {
         Box::pin(async move { Ok(vec![]) })
     }
 
-    // fn encrypt_dek_sync<A, P>(
-    //     &self,
-    //     _aad: Aad<A>,
-    //     _plaintext: P,
-    // ) -> Result<Vec<u8>, Self::EncryptError>
-    // where
-    //     A: AsRef<[u8]>,
-    //     P: AsRef<[u8]>,
-    // {
-    //     Ok(vec![])
-    // }
+    fn encrypt_dek_sync<A, P>(
+        &self,
+        _aad: Aad<A>,
+        _plaintext: P,
+    ) -> Result<Vec<u8>, Self::EncryptError>
+    where
+        A: AsRef<[u8]>,
+        P: AsRef<[u8]>,
+    {
+        Ok(vec![])
+    }
 
-    // fn decrypt_dek_sync<A, C>(
-    //     &self,
-    //     _aad: Aad<A>,
-    //     _ciphertext: C,
-    // ) -> Result<Vec<u8>, Self::DecryptError>
-    // where
-    //     A: AsRef<[u8]>,
-    //     C: AsRef<[u8]>,
-    // {
-    //     Ok(vec![])
-    // }
+    fn decrypt_dek_sync<A, C>(
+        &self,
+        _aad: Aad<A>,
+        _ciphertext: C,
+    ) -> Result<Vec<u8>, Self::DecryptError>
+    where
+        A: AsRef<[u8]>,
+        C: AsRef<[u8]>,
+    {
+        Ok(vec![])
+    }
 }
 
 pub(crate) fn is_cleartext<'a, T: Envelope + Any + 'a>(envelope: &T) -> bool {
@@ -305,6 +305,6 @@ mod tests {
         }
         assert_eq!(value.get("kind").unwrap(), "MAC");
 
-        let v = Mac::open(Aad::empty(), &result, &envelope).await.unwrap();
+        let v = Mac::open(Aad::empty(), result, &envelope).await.unwrap();
     }
 }
