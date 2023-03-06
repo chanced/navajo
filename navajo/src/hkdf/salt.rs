@@ -1,3 +1,5 @@
+use alloc::sync::Arc;
+
 use crate::Rng;
 
 use super::{
@@ -66,14 +68,14 @@ enum SaltInner {
 #[derive(Clone)]
 #[cfg(feature = "ring")]
 struct RingSalt {
-    salt: ring::hkdf::Salt,
+    salt: Arc<ring::hkdf::Salt>,
     algorithm: Algorithm,
 }
 #[cfg(feature = "ring")]
 impl RingSalt {
     fn new(algorithm: Algorithm, value: &[u8]) -> Self {
         Self {
-            salt: ring::hkdf::Salt::new(algorithm.into(), value),
+            salt: Arc::new(ring::hkdf::Salt::new(algorithm.into(), value)),
             algorithm,
         }
     }
