@@ -1,6 +1,15 @@
+use std::fmt::Display;
+
 use navajo::secret_store::SecretStore;
 
+#[derive(Debug, Clone)]
 pub enum SecretStoreError {}
+impl Display for SecretStoreError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
+impl std::error::Error for SecretStoreError {}
 
 pub struct GcpSecretStore {}
 impl SecretStore for GcpSecretStore {

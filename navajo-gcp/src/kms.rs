@@ -9,11 +9,15 @@ use secret_vault_value::SecretValue;
 use std::fmt::Display;
 use tonic::metadata::MetadataValue;
 use tonic::Status;
+
+// TODO: Improve error handling, classify KmsError
+
 #[derive(Clone, Debug)]
 pub enum KmsError {
     Tonic(Status),
     Base64(base64::DecodeError),
 }
+
 impl std::error::Error for KmsError {}
 impl Display for KmsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
