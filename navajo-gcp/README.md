@@ -1,3 +1,3 @@
 # navajo-gcp
 
-## Placeholder -- work in progress
+GCP integration for [navajo](https://github.com/chanced/navajo).

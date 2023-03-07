@@ -2,10 +2,10 @@ use core::{fmt::Display, pin::Pin};
 
 use futures::Future;
 
-use crate::sensitive;
+use crate::{error::Error, sensitive};
 
 pub trait SecretStore {
-    type Error: Display + Send + Sync;
+    type Error: Error + Send + Sync;
     fn get<N: ToString>(
         &self,
         name: N,

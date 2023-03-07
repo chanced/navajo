@@ -1,4 +1,4 @@
-use core::{any::Any, fmt::Display, pin::Pin};
+use core::{any::Any, pin::Pin};
 
 use aes_gcm::{aead::Aead as RustCryptoAead, AeadCore};
 #[cfg(not(feature = "std"))]
@@ -7,11 +7,11 @@ use chacha20poly1305::{aead::Payload, ChaCha20Poly1305, KeyInit};
 
 use futures::Future;
 
-use crate::Aad;
+use crate::{error::Error, Aad};
 #[allow(clippy::type_complexity)]
 pub trait Envelope {
-    type EncryptError: Display + Send + Sync;
-    type DecryptError: Display + Send + Sync;
+    type EncryptError: Error + Send + Sync;
+    type DecryptError: Error + Send + Sync;
     fn encrypt_dek<A, P>(
         &self,
         aad: Aad<A>,
@@ -182,8 +182,8 @@ impl Envelope for InMemory {
 pub struct CleartextJson;
 
 impl Envelope for CleartextJson {
-    type EncryptError = String;
-    type DecryptError = String;
+    type EncryptError = serde_json::Error;
+    type DecryptError = serde_json::Error;
 
     fn encrypt_dek<'a, A, P>(
         &'a self,

@@ -13,10 +13,6 @@ mod segment;
 mod size;
 mod stream;
 mod try_stream;
-
-#[cfg(feature = "hkdf")]
-mod derived_aead;
-
 use crate::{
     error::{EncryptError, KeyNotFoundError, RemoveKeyError},
     keyring::Keyring,
@@ -30,7 +26,7 @@ use futures::{Stream, TryStream};
 pub(crate) use material::Material;
 use serde_json::Value;
 use size::Size;
-use zeroize::{Zeroize, ZeroizeOnDrop};
+use zeroize::ZeroizeOnDrop;
 
 pub use algorithm::Algorithm;
 pub use ciphertext_info::CiphertextInfo;
@@ -42,8 +38,6 @@ pub use segment::Segment;
 pub use stream::{AeadStream, DecryptStream, EncryptStream};
 pub use try_stream::{AeadTryStream, DecryptTryStream, EncryptTryStream};
 
-#[cfg(feature = "hkdf")]
-pub use derived_aead::DerivedAead;
 #[cfg(feature = "std")]
 mod reader;
 #[cfg(feature = "std")]

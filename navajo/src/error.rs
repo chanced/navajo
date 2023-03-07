@@ -11,7 +11,7 @@ use alloc::{
 pub trait Error: core::fmt::Debug + core::fmt::Display {}
 
 #[cfg(feature = "std")]
-pub trait Error: std::error::Error {}
+pub use std::error::Error;
 
 #[derive(Debug)]
 pub struct RandomError(pub rand_core::Error);
@@ -51,8 +51,6 @@ impl From<rand_core::Error> for RandomError {
         Self(err)
     }
 }
-#[cfg(feature = "std")]
-impl std::error::Error for RandomError {}
 
 #[derive(Debug, Clone, Copy)]
 pub struct KeyNotFoundError(pub u32);
@@ -69,8 +67,6 @@ impl fmt::Display for KeyNotFoundError {
         write!(f, "navajo: missing key: {}", self.0)
     }
 }
-#[cfg(feature = "std")]
-impl std::error::Error for KeyNotFoundError {}
 
 #[derive(Clone, Debug)]
 pub struct UnspecifiedError;
@@ -89,9 +85,6 @@ impl fmt::Display for UnspecifiedError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for UnspecifiedError {}
-
 #[derive(Clone, Debug)]
 pub struct SegmentLimitExceededError;
 impl core::fmt::Display for SegmentLimitExceededError {
@@ -100,9 +93,6 @@ impl core::fmt::Display for SegmentLimitExceededError {
     }
 }
 impl Error for SegmentLimitExceededError {}
-
-#[cfg(feature = "std")]
-impl std::error::Error for SegmentLimitExceededError {}
 
 #[derive(Clone, Debug)]
 pub enum EncryptError {
@@ -140,9 +130,6 @@ impl From<EncryptError> for std::io::Error {
         Self::new(std::io::ErrorKind::Other, e)
     }
 }
-
-#[cfg(feature = "std")]
-impl std::error::Error for EncryptError {}
 
 impl From<UnspecifiedError> for EncryptError {
     fn from(_: UnspecifiedError) -> Self {
@@ -190,9 +177,6 @@ where
         }
     }
 }
-
-#[cfg(feature = "std")]
-impl<E> std::error::Error for EncryptTryStreamError<E> where E: std::error::Error {}
 
 #[derive(Debug, Clone)]
 pub enum DecryptError {
@@ -245,8 +229,6 @@ impl fmt::Display for DecryptError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for DecryptError {}
 impl From<UnspecifiedError> for DecryptError {
     fn from(_e: UnspecifiedError) -> Self {
         Self::Unspecified
@@ -293,9 +275,6 @@ where
     }
 }
 
-#[cfg(feature = "std")]
-impl<E> std::error::Error for DecryptStreamError<E> where E: std::error::Error {}
-
 #[derive(Debug, Clone)]
 pub struct MalformedError(pub Cow<'static, str>);
 impl Error for MalformedError {}
@@ -318,9 +297,6 @@ impl fmt::Display for MalformedError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for MalformedError {}
-
 #[derive(Clone, Copy, Debug)]
 pub struct InvalidAlgorithm(pub u8);
 impl Error for InvalidAlgorithm {}
@@ -330,9 +306,6 @@ impl fmt::Display for InvalidAlgorithm {
         write!(f, "navajo: invalid algorithm \"{}\"", self.0)
     }
 }
-
-#[cfg(feature = "std")]
-impl std::error::Error for InvalidAlgorithm {}
 
 impl From<u8> for InvalidAlgorithm {
     fn from(v: u8) -> Self {
@@ -346,8 +319,6 @@ pub enum TruncationError {
     MinLengthNotMet,
 }
 impl Error for TruncationError {}
-#[cfg(feature = "std")]
-impl std::error::Error for TruncationError {}
 
 impl Display for TruncationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -393,8 +364,6 @@ impl From<MacVerificationError> for MacVerificationReadError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for MacVerificationReadError {}
-#[cfg(feature = "std")]
-impl Error for MacVerificationReadError {}
 
 #[derive(Debug, Clone)]
 pub struct MacVerificationError;
@@ -409,8 +378,6 @@ impl From<UnspecifiedError> for MacVerificationError {
         Self {}
     }
 }
-#[cfg(feature = "std")]
-impl std::error::Error for MacVerificationError {}
 
 #[derive(Debug)]
 pub struct SealError(pub String);
@@ -444,9 +411,6 @@ impl From<chacha20poly1305::Error> for SealError {
         Self(e.to_string())
     }
 }
-
-#[cfg(feature = "std")]
-impl std::error::Error for SealError {}
 
 #[derive(Debug)]
 pub struct OpenError(pub String);
@@ -485,9 +449,6 @@ impl From<crypto_common::InvalidLength> for OpenError {
         Self(e.to_string())
     }
 }
-
-#[cfg(feature = "std")]
-impl std::error::Error for OpenError {}
 
 #[cfg(any(
     feature = "aead",
@@ -632,8 +593,6 @@ impl<E> std::error::Error for VerifyStreamError<E> where E: std::error::Error {}
 #[cfg(not(feature = "std"))]
 impl<E> Error for VerifyStreamError<E> where E: core::fmt::Debug + core::fmt::Display {}
 
-#[cfg(feature = "std")]
-impl<E> Error for VerifyStreamError<E> where E: std::error::Error {}
 impl<E> From<MacVerificationError> for VerifyStreamError<E> {
     fn from(_: MacVerificationError) -> Self {
         Self::FailedVerification
@@ -643,9 +602,6 @@ impl<E> From<MacVerificationError> for VerifyStreamError<E> {
 #[derive(Clone, Debug)]
 pub struct InvalidLengthError;
 impl Error for InvalidLengthError {}
-
-#[cfg(feature = "std")]
-impl std::error::Error for InvalidLengthError {}
 
 impl Display for InvalidLengthError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -678,8 +634,7 @@ impl fmt::Debug for KeyError {
         write!(f, "navajo: malformed key: {}", self.0)
     }
 }
-#[cfg(feature = "std")]
-impl std::error::Error for KeyError {}
+
 impl From<String> for KeyError {
     fn from(e: String) -> Self {
         Self(e)
