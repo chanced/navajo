@@ -2,14 +2,8 @@
 
 navajo is Rust library that provides secure and easy to use cryptographic APIs.
 
-The project is still in active, pre-release development. The short-term plans
-are to provide adequate coverage for AEAD, DAEAD, MAC, HKDF, Signatures, and
-HPKE with integrations for AWS, Azure, GCP, and Hashicrop Vault.
-
-The first alpha release will lack HPKE. Fuzzing will be setup as soon as the API
-is complete, hopefully before the end of Q1 2024.
-
-The long-term plan is to extend to other languages via WASI after fuzzing is finished.
+The project is in on-going development. The long-term plan is to extend to other
+languages via WASI once fuzzing is finished.
 
 ## Security Note
 
