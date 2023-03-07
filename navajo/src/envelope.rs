@@ -12,10 +12,10 @@ use crate::Aad;
 pub trait Envelope {
     type EncryptError: Display + Send + Sync;
     type DecryptError: Display + Send + Sync;
-    fn encrypt_dek<'a, A, P>(
-        &'a self,
+    fn encrypt_dek<A, P>(
+        &self,
         aad: Aad<A>,
-        cleartext: P,
+        plaintext: P,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::EncryptError>> + Send + '_>>
     where
         A: 'static + AsRef<[u8]> + Send + Sync,
@@ -24,14 +24,14 @@ pub trait Envelope {
     fn encrypt_dek_sync<A, P>(
         &self,
         aad: Aad<A>,
-        cleartext: P,
+        plaintext: P,
     ) -> Result<Vec<u8>, Self::EncryptError>
     where
         A: AsRef<[u8]>,
         P: AsRef<[u8]>;
 
-    fn decrypt_dek<'a, A, C>(
-        &'a self,
+    fn decrypt_dek<A, C>(
+        &self,
         aad: Aad<A>,
         ciphertext: C,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::DecryptError>> + Send + '_>>
@@ -83,7 +83,7 @@ impl Envelope for InMemory {
     fn encrypt_dek<'a, A, P>(
         &'a self,
         aad: Aad<A>,
-        cleartext: P,
+        plaintext: P,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::EncryptError>> + Send + '_>>
     where
         A: 'static + AsRef<[u8]> + Send + Sync,
@@ -97,7 +97,7 @@ impl Envelope for InMemory {
                 &nonce,
                 Payload {
                     aad: aad.as_ref(),
-                    msg: cleartext.as_ref(),
+                    msg: plaintext.as_ref(),
                 },
             )?;
             Ok(ciphertext)
@@ -118,21 +118,21 @@ impl Envelope for InMemory {
         let cipher = ChaCha20Poly1305::new(&self.key.into());
         let aad = aad.as_ref().to_vec();
         Box::pin(async move {
-            let cleartext = cipher.decrypt(
+            let plaintext = cipher.decrypt(
                 &nonce,
                 Payload {
                     aad: aad.as_ref(),
                     msg: ciphertext.as_ref(),
                 },
             )?;
-            Ok(cleartext)
+            Ok(plaintext)
         })
     }
 
     fn encrypt_dek_sync<A, P>(
         &self,
         aad: Aad<A>,
-        cleartext: P,
+        plaintext: P,
     ) -> Result<Vec<u8>, Self::EncryptError>
     where
         A: AsRef<[u8]>,
@@ -145,7 +145,7 @@ impl Envelope for InMemory {
             &nonce,
             Payload {
                 aad: aad.as_ref(),
-                msg: cleartext.as_ref(),
+                msg: plaintext.as_ref(),
             },
         )?;
         Ok(ciphertext)
@@ -163,14 +163,14 @@ impl Envelope for InMemory {
         let nonce = self.nonce;
         let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
         let cipher = ChaCha20Poly1305::new(&self.key.into());
-        let cleartext = cipher.decrypt(
+        let plaintext = cipher.decrypt(
             &nonce,
             Payload {
                 aad: aad.as_ref(),
                 msg: ciphertext.as_ref(),
             },
         )?;
-        Ok(cleartext)
+        Ok(plaintext)
     }
 }
 

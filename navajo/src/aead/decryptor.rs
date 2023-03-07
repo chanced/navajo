@@ -547,7 +547,7 @@ mod tests {
         for chunk in decryptor.finalize(Aad(aad)).unwrap() {
             cleartext_chunks.push(chunk);
         }
-        let cleartext = cleartext_chunks.concat();
-        assert_eq!(cleartext, data);
+        let plaintext = cleartext_chunks.concat();
+        assert_eq!(plaintext, data);
     }
 }

@@ -234,8 +234,8 @@ where
                                 *this.done = true;
                                 return Ready(Some(Err(e)));
                             }
-                            Ok(Some(cleartext)) => {
-                                this.queue.push_back(cleartext);
+                            Ok(Some(plaintext)) => {
+                                this.queue.push_back(plaintext);
                                 this.decryptor.replace(decryptor);
                             }
                             Ok(None) => {
@@ -305,11 +305,11 @@ mod tests {
 
         println!("ciphertext: {}", ciphertext.len());
 
-        let cleartext: Vec<u8> = stream::iter(ciphertext.chunks(40).map(Vec::from))
+        let plaintext: Vec<u8> = stream::iter(ciphertext.chunks(40).map(Vec::from))
             .decrypt(Aad(Vec::from(&b"additional data"[..])), aead)
             .try_concat()
             .await
             .unwrap();
-        assert_eq!(cleartext, data);
+        assert_eq!(plaintext, data);
     }
 }

@@ -2,7 +2,7 @@
 
 Deterministic AEAD provides both confidentiality and integrity protection for
 messages, along with the ability to authenticate associated data. Encrypting
-the same cleartext with a given key will always result in the same ciphertext.
+the same plaintext with a given key will always result in the same ciphertext.
 
 This determnistic nature is useful in key wraps and in situations where indexing
 and querying encrypted data is desired. On the other hand, it means that an

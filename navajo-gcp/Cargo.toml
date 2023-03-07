@@ -12,3 +12,10 @@ navajo = { path = "../navajo" }
 tokio = { version = "1.26", features = ["full"] }
 secret-vault-value = { version = "0.3" }
 async-trait = "0.1"
+gcloud-sdk = { version = "0.19", features = ["google-cloud-kms-v1"] }
+tonic = { version = "0.8", features = ["tls"] }
+prost = "0.11"
+prost-types = "0.11"
+url = "2.3"
+base64 = "0.21"
+crc32c = "0.6"

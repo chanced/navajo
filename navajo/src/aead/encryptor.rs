@@ -87,12 +87,12 @@ where
             rand,
         }
     }
-    pub fn update<A, C>(&mut self, aad: Aad<A>, cleartext: C) -> Result<(), EncryptError>
+    pub fn update<A, C>(&mut self, aad: Aad<A>, plaintext: C) -> Result<(), EncryptError>
     where
         A: AsRef<[u8]>,
         C: AsRef<[u8]>,
     {
-        self.buf.extend_from_slice(cleartext.as_ref());
+        self.buf.extend_from_slice(plaintext.as_ref());
         while let Some(buf) = self.try_encrypt_seg(aad.as_ref())? {
             self.segments.push_back(buf);
         }

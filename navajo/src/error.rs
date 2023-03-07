@@ -117,7 +117,7 @@ impl fmt::Display for EncryptError {
         match self {
             Self::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
             Self::SegmentLimitExceeded => fmt::Display::fmt(&SegmentLimitExceededError, f),
-            Self::EmptyCleartext => write!(f, "cleartext is empty"),
+            Self::EmptyCleartext => write!(f, "plaintext is empty"),
         }
     }
 }

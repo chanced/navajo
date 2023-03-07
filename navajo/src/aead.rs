@@ -61,26 +61,26 @@ pub struct Aead {
 }
 
 impl Aead {
-    pub fn encrypt_in_place<A, T>(&self, aad: Aad<A>, cleartext: &mut T) -> Result<(), EncryptError>
+    pub fn encrypt_in_place<A, T>(&self, aad: Aad<A>, plaintext: &mut T) -> Result<(), EncryptError>
     where
         A: AsRef<[u8]>,
         T: Buffer,
     {
-        let encryptor = Encryptor::new(self, None, mem::take(cleartext));
+        let encryptor = Encryptor::new(self, None, mem::take(plaintext));
         let result = encryptor
             .finalize(aad)?
             .next()
             .ok_or(EncryptError::Unspecified)?;
-        *cleartext = result;
+        *plaintext = result;
         Ok(())
     }
     /// encrypt...
-    pub fn encrypt<A, T>(&self, aad: Aad<A>, cleartext: T) -> Result<Vec<u8>, EncryptError>
+    pub fn encrypt<A, T>(&self, aad: Aad<A>, plaintext: T) -> Result<Vec<u8>, EncryptError>
     where
         A: AsRef<[u8]>,
         T: AsRef<[u8]>,
     {
-        let encryptor = Encryptor::new(self, None, cleartext.as_ref().to_vec());
+        let encryptor = Encryptor::new(self, None, plaintext.as_ref().to_vec());
         let result = encryptor
             .finalize(aad)?
             .next()
@@ -308,7 +308,7 @@ impl Envelope for Aead {
     fn encrypt_dek<'a, A, P>(
         &'a self,
         aad: Aad<A>,
-        cleartext: P,
+        plaintext: P,
     ) -> core::pin::Pin<
         Box<dyn futures::Future<Output = Result<Vec<u8>, Self::EncryptError>> + Send + '_>,
     >
@@ -316,19 +316,19 @@ impl Envelope for Aead {
         A: 'static + AsRef<[u8]> + Send + Sync,
         P: 'static + AsRef<[u8]> + Send + Sync,
     {
-        Box::pin(async move { self.encrypt(aad, cleartext) })
+        Box::pin(async move { self.encrypt(aad, plaintext) })
     }
 
     fn encrypt_dek_sync<A, P>(
         &self,
         aad: Aad<A>,
-        cleartext: P,
+        plaintext: P,
     ) -> Result<Vec<u8>, Self::EncryptError>
     where
         A: AsRef<[u8]>,
         P: AsRef<[u8]>,
     {
-        self.encrypt(aad, cleartext)
+        self.encrypt(aad, plaintext)
     }
 
     fn decrypt_dek<'a, A, B>(
@@ -372,23 +372,23 @@ mod tests {
     use super::*;
 
     #[quickcheck]
-    fn encrypt_decrypt(mut cleartext: Vec<u8>, aad: Vec<u8>) -> bool {
+    fn encrypt_decrypt(mut plaintext: Vec<u8>, aad: Vec<u8>) -> bool {
         for algorithm in Algorithm::iter() {
-            let src = cleartext.clone();
+            let src = plaintext.clone();
             let aead = Aead::new(algorithm, None);
-            let result = aead.encrypt_in_place(Aad(&aad), &mut cleartext);
-            if cleartext.is_empty() {
+            let result = aead.encrypt_in_place(Aad(&aad), &mut plaintext);
+            if plaintext.is_empty() {
                 if result.is_ok() {
                     return false;
                 } else {
                     continue;
                 }
             }
-            if let Err(e) = aead.decrypt_in_place(Aad(&aad), &mut cleartext) {
+            if let Err(e) = aead.decrypt_in_place(Aad(&aad), &mut plaintext) {
                 println!("{e:?}");
                 return false;
             }
-            if src != cleartext {
+            if src != plaintext {
                 return false;
             }
         }

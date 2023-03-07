@@ -12,7 +12,20 @@ impl Aad<[u8; 0]> {
         Self([0u8; 0])
     }
 }
-
+impl<A> Aad<A>
+where
+    A: AsRef<[u8]>,
+{
+    pub fn new(aad: A) -> Self {
+        Self(aad)
+    }
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.0.as_ref().to_vec()
+    }
+}
 impl<A> From<A> for Aad<A>
 where
     A: AsRef<[u8]>,
