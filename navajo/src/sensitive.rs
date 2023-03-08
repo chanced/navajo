@@ -9,13 +9,13 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 pub struct Bytes(#[serde(with = "b64::standard")] Arc<[u8]>);
 
 impl Bytes {
-    pub(crate) fn new(bytes: &[u8]) -> Self {
+    pub fn new(bytes: &[u8]) -> Self {
         Self(Arc::from(bytes))
     }
-    pub(crate) fn as_slice(&self) -> &[u8] {
+    pub fn as_slice(&self) -> &[u8] {
         &self.0
     }
-    pub(crate) fn as_vec(self) -> Vec<u8> {
+    pub fn as_vec(self) -> Vec<u8> {
         self.0.as_ref().into()
     }
 }
