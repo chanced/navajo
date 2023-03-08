@@ -6,7 +6,6 @@ use gcloud_sdk::proto_ext::kms::EncryptRequest;
 use gcloud_sdk::*;
 use navajo::Envelope;
 use secret_vault_value::SecretValue;
-use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::sync::Arc;
 use tonic::metadata::MetadataValue;
@@ -210,6 +209,12 @@ pub mod sync {
         }
     }
 
+    impl Default for GcpKms {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     #[derive(Clone, Debug)]
     pub struct GcpKmsKey {
         key: Arc<super::GcpKmsKey>,
@@ -244,11 +249,10 @@ pub mod sync {
             A: AsRef<[u8]>,
             C: AsRef<[u8]>,
         {
-            use tokio::runtime::Builder;
-            let runtime = Builder::new_current_thread().enable_io().build().unwrap();
             let aad = navajo::Aad(aad.as_ref().to_vec());
             let ciphertext = ciphertext.as_ref().to_vec();
-            runtime.block_on(async move { self.key.decrypt_dek(aad, ciphertext).await })
+            self.runtime
+                .block_on(async move { self.key.decrypt_dek(aad, ciphertext).await })
         }
     }
 }
