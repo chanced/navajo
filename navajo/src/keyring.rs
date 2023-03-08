@@ -464,13 +464,13 @@ where
     pub(crate) fn seal_sync<A, E>(&self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
     where
         A: AsRef<[u8]>,
-        E: Envelope,
+        E: crate::envelope::sync::Envelope,
     {
         let (locally_serialized_and_sealed, cipher_and_nonce) =
             self.serialize_and_seal_locally(aad.as_ref())?;
 
         let sealed_cipher_and_nonce = envelope
-            .encrypt_dek_sync(aad, &cipher_and_nonce)
+            .encrypt_dek(aad, &cipher_and_nonce)
             .map_err(|e| e.to_string())?;
 
         self.encode_serialized(
@@ -510,12 +510,12 @@ pub(crate) fn open_keyring_value_sync<A, S, E>(
 where
     A: AsRef<[u8]>,
     S: AsRef<[u8]>,
-    E: Envelope,
+    E: crate::envelope::sync::Envelope,
 {
     let sealed = sealed.as_ref();
     let sealed_cipher_and_nonce = read_sealed_cipher_and_nonce(sealed)?;
     let key = envelope
-        .decrypt_dek_sync(Aad(aad.as_ref()), sealed_cipher_and_nonce.clone())
+        .decrypt_dek(Aad(aad.as_ref()), sealed_cipher_and_nonce.clone())
         .map_err(|e| e.to_string())?;
 
     let value = open_and_deserialize(key, aad, sealed, &sealed_cipher_and_nonce)?;

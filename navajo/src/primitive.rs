@@ -126,10 +126,10 @@ impl Primitive {
             Ok(sealed)
         }
     }
-    pub fn seal_sync<A, E>(&self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
+    pub fn seal_sync<'a, A, E>(&'a self, aad: Aad<A>, envelope: &'a E) -> Result<Vec<u8>, SealError>
     where
         A: AsRef<[u8]>,
-        E: Envelope + 'static,
+        E: 'static + crate::envelope::sync::Envelope,
     {
         if is_cleartext(envelope) {
             self.serialize_cleartext()
@@ -170,7 +170,7 @@ impl Primitive {
     where
         A: AsRef<[u8]>,
         C: AsRef<[u8]>,
-        E: Envelope + 'static,
+        E: 'static + crate::envelope::sync::Envelope,
     {
         let sealed = ciphertext.as_ref();
         if sealed.is_empty() {

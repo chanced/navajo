@@ -106,7 +106,7 @@ impl Mac {
     where
         A: AsRef<[u8]>,
         C: AsRef<[u8]>,
-        E: Envelope + 'static,
+        E: 'static + crate::envelope::sync::Envelope,
     {
         let primitive = Primitive::open_sync(aad, ciphertext, envelope)?;
         if let Some(mac) = primitive.mac() {
@@ -170,7 +170,7 @@ impl Mac {
     pub fn seal_sync<A, E>(mac: &Self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
     where
         A: AsRef<[u8]>,
-        E: Envelope,
+        E: crate::envelope::sync::Envelope,
     {
         Keyring::seal_sync(mac.keyring(), aad, envelope)
     }

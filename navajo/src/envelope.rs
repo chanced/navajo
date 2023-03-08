@@ -7,7 +7,7 @@ use chacha20poly1305::{aead::Payload, ChaCha20Poly1305, KeyInit};
 
 use futures::Future;
 
-use crate::{error::Error, Aad};
+use crate::{envelope, error::Error, Aad};
 #[allow(clippy::type_complexity)]
 pub trait Envelope {
     type EncryptError: Error + Send + Sync;
@@ -21,15 +21,6 @@ pub trait Envelope {
         A: 'static + AsRef<[u8]> + Send + Sync,
         P: 'static + AsRef<[u8]> + Send + Sync;
 
-    fn encrypt_dek_sync<A, P>(
-        &self,
-        aad: Aad<A>,
-        plaintext: P,
-    ) -> Result<Vec<u8>, Self::EncryptError>
-    where
-        A: AsRef<[u8]>,
-        P: AsRef<[u8]>;
-
     fn decrypt_dek<A, C>(
         &self,
         aad: Aad<A>,
@@ -38,15 +29,31 @@ pub trait Envelope {
     where
         A: 'static + AsRef<[u8]> + Send + Sync,
         C: 'static + AsRef<[u8]> + Send + Sync;
+}
 
-    fn decrypt_dek_sync<A, C>(
-        &self,
-        aad: Aad<A>,
-        ciphertext: C,
-    ) -> Result<Vec<u8>, Self::DecryptError>
-    where
-        A: AsRef<[u8]>,
-        C: AsRef<[u8]>;
+pub mod sync {
+    pub trait Envelope {
+        type EncryptError: super::Error + Send + Sync;
+        type DecryptError: super::Error + Send + Sync;
+
+        fn encrypt_dek<A, P>(
+            &self,
+            aad: super::Aad<A>,
+            plaintext: P,
+        ) -> Result<Vec<u8>, Self::EncryptError>
+        where
+            A: AsRef<[u8]>,
+            P: AsRef<[u8]>;
+
+        fn decrypt_dek<A, C>(
+            &self,
+            aad: super::Aad<A>,
+            ciphertext: C,
+        ) -> Result<Vec<u8>, Self::DecryptError>
+        where
+            A: AsRef<[u8]>,
+            C: AsRef<[u8]>;
+    }
 }
 
 /// `InMemory` is an in-memory [`Envelope`] implementation that is not meant to be used outside of testing.
@@ -128,12 +135,11 @@ impl Envelope for InMemory {
             Ok(plaintext)
         })
     }
-
-    fn encrypt_dek_sync<A, P>(
-        &self,
-        aad: Aad<A>,
-        plaintext: P,
-    ) -> Result<Vec<u8>, Self::EncryptError>
+}
+impl envelope::sync::Envelope for InMemory {
+    type EncryptError = chacha20poly1305::Error;
+    type DecryptError = chacha20poly1305::Error;
+    fn encrypt_dek<A, P>(&self, aad: Aad<A>, plaintext: P) -> Result<Vec<u8>, Self::EncryptError>
     where
         A: AsRef<[u8]>,
         P: AsRef<[u8]>,
@@ -151,11 +157,7 @@ impl Envelope for InMemory {
         Ok(ciphertext)
     }
 
-    fn decrypt_dek_sync<A, C>(
-        &self,
-        aad: Aad<A>,
-        ciphertext: C,
-    ) -> Result<Vec<u8>, Self::DecryptError>
+    fn decrypt_dek<A, C>(&self, aad: Aad<A>, ciphertext: C) -> Result<Vec<u8>, Self::DecryptError>
     where
         A: AsRef<[u8]>,
         C: AsRef<[u8]>,
@@ -208,12 +210,12 @@ impl Envelope for CleartextJson {
     {
         Box::pin(async move { Ok(vec![]) })
     }
+}
 
-    fn encrypt_dek_sync<A, P>(
-        &self,
-        _aad: Aad<A>,
-        _plaintext: P,
-    ) -> Result<Vec<u8>, Self::EncryptError>
+impl envelope::sync::Envelope for CleartextJson {
+    type EncryptError = serde_json::Error;
+    type DecryptError = serde_json::Error;
+    fn encrypt_dek<A, P>(&self, _aad: Aad<A>, _plaintext: P) -> Result<Vec<u8>, Self::EncryptError>
     where
         A: AsRef<[u8]>,
         P: AsRef<[u8]>,
@@ -221,11 +223,7 @@ impl Envelope for CleartextJson {
         Ok(vec![])
     }
 
-    fn decrypt_dek_sync<A, C>(
-        &self,
-        _aad: Aad<A>,
-        _ciphertext: C,
-    ) -> Result<Vec<u8>, Self::DecryptError>
+    fn decrypt_dek<A, C>(&self, _aad: Aad<A>, _ciphertext: C) -> Result<Vec<u8>, Self::DecryptError>
     where
         A: AsRef<[u8]>,
         C: AsRef<[u8]>,
@@ -233,8 +231,7 @@ impl Envelope for CleartextJson {
         Ok(vec![])
     }
 }
-
-pub(crate) fn is_cleartext<'a, T: Envelope + Any + 'a>(envelope: &T) -> bool {
+pub(crate) fn is_cleartext<'a, T: Any + 'a>(envelope: &T) -> bool {
     let envelope = envelope as &dyn Any;
     envelope.downcast_ref::<CleartextJson>().is_some()
 }

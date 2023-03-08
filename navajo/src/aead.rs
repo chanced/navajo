@@ -14,6 +14,7 @@ mod size;
 mod stream;
 mod try_stream;
 use crate::{
+    envelope,
     error::{EncryptError, KeyNotFoundError, RemoveKeyError},
     keyring::Keyring,
     rand::Rng,
@@ -296,7 +297,6 @@ impl AsMut<Aead> for Aead {
 
 impl Envelope for Aead {
     type EncryptError = crate::error::EncryptError;
-
     type DecryptError = crate::error::DecryptError;
 
     fn encrypt_dek<'a, A, P>(
@@ -313,18 +313,6 @@ impl Envelope for Aead {
         Box::pin(async move { self.encrypt(aad, plaintext) })
     }
 
-    fn encrypt_dek_sync<A, P>(
-        &self,
-        aad: Aad<A>,
-        plaintext: P,
-    ) -> Result<Vec<u8>, Self::EncryptError>
-    where
-        A: AsRef<[u8]>,
-        P: AsRef<[u8]>,
-    {
-        self.encrypt(aad, plaintext)
-    }
-
     fn decrypt_dek<'a, A, B>(
         &'a self,
         aad: Aad<A>,
@@ -338,12 +326,18 @@ impl Envelope for Aead {
     {
         Box::pin(async move { self.decrypt(aad, ciphertext) })
     }
-
-    fn decrypt_dek_sync<A, C>(
-        &self,
-        aad: Aad<A>,
-        ciphertext: C,
-    ) -> Result<Vec<u8>, Self::DecryptError>
+}
+impl envelope::sync::Envelope for Aead {
+    type EncryptError = crate::error::EncryptError;
+    type DecryptError = crate::error::DecryptError;
+    fn encrypt_dek<A, P>(&self, aad: Aad<A>, plaintext: P) -> Result<Vec<u8>, Self::EncryptError>
+    where
+        A: AsRef<[u8]>,
+        P: AsRef<[u8]>,
+    {
+        self.encrypt(aad, plaintext)
+    }
+    fn decrypt_dek<A, C>(&self, aad: Aad<A>, ciphertext: C) -> Result<Vec<u8>, Self::DecryptError>
     where
         A: AsRef<[u8]>,
         C: AsRef<[u8]>,

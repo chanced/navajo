@@ -1,6 +1,6 @@
-mod kms;
-pub use kms::{GcpKms, KmsError};
+mod gcp_kms;
+pub use gcp_kms::{sync, GcpKms, GcpKmsError};
 
-mod secret_store;
+mod gcp_secret_store;
 
-pub use secret_store::GcpSecretStore;
+pub use gcp_secret_store::GcpSecretStore;
