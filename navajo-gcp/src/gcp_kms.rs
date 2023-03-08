@@ -50,14 +50,12 @@ impl From<gcloud_sdk::error::Error> for GcpKmsError {
 #[derive(Clone)]
 pub struct GcpKms {
     client: Arc<tokio::sync::OnceCell<GoogleApi<KeyManagementServiceClient<GoogleAuthMiddleware>>>>,
-    x: HashMap<[u8; 5], String>,
 }
 
 impl GcpKms {
     pub fn new() -> Self {
         Self {
             client: Default::default(),
-            x: Default::default(),
         }
     }
     pub fn key<N: ToString>(&self, name: N) -> GcpKmsKey {
