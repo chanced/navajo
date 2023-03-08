@@ -302,6 +302,6 @@ mod tests {
         }
         assert_eq!(value.get("kind").unwrap(), "MAC");
 
-        let v = Mac::open(Aad::empty(), result, &envelope).await.unwrap();
+        let _v = Mac::open(Aad::empty(), result, &envelope).await.unwrap();
     }
 }

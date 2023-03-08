@@ -132,7 +132,7 @@ mod tests {
         let expected =
             hex::decode("20fd9496199a45e414bdd82ce531ec681200ce459ab4a85239cc6076dc5de225")
                 .unwrap();
-        let mac = crate::mac::Mac::new_external_key(&key, Sha256, None, None).unwrap();
+        let mac = crate::mac::Mac::new_external_key(key, Sha256, None, None).unwrap();
 
         let mut hasher = Computer::new(&mac);
         hasher.update(b"message");
@@ -143,7 +143,7 @@ mod tests {
     fn test_chunked() {
         let key = hex::decode("52fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649")
             .unwrap();
-        let mut mac = crate::mac::Mac::new_external_key(&key, Sha256, None, None).unwrap();
+        let mut mac = crate::mac::Mac::new_external_key(key, Sha256, None, None).unwrap();
 
         let second_key =
             hex::decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")

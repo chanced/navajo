@@ -1,10 +1,9 @@
 use alloc::sync::Arc;
-use rand_core::CryptoRng;
+
 
 use crate::{
     error::{KeyError, VerificationError},
-    rand::is_zero,
-    sensitive, Rng, SystemRng,
+    sensitive,
 };
 
 use super::{material::KeyPair, Algorithm};
@@ -73,7 +72,7 @@ enum Ecdsa {
     },
 }
 impl Ecdsa {
-    fn from_key_pair(alg: Algorithm, keys: &KeyPair) -> Result<Self, KeyError> {
+    fn from_key_pair(_alg: Algorithm, _keys: &KeyPair) -> Result<Self, KeyError> {
         #[cfg(feature = "ring")]
         {
             // let signing_key = ring::signature::EcdsaKeyPair::from_private_key_and_public_key(
@@ -103,11 +102,11 @@ impl Ecdsa {
         }
     }
 
-    fn sign(&self, data: &[u8]) -> Result<Vec<u8>, KeyError> {
+    fn sign(&self, _data: &[u8]) -> Result<Vec<u8>, KeyError> {
         todo!()
     }
 
-    fn verify(&self, data: &[u8]) -> Result<(), VerificationError> {
+    fn verify(&self, _data: &[u8]) -> Result<(), VerificationError> {
         todo!()
     }
 }
@@ -132,12 +131,12 @@ impl Ed25519 {
                 &key_pair.private,
                 &key_pair.public,
             )?;
-            let signing_key = Arc::new(signing_key);
+            let _signing_key = Arc::new(signing_key);
             let verifying_key = ring::signature::UnparsedPublicKey::new(
                 &ring::signature::ED25519,
                 key_pair.public.clone(),
             );
-            let verifying_key = Arc::new(verifying_key);
+            let _verifying_key = Arc::new(verifying_key);
             todo!()
         }
         #[cfg(not(feature = "ring"))]
@@ -150,7 +149,7 @@ impl Ed25519 {
             return Ok(result);
         }
     }
-    fn verify(&self, data: &[u8]) -> Result<(), VerificationError> {
+    fn verify(&self, _data: &[u8]) -> Result<(), VerificationError> {
         todo!()
     }
 }
@@ -172,11 +171,11 @@ enum Rsa {
 }
 
 impl Rsa {
-    fn from_key_pair(algorithm: Algorithm, keys: &KeyPair) -> Result<Self, KeyError> {
+    fn from_key_pair(_algorithm: Algorithm, _keys: &KeyPair) -> Result<Self, KeyError> {
         todo!()
     }
 
-    fn sign(&self, data: &[u8]) -> Result<Vec<u8>, KeyError> {
+    fn sign(&self, _data: &[u8]) -> Result<Vec<u8>, KeyError> {
         #[cfg(feature = "ring")]
         {
             todo!()
@@ -192,7 +191,7 @@ impl Rsa {
         }
     }
 
-    fn verify(&self, data: &[u8]) -> Result<(), VerificationError> {
+    fn verify(&self, _data: &[u8]) -> Result<(), VerificationError> {
         todo!()
     }
 }

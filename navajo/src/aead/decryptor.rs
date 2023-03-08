@@ -396,7 +396,7 @@ mod tests {
         let mut seed = vec![0u8; aead.primary_key().algorithm.key_len()];
         rng.fill(&mut seed);
         // rand::fill(&mut seed);
-        let mut nonce = vec![0u8; aead.primary_key().algorithm.nonce_prefix_len()];
+        let nonce = vec![0u8; aead.primary_key().algorithm.nonce_prefix_len()];
         rng.fill(&mut seed);
         let buf = [
             &method.to_be_bytes()[..],

@@ -630,7 +630,7 @@ mod tests {
     async fn test_seal_and_open() {
         use crate::rand::SystemRng;
 
-        let rand = SystemRng::new(); // TODO: Replace with MockRandom.
+        let _rand = SystemRng::new(); // TODO: Replace with MockRandom.
 
         let material = Material::new(Algorithm::Waffles);
         let mut keyring = Keyring::new(&SystemRng, material, Origin::Navajo, Some("test".into()));

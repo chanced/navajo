@@ -1,4 +1,4 @@
-use core::{fmt::Display, pin::Pin};
+use core::{pin::Pin};
 
 use futures::Future;
 

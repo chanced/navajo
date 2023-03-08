@@ -31,7 +31,7 @@ impl KeyMaterial for Material {
     }
 }
 impl Material {
-    pub(super) fn new(algorithm: Algorithm, pub_id: String) -> Self {
+    pub(super) fn new(_algorithm: Algorithm, _pub_id: String) -> Self {
         todo!()
     }
 }

@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use alloc::collections::VecDeque;
+
 
 use crate::{Aad, Aead};
 
@@ -50,7 +50,7 @@ where
     pub fn finalize(self) -> Result<usize, std::io::Error> {
         let EncryptWriter {
             encryptor,
-            mut writer,
+            writer,
             mut counter,
             aad,
         } = self;

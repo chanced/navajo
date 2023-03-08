@@ -521,7 +521,7 @@ impl Mac {
 
     pub fn add_external_key_with_rng<R, K>(
         &mut self,
-        rand: R,
+        rng: &R,
         key: K,
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
@@ -531,14 +531,7 @@ impl Mac {
         K: AsRef<[u8]>,
         R: Rng,
     {
-        self.create_key(
-            &SystemRng,
-            algorithm,
-            key.as_ref(),
-            prefix,
-            Origin::External,
-            meta,
-        )
+        self.create_key(rng, algorithm, key.as_ref(), prefix, Origin::External, meta)
     }
 
     /// Returns [`MacKeyInfo`] for the primary key.

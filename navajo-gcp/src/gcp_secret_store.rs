@@ -4,12 +4,12 @@ use gcloud_sdk::{
     google::cloud::secretmanager::v1::secret_manager_service_client::SecretManagerServiceClient,
     GoogleApi, GoogleAuthMiddleware,
 };
-use navajo::secret_store::SecretStore;
+
 
 #[derive(Debug, Clone)]
 pub enum SecretStoreError {}
 impl Display for SecretStoreError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         todo!()
     }
 }
@@ -20,7 +20,7 @@ pub struct GcpSecretStore {
 }
 
 impl GcpSecretStore {
-    pub async fn new<N>(name: N) -> Result<Self, gcloud_sdk::error::Error>
+    pub async fn new<N>(_name: N) -> Result<Self, gcloud_sdk::error::Error>
     where
         N: ToString,
     {

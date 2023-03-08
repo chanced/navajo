@@ -159,10 +159,10 @@ impl Ecdsa {
             );
             let signing_key = Arc::new(signing_key);
             let verifying_key = Arc::new(verifying_key);
-            return Ok(Self {
+            Ok(Self {
                 signing_key,
                 verifying_key,
-            });
+            })
         }
         #[cfg(not(feature = "ring"))]
         {
@@ -182,7 +182,7 @@ impl Ecdsa {
         }
     }
 
-    fn sign(&self, data: &[u8]) -> Result<Vec<u8>, KeyError> {
+    fn sign(&self, _data: &[u8]) -> Result<Vec<u8>, KeyError> {
         todo!()
     }
 }
@@ -217,10 +217,10 @@ impl Ed25519 {
                 key_pair.public.clone(),
             );
             let verifying_key = Arc::new(verifying_key);
-            return Ok(Self {
+            Ok(Self {
                 signing_key,
                 verifying_key,
-            });
+            })
         }
         #[cfg(not(feature = "ring"))]
         {
@@ -247,7 +247,7 @@ impl Ed25519 {
         }
     }
 
-    fn sign(&self, data: &[u8]) -> Result<Vec<u8>, KeyError> {
+    fn sign(&self, _data: &[u8]) -> Result<Vec<u8>, KeyError> {
         todo!()
     }
 }
@@ -269,7 +269,7 @@ enum Rsa {
 }
 
 impl Rsa {
-    fn generate_key_pair<G>(mut rng: G, algorithm: Algorithm) -> KeyPair
+    fn generate_key_pair<G>(mut rng: G, _algorithm: Algorithm) -> KeyPair
     where
         G: Rng + CryptoRng + CryptoRngCore,
     {
@@ -289,11 +289,11 @@ impl Rsa {
         let public = sensitive::Bytes::new(public_key.to_public_key_der().unwrap().as_bytes());
         KeyPair { private, public }
     }
-    fn from_key_pair(algorithm: Algorithm, keys: &KeyPair) -> Result<Self, KeyError> {
+    fn from_key_pair(_algorithm: Algorithm, _keys: &KeyPair) -> Result<Self, KeyError> {
         todo!()
     }
 
-    fn sign(&self, data: &[u8]) -> Result<Vec<u8>, KeyError> {
+    fn sign(&self, _data: &[u8]) -> Result<Vec<u8>, KeyError> {
         #[cfg(feature = "ring")]
         {
             todo!()
@@ -318,6 +318,6 @@ mod tests {
     #[test]
     fn test_generate() {
         let rng = crate::rand::SystemRng;
-        let key = SigningKey::generate(&rng, Algorithm::Es256, None);
+        let _key = SigningKey::generate(&rng, Algorithm::Es256, None);
     }
 }

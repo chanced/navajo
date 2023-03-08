@@ -6,10 +6,10 @@ mod material;
 pub use algorithm::Algorithm;
 pub(crate) use material::Material;
 
-use serde_json::Value;
+
 use zeroize::ZeroizeOnDrop;
 
-use crate::{key::KeyMaterial, keyring::Keyring, sensitive};
+use crate::{keyring::Keyring};
 
 #[derive(Clone, Debug, ZeroizeOnDrop)]
 pub struct Daead {

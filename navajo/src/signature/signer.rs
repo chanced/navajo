@@ -16,9 +16,9 @@ impl Signer {
     }
 
     pub fn new(
-        algorithm: Algorithm,
-        pub_id: Option<String>,
-        meta: Option<serde_json::Value>,
+        _algorithm: Algorithm,
+        _pub_id: Option<String>,
+        _meta: Option<serde_json::Value>,
     ) -> Self {
         todo!()
         // let material = Material::new(algorithm)

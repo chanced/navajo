@@ -2,7 +2,6 @@ use super::entry::Entry;
 use crate::{
     constant_time::verify_slices_are_equal,
     error::{MacVerificationError, TruncationError},
-    Mac,
 };
 use alloc::{sync::Arc, vec::Vec};
 

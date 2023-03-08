@@ -1,6 +1,6 @@
 use crate::{key::Key, mac::output};
 use alloc::vec::Vec;
-use sha2::Sha256;
+
 
 use super::{
     entry::Entry,
