@@ -14,9 +14,8 @@ pub trait SecretStore {
 
 pub mod sync {
     use crate::{error::Error, sensitive};
-
     pub trait SecretStore {
         type Error: Error + Send + Sync;
-        fn get_sync<N: ToString>(&self, name: N) -> Result<sensitive::Bytes, Self::Error>;
+        fn get<N: ToString>(&self, name: N) -> Result<sensitive::Bytes, Self::Error>;
     }
 }

@@ -6,10 +6,11 @@ license = "MIT OR Apache-2.0"
 authors = ["Chance Dinkins"]
 description = "Navajo CLI"
 
-
-[dependencies]
-chacha20poly1305 = "0.10"
-rand = "*"
-
 [[bin]]
 name = "navajo"
+
+[dependencies]
+strum = { version = "0.24", features = ["derive", "strum_macros"] }
+navajo = { path = "../navajo" }
+clap = { version = "4.1", features = ["derive", "wrap_help"] }
+tokio = { version = "1.26", features = ["full"] }

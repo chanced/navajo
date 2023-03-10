@@ -1,6 +1,10 @@
-mod gcp_kms;
-pub use gcp_kms::{sync, Kms, KmsError};
+mod kms;
+pub use kms::{Kms, KmsError};
 
-mod gcp_secret_manager;
+mod secret_manager;
 
-pub use gcp_secret_manager::SecretManager;
+pub use secret_manager::SecretManager;
+
+pub mod sync {
+    pub use super::kms::sync::{Key, Kms};
+}

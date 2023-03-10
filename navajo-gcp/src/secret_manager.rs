@@ -5,7 +5,7 @@ use gcloud_sdk::{
     },
     GoogleApi, GoogleAuthMiddleware,
 };
-use navajo::sensitive;
+use navajo::{secret_store::SecretStore, sensitive};
 use secret_vault_value::SecretValue;
 use std::{fmt::Display, ops::Deref, sync::Arc};
 use tokio::sync::OnceCell;
@@ -14,22 +14,20 @@ use tonic::{Request, Status};
 #[derive(Clone)]
 pub struct SecretManager {
     client: Arc<OnceCell<GoogleApi<SecretManagerServiceClient<GoogleAuthMiddleware>>>>,
-    project_id: String,
 }
 
 impl SecretManager {
     /// Creates a new SecretManager instance.
-    pub fn new<N: ToString>(project_id: N) -> Self {
+    pub fn new() -> Self {
         Self {
-            project_id: project_id.to_string(),
             client: Default::default(),
         }
     }
-    pub fn project_id(&self) -> &str {
-        &self.project_id
-    }
 
-    /// Attempts to retrieve the Secret from GCP.
+    /// Attempts to retrieve the Secret from GCP. The name must be in the format:
+    /// ```plaintext
+    /// projects/*/secrets/*
+    /// ```
     ///
     /// # Errors
     /// Returns a `SecretManagerError` if the Secret cannot be retrieved from GCP.
@@ -40,7 +38,7 @@ impl SecretManager {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let secret_manager = SecretManager::new("my-project");
+    ///     let secret_manager = SecretManager::new();
     ///     let secret = secret_manager.secret("my-secret").await?;
     ///     let secret_version = secret.latest().await?;
     ///     let secret_value = secret_version.value();
@@ -48,7 +46,6 @@ impl SecretManager {
     ///
     pub async fn secret<N: ToString>(&self, name: N) -> Result<Secret, SecretManagerError> {
         let name = name.to_string();
-        let name = format!("projects/{}/secrets/{name}", self.project_id());
         let secret = self
             .try_get_client()
             .await?
@@ -68,6 +65,59 @@ impl SecretManager {
     }
 }
 
+impl Default for SecretManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SecretStore for SecretManager {
+    type Error = SecretManagerError;
+    fn get<N: ToString>(
+        &self,
+        name: N,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<sensitive::Bytes, Self::Error>> + Send + '_>,
+    > {
+        let mut name = name.to_string();
+        let parts: Vec<String> = name.split('/').map(|s| s.to_string()).collect();
+        let mut version = "latest".to_string();
+        if parts.len() > 4 {
+            name = parts[..4].join("/");
+            if parts.len() > 5 {
+                version = parts[5].clone();
+            }
+        }
+        Box::pin(async move {
+            let secret = self.secret(name).await?;
+            let secret_version = secret.version(version).await?;
+            Ok(sensitive::Bytes::new(
+                secret_version
+                    .value()
+                    .map(|v| v.as_sensitive_bytes())
+                    .unwrap_or(&[]),
+            ))
+        })
+    }
+}
+
+pub mod sync {
+    use std::sync::Arc;
+
+    pub struct SecretManger {
+        inner: super::SecretManager,
+        runtime: Arc<tokio::runtime::Runtime>,
+    }
+    impl SecretManger {
+        pub fn new() -> Self {
+            Self {
+                inner: super::SecretManager::new(),
+                runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Secret {
     inner: gcloud_sdk::google::cloud::secretmanager::v1::Secret,
@@ -79,13 +129,13 @@ impl Secret {
     }
 
     /// # Example
-    /// ```
+    /// ```no_run
     /// use navajo_gcp::gcp_secret_manager::SecretManager;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let secret_manager = SecretManager::new("my-project");
-    ///     let secret = secret_manager.secret("my-secret").await?;
+    ///     let secret_manager = SecretManager::new();
+    ///     let secret = secret_manager.secret("projects/my-project/secrets/my-secret").await?;
     ///     let secret_version = secret.version("latest").await?;
     ///     let secret_value = secret_version.value();
     /// }
@@ -166,13 +216,22 @@ impl From<gcloud_sdk::error::Error> for SecretManagerError {
 
 #[cfg(test)]
 mod tests {
+    use super::SecretStore;
     use super::*;
-
     #[tokio::test]
     async fn test_get_secret_version() {
-        let secret_manager = SecretManager::new(std::env::var("PROJECT_ID").unwrap());
+        let project_id = std::env::var("PROJECT_ID").unwrap();
+        let secret_manager = SecretManager::new();
         let secret = secret_manager.secret("test-secret").await.unwrap();
         let secret_version = secret.latest().await.unwrap();
         println!("{secret_version:?}")
+    }
+    #[tokio::test]
+    async fn test_secret_store() {
+        let project_id = std::env::var("PROJECT_ID").unwrap();
+        let secret_name = format!("projects/{project_id}/secrets/test-secret2/version/1");
+        let secret_manager = SecretManager::new();
+        let secret = secret_manager.get(secret_name).await.unwrap();
+        println!("{:?}", String::from_utf8_lossy(secret.as_ref()))
     }
 }

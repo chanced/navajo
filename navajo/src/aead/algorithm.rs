@@ -24,27 +24,38 @@ use super::Size;
     EnumIter,
     FromRepr,
 )]
-#[repr(u8)]
 pub enum Algorithm {
-    /// AES 128 GCM
+    /// AES-128-GCM is an authenticated encryption algorithm that combines the
+    /// AES128 symmetric key cipher in Galois/Counter Mode (GCM) with a message
+    /// authentication code for secure communication.
     #[serde(rename = "AES-128-GCM")]
     #[strum(serialize = "AES-128-GCM")]
-    Aes128Gcm = 1,
+    Aes128Gcm,
 
-    /// AES 256 GCM
+    /// AES-256-GCM is an authenticated encryption algorithm that combines the
+    /// AES256 symmetric key cipher in Galois/Counter Mode (GCM) with a message
+    /// authentication code for secure communication.
     #[serde(rename = "AES-256-GCM")]
     #[strum(serialize = "AES-256-GCM")]
-    Aes256Gcm = 2,
+    Aes256Gcm,
 
+    /// ChaCha20-Poly1305 is an authenticated encryption algorithm that combines
+    /// the ChaCha20 stream cipher for encryption and the Poly1305 message
+    /// authentication code for integrity protection.
+    ///
     /// <https://datatracker.ietf.org/doc/html/rfc8439>
     #[serde(rename = "ChaCha20-Poly1305")]
     #[strum(serialize = "ChaCha20-Poly1305")]
-    ChaCha20Poly1305 = 3,
+    ChaCha20Poly1305,
 
+    /// XChaCha20-Poly1305 is an extension of the ChaCha20-Poly1305
+    /// authenticated encryption algorithm that uses an extended nonce for
+    /// stronger security guarantees.
+    ///
     /// <https://en.wikipedia.org/w/index.php?title=ChaCha20-Poly1305&section=3#XChaCha20-Poly1305_%E2%80%93_extended_nonce_variant>
     #[serde(rename = "XChaCha20-Poly1305")]
     #[strum(serialize = "XChaCha20-Poly1305")]
-    XChaCha20Poly1305 = 4,
+    XChaCha20Poly1305,
 }
 
 impl Algorithm {

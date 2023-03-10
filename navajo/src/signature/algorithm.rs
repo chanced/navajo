@@ -25,18 +25,18 @@ pub enum Algorithm {
     #[strum(serialize = "Ed25519")]
     #[serde(rename = "Ed25519")]
     Ed25519,
-    /// RSA SSA PKCS#1 v1.5 2048 8192 bits SHA-256
-    Rs256,
-    /// RSA SSA PKCS#1 v1.5 2048 8192 bits SHA-384
-    Rs384,
-    /// RSA SSA PKCS#1 v1.5 2048 8192 bits SHA-512
-    Rs512,
-    /// RSA PSS 2048-8192 bits SHA-256
-    Ps256,
-    /// RSA PSS 2048-8192 bits SHA-384
-    Ps384,
-    /// RSA PSS 2048-8192 bits SHA-512
-    Ps512,
+    // /// RSA SSA PKCS#1 v1.5 2048 8192 bits SHA-256
+    // Rs256,
+    // /// RSA SSA PKCS#1 v1.5 2048 8192 bits SHA-384
+    // Rs384,
+    // /// RSA SSA PKCS#1 v1.5 2048 8192 bits SHA-512
+    // Rs512,
+    // /// RSA PSS 2048-8192 bits SHA-256
+    // Ps256,
+    // /// RSA PSS 2048-8192 bits SHA-384
+    // Ps384,
+    // /// RSA PSS 2048-8192 bits SHA-512
+    // Ps512,
 }
 impl Algorithm {
     #[cfg(feature = "ring")]
@@ -59,18 +59,18 @@ impl Algorithm {
             _ => unreachable!("not an ecdsa algorithm: {}", self),
         }
     }
-    #[cfg(feature = "ring")]
-    pub(super) fn ring_rsa_signing_parameters(&self) -> &'static ring::signature::RsaParameters {
-        match self {
-            Algorithm::Rs256 => &ring::signature::RSA_PKCS1_2048_8192_SHA256,
-            Algorithm::Rs384 => &ring::signature::RSA_PKCS1_2048_8192_SHA384,
-            Algorithm::Rs512 => &ring::signature::RSA_PKCS1_2048_8192_SHA512,
-            Algorithm::Ps256 => &ring::signature::RSA_PSS_2048_8192_SHA256,
-            Algorithm::Ps384 => &ring::signature::RSA_PSS_2048_8192_SHA384,
-            Algorithm::Ps512 => &ring::signature::RSA_PSS_2048_8192_SHA512,
-            _ => unreachable!("not an rsa algorithm: {}", self),
-        }
-    }
+    // #[cfg(feature = "ring")]
+    // pub(super) fn ring_rsa_signing_parameters(&self) -> &'static ring::signature::RsaParameters {
+    //     match self {
+    // Algorithm::Rs256 => &ring::signature::RSA_PKCS1_2048_8192_SHA256,
+    // Algorithm::Rs384 => &ring::signature::RSA_PKCS1_2048_8192_SHA384,
+    // Algorithm::Rs512 => &ring::signature::RSA_PKCS1_2048_8192_SHA512,
+    // Algorithm::Ps256 => &ring::signature::RSA_PSS_2048_8192_SHA256,
+    // Algorithm::Ps384 => &ring::signature::RSA_PSS_2048_8192_SHA384,
+    // Algorithm::Ps512 => &ring::signature::RSA_PSS_2048_8192_SHA512,
+    //     _ => unreachable!("not an rsa algorithm: {}", self),
+    // }
+    // }
     #[cfg(feature = "ring")]
     pub(super) fn ring_ed_dsa_parameters(&self) -> &'static ring::signature::EdDSAParameters {
         match self {

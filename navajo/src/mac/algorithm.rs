@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
-use strum::{Display, EnumIter, IntoStaticStr};
+use strum::{AsStaticStr, Display, EnumIter, IntoStaticStr};
 
 use crate::{error::KeyError, rand::Rng};
 

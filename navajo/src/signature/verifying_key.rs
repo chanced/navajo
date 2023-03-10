@@ -1,6 +1,5 @@
 use alloc::sync::Arc;
 
-
 use crate::{
     error::{KeyError, VerificationError},
     sensitive,
@@ -34,12 +33,12 @@ impl Inner {
             Algorithm::Es256 | Algorithm::Es384 => {
                 Self::Ecdsa(Ecdsa::from_key_pair(algorithm, keys)?)
             }
-            Algorithm::Rs256
-            | Algorithm::Rs384
-            | Algorithm::Rs512
-            | Algorithm::Ps256
-            | Algorithm::Ps384
-            | Algorithm::Ps512 => Self::Rsa(Rsa::from_key_pair(algorithm, keys)?),
+            // Algorithm::Rs256
+            // | Algorithm::Rs384
+            // | Algorithm::Rs512
+            // | Algorithm::Ps256
+            // | Algorithm::Ps384
+            // | Algorithm::Ps512 => Self::Rsa(Rsa::from_key_pair(algorithm, keys)?),
         };
         Ok(key)
     }

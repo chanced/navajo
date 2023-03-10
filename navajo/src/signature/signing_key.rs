@@ -57,12 +57,12 @@ impl Inner {
         match algorithm {
             Algorithm::Ed25519 => Ed25519::generate_key_pair(rng, algorithm),
             Algorithm::Es256 | Algorithm::Es384 => Ecdsa::generate_key_pair(rng, algorithm),
-            Algorithm::Rs256
-            | Algorithm::Rs384
-            | Algorithm::Rs512
-            | Algorithm::Ps256
-            | Algorithm::Ps384
-            | Algorithm::Ps512 => Rsa::generate_key_pair(rng.clone(), algorithm),
+            // Algorithm::Rs256
+            // | Algorithm::Rs384
+            // | Algorithm::Rs512
+            // | Algorithm::Ps256
+            // | Algorithm::Ps384
+            // | Algorithm::Ps512 => Rsa::generate_key_pair(rng.clone(), algorithm),
         }
     }
 
@@ -72,12 +72,12 @@ impl Inner {
             Algorithm::Es256 | Algorithm::Es384 => {
                 Self::Ecdsa(Ecdsa::from_key_pair(algorithm, keys)?)
             }
-            Algorithm::Rs256
-            | Algorithm::Rs384
-            | Algorithm::Rs512
-            | Algorithm::Ps256
-            | Algorithm::Ps384
-            | Algorithm::Ps512 => Self::Rsa(Rsa::from_key_pair(algorithm, keys)?),
+            // Algorithm::Rs256
+            // | Algorithm::Rs384
+            // | Algorithm::Rs512
+            // | Algorithm::Ps256
+            // | Algorithm::Ps384
+            // | Algorithm::Ps512 => Self::Rsa(Rsa::from_key_pair(algorithm, keys)?),
         };
         Ok(key)
     }

@@ -113,7 +113,6 @@ impl Envelope for Key {
     {
         // let ciphertext = b64.encode(ciphertext.as_ref());
         let ciphertext_crc32c = Some(crc32c(ciphertext.as_ref()) as i64);
-
         let additional_authenticated_data = aad.to_vec();
         let mut request = tonic::Request::new(DecryptRequest {
             name: self.name.clone(),
