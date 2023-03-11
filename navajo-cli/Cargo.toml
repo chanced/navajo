@@ -10,7 +10,12 @@ description = "Navajo CLI"
 name = "navajo"
 
 [dependencies]
-strum = { version = "0.24", features = ["derive", "strum_macros"] }
 navajo = { path = "../navajo" }
+navajo-gcp = { path = "../navajo-gcp" }
+
+strum = { version = "0.24", features = ["derive", "strum_macros"] }
 clap = { version = "4.1", features = ["derive", "wrap_help"] }
 tokio = { version = "1.26", features = ["full"] }
+url = "2.3"
+serde = { version = "1.0" }
+serde_json = { version = "1.0" }

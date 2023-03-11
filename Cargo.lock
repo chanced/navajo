@@ -1520,8 +1520,12 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "navajo",
+ "navajo-gcp",
+ "serde",
+ "serde_json",
  "strum",
  "tokio",
+ "url",
 ]
 
 [[package]]

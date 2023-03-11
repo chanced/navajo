@@ -1,10 +1,13 @@
 use std::path::PathBuf;
 
+use crate::{algorithm::Algorithm, envelope::Envelope, secret_store::SecretStore};
 use clap::{Parser, Subcommand};
-use navajo::Envelope;
+use navajo::{
+    primitive::{Kind, Primitive},
+    Aead, Daead, Mac, Signer,
+};
 use tokio::io::{AsyncRead, AsyncWrite};
-
-use crate::algorithm::Algorithm;
+use url::Url;
 
 #[derive(Debug, Parser)]
 #[command(name = "navajo")]
@@ -85,9 +88,13 @@ pub struct New {
     /// Specifies the algorithm to use for the first key in the keyring.
     pub algorithm: Algorithm,
     #[command(flatten)]
+    pub metadata: Metadata,
+    #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
     pub envelope: EnvelopeArgs,
+    #[arg(value_name = "PUB_ID", long = "public-id", short = 'p')]
+    pub pub_id: Option<String>,
 }
 
 impl New {
@@ -96,8 +103,43 @@ impl New {
         stdin: impl 'static + AsyncRead,
         stdout: impl 'static + AsyncWrite,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let (input, output) = self.io.get(stdin, stdout).await?;
-        let (aad, kms) = self.envelope.get().await?;
+        let New {
+            algorithm,
+            envelope: env_args,
+            io,
+            metadata,
+            pub_id,
+        } = self;
+        let (input, output) = io.get(stdin, stdout).await?;
+        let envelope = env_args.get_envelope().await?;
+        let secret_store = env_args.get_secret_store().await?;
+        let metadata: Option<serde_json::Value> = metadata.into();
+        let primitive = match algorithm.kind() {
+            Kind::Aead => Primitive::Aead(Aead::new(algorithm.try_into()?, metadata)),
+            Kind::Daead => Primitive::Daead(Daead::new(algorithm.try_into()?, metadata)),
+            Kind::Mac => Primitive::Mac(Mac::new(algorithm.try_into()?, metadata)),
+            Kind::Signature => {
+                Primitive::Signature(Signer::new(algorithm.try_into()?, pub_id, metadata))
+            }
+        };
+        let aad = secret_store.map(|(store, path)| {});
+        todo!()
+    }
+}
+
+#[derive(Debug, Parser)]
+pub struct Metadata {
+    /// Metadata in the form of JSON to associate with the first key, if any.
+    ///
+    /// If Metadata is not a JSON object or array, it will be treated as a
+    /// string.
+    pub metadata: Option<String>,
+}
+impl From<Metadata> for Option<serde_json::Value> {
+    fn from(metadata: Metadata) -> Self {
+        metadata
+            .metadata
+            .map(|val| serde_json::from_str(&val).unwrap_or(serde_json::Value::String(val)))
     }
 }
 
@@ -256,6 +298,29 @@ impl CreatePublic {
 }
 
 #[derive(Debug, Parser)]
+pub struct SetKeyMeta {
+    #[command(flatten)]
+    pub key_op: KeyOpArgs,
+    /// The new metadata for the key. To clear the metadata, use --clear
+    ///
+    /// Required if --clear is not set
+    pub meta: Option<String>,
+
+    /// If set, the metadata for the key will be cleared
+    #[arg(value_name = "CLEAR_METADATA", long = "clear")]
+    pub clear_metadata: bool,
+}
+impl SetKeyMeta {
+    pub async fn execute(
+        self,
+        stdin: impl 'static + AsyncRead,
+        stdout: impl 'static + AsyncWrite,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        todo!()
+    }
+}
+
+#[derive(Debug, Parser)]
 pub struct KeyOpArgs {
     #[command(flatten)]
     pub io: IoArgs,
@@ -314,7 +379,7 @@ pub struct EnvelopeArgs {
     /// gcp://projects/my-project/locations/us-east1/keyRings/my-keyring/cryptoKeys/my-key
     /// would use the key with the ID `my-key` in the keyring `my-keyring` at us-east1 on GCP.
     ///
-    pub key_uri: Option<String>,
+    pub key_uri: Option<Url>,
 
     /// The URI for the Secret Store to use for additional authenticated data
     /// (AAD). The URI is of the form <gcp|aws|azure|vault>://<key-path>.
@@ -323,41 +388,50 @@ pub struct EnvelopeArgs {
     /// gcp://projects/my-project/secrets/my-secret/versions/1 would use the
     /// first version of the secret "my-secret" on GCP.
     #[arg(value_name = "AAD_SECRET_URI", long = "aad-secret-uri", short = 's')]
-    pub aad_secret_store_uri: Option<String>,
+    pub aad_secret_store_uri: Option<Url>,
 }
 
 impl EnvelopeArgs {
-    pub async fn get(
+    pub async fn get_envelope(
         &self,
-    ) -> Result<(Option<Box<dyn Envelope>>, Option<Vec<u8>>), Box<dyn std::error::Error>> {
-        if let Some(key_uri) = &self.key_uri {
-            let envelope = Envelope::new(key_uri, self.aad_secret_store_uri.as_deref())?;
-            Ok(Some(envelope))
-        } else {
-            Ok(None)
+    ) -> Result<(Envelope, Option<String>), Box<dyn std::error::Error>> {
+        let uri = self.key_uri.as_ref();
+        if uri.is_none() {
+            return Ok((Envelope::Cleartext(navajo::CleartextJson), None));
+        }
+        let uri = uri.unwrap();
+
+        let uri_str = Some(
+            uri.to_string()
+                .replace(&(uri.scheme().to_string() + "://"), ""),
+        );
+        match uri.scheme() {
+            "gcp" => Ok((Envelope::Gcp(navajo_gcp::Kms::new()), uri_str)),
+            "aws" => Err("AWS KMS is not yet implemented".into()),
+            "azure" => Err("Azure KMS is not yet implemented".into()),
+            "vault" => Err("Vault KMS is not yet implemented".into()),
+            _ => Err(format!("unknown KMS scheme: {}", uri.scheme()).into()),
         }
     }
-}
-
-#[derive(Debug, Parser)]
-pub struct SetKeyMeta {
-    #[command(flatten)]
-    pub key_op: KeyOpArgs,
-    /// The new metadata for the key. To clear the metadata, use --clear
-    ///
-    /// Required if --clear is not set
-    pub meta: Option<String>,
-
-    /// If set, the metadata for the key will be cleared
-    #[arg(value_name = "CLEAR_METADATA", long = "clear")]
-    pub clear_metadata: bool,
-}
-impl SetKeyMeta {
-    pub async fn execute(
-        self,
-        stdin: impl 'static + AsyncRead,
-        stdout: impl 'static + AsyncWrite,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        todo!()
+    pub async fn get_secret_store(
+        &self,
+    ) -> Result<Option<(SecretStore, String)>, Box<dyn std::error::Error>> {
+        self.aad_secret_store_uri
+            .as_ref()
+            .map(|uri| {
+                (
+                    uri,
+                    uri.to_string()
+                        .replace(&(uri.scheme().to_string() + "://"), ""),
+                )
+            })
+            .map(|(uri, path)| match uri.scheme() {
+                "gcp" => Ok((SecretStore::Gcp(navajo_gcp::SecretManager::new()), path)),
+                "aws" => Err("AWS Secret Manager is not yet implemented".into()),
+                "azure" => Err("Azure Key Vault is not yet implemented".into()),
+                "vault" => Err("Vault is not yet implemented".into()),
+                _ => Err(format!("unknown Secret Store scheme: {}", uri.scheme()).into()),
+            })
+            .transpose()
     }
 }

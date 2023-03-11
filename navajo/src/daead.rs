@@ -6,10 +6,9 @@ mod material;
 pub use algorithm::Algorithm;
 pub(crate) use material::Material;
 
-
 use zeroize::ZeroizeOnDrop;
 
-use crate::{keyring::Keyring};
+use crate::keyring::Keyring;
 
 #[derive(Clone, Debug, ZeroizeOnDrop)]
 pub struct Daead {
@@ -17,6 +16,9 @@ pub struct Daead {
 }
 
 impl Daead {
+    pub fn new(algorithm: Algorithm, metadata: Option<serde_json::Value>) -> Self {
+        todo!()
+    }
     pub(crate) fn keyring(&self) -> &Keyring<Material> {
         &self.keyring
     }

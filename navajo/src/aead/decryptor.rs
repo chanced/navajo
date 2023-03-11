@@ -435,7 +435,7 @@ mod tests {
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
         let mut data = vec![0u8; 1024];
         let rng = SystemRng::new();
-        rng.fill(&mut data);
+        rng.fill(&mut data).unwrap();
         let encryptor = Encryptor::new(&aead, None, data.clone());
         let ciphertext = encryptor.finalize(Aad::empty()).unwrap().next().unwrap();
         let decryptor = Decryptor::new(&aead, ciphertext);

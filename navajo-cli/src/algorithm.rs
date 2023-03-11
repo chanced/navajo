@@ -2,7 +2,9 @@
 
 use clap::ValueEnum;
 
-#[derive(Clone, Debug, PartialEq, Eq, ValueEnum)]
+use navajo::primitive::Kind;
+
+#[derive(Clone, Debug, PartialEq, Eq, ValueEnum, strum::Display)]
 pub enum Algorithm {
     // ------------------------------------------
     // AEAD
@@ -15,6 +17,7 @@ pub enum Algorithm {
         alias = "aes-128-gcm",
         alias = "aes_128_gcm"
     )]
+    #[strum(serialize = "AES-128-GCM")]
     Aes_128_Gcm,
     /// AEAD - AES-256-GCM
     #[clap(
@@ -24,6 +27,7 @@ pub enum Algorithm {
         alias = "aes-256-gcm",
         alias = "aes_256_gcm"
     )]
+    #[strum(serialize = "AES-256-GCM")]
     Aes_256_Gcm,
     /// AEAD - ChaCha20-Poly1305
     #[clap(
@@ -35,6 +39,7 @@ pub enum Algorithm {
         alias = "ChaCha20Poly1305",
         alias = "chacha20-poly1305"
     )]
+    #[strum(serialize = "ChaCha20-Poly1305")]
     Chacha20Poly1305,
     /// AEAD - XChaCha20-Poly1305
     #[clap(
@@ -47,6 +52,7 @@ pub enum Algorithm {
         alias = "XChaCha20Poly1305",
         alias = "xchacha20-poly1305"
     )]
+    #[strum(serialize = "XChaCha20-Poly1305")]
     Xchacha20Poly1305,
 
     // ------------------------------------------
@@ -59,6 +65,7 @@ pub enum Algorithm {
         alias = "aes-siv",
         alias = "aes_siv"
     )]
+    #[strum(serialize = "AES-SIV")]
     AesSiv,
 
     // ------------------------------------------
@@ -74,6 +81,7 @@ pub enum Algorithm {
         alias = "BLAKE_3",
         alias = "blake_3"
     )]
+    #[strum(serialize = "Blake3")]
     Blake3,
     /// MAC - HMAC Sha256
     #[clap(
@@ -90,6 +98,7 @@ pub enum Algorithm {
         alias = "Sha256",
         alias = "Sha2_256"
     )]
+    #[strum(serialize = "SHA-256")]
     Sha2_256,
     /// MAC - HMAC Sha384
     #[clap(
@@ -106,6 +115,7 @@ pub enum Algorithm {
         alias = "Sha384",
         alias = "Sha2_384"
     )]
+    #[strum(serialize = "SHA-384")]
     Sha2_384,
     /// MAC - HMAC Sha512
     #[clap(
@@ -122,6 +132,7 @@ pub enum Algorithm {
         alias = "Sha512",
         alias = "Sha2_512"
     )]
+    #[strum(serialize = "SHA-512")]
     Sha2_512,
     /// MAC - HMAC Sha3-256
     #[clap(
@@ -132,6 +143,7 @@ pub enum Algorithm {
         alias = "Sha3_256",
         alias = "Sha3-256"
     )]
+    #[strum(serialize = "SHA3-256")]
     Sha3_256,
     /// MAC - HMAC Sha3-224
     #[clap(
@@ -142,6 +154,7 @@ pub enum Algorithm {
         alias = "Sha3_224",
         alias = "Sha3-224"
     )]
+    #[strum(serialize = "SHA3-224")]
     Sha3_224,
     /// MAC - HMAC Sha3-384
     #[clap(
@@ -152,6 +165,7 @@ pub enum Algorithm {
         alias = "Sha3_384",
         alias = "Sha3-384"
     )]
+    #[strum(serialize = "SHA3-384")]
     Sha3_384,
     /// MAC - HMAC Sha3-384
     #[clap(
@@ -162,6 +176,7 @@ pub enum Algorithm {
         alias = "Sha3_512",
         alias = "Sha3-512"
     )]
+    #[strum(serialize = "SHA3-512")]
     Sha3_512,
     /// MAC - CMAC AES-128
     #[clap(
@@ -177,6 +192,7 @@ pub enum Algorithm {
         alias = "cmac-aes128",
         alias = "cmac_aes128"
     )]
+    #[strum(serialize = "AES-128")]
     Aes_128,
     /// MAC - CMAC AES-192
     #[clap(
@@ -192,6 +208,7 @@ pub enum Algorithm {
         alias = "cmac-aes192",
         alias = "cmac_aes192"
     )]
+    #[strum(serialize = "AES-192")]
     Aes_192,
     /// MAC - CMAC AES-256
     #[clap(
@@ -207,15 +224,113 @@ pub enum Algorithm {
         alias = "cmac-aes256",
         alias = "cmac_aes256"
     )]
+    #[strum(serialize = "AES-256")]
     Aes_256,
 
     // ------------------------------------------
     // Signature
     // ------------------------------------------
     /// Signature - ECDSA using P-256 and SHA-256
+    #[clap(
+        alias = "ES256",
+        alias = "es256",
+        alias = "ECDSA_P256_SHA256",
+        alias = "ecdsa_p256_sha256"
+    )]
+    #[strum(serialize = "ES256")]
     Es256,
     /// Signature - ECDSA using P-384 and SHA-384
+    #[clap(
+        alias = "ES384",
+        alias = "es384",
+        alias = "ECDSA_P384_SHA384",
+        alias = "ecdsa_p384_sha384"
+    )]
+    #[strum(serialize = "ES384")]
     Es384,
     /// Signature - Ed25519 Edwards Digital Signature Algorithm (EdDSA) over Curve25519
+    #[clap(alias = "ED25519", alias = "ed25519")]
+    #[strum(serialize = "Ed25519")]
     Ed25519,
+}
+impl Algorithm {
+    pub fn kind(&self) -> Kind {
+        match self {
+            Algorithm::Aes_128_Gcm
+            | Algorithm::Aes_256_Gcm
+            | Algorithm::Chacha20Poly1305
+            | Algorithm::Xchacha20Poly1305 => Kind::Aead,
+
+            Algorithm::AesSiv => Kind::Daead,
+
+            Algorithm::Blake3
+            | Algorithm::Sha2_256
+            | Algorithm::Sha2_384
+            | Algorithm::Sha2_512
+            | Algorithm::Sha3_256
+            | Algorithm::Sha3_224
+            | Algorithm::Sha3_384
+            | Algorithm::Sha3_512
+            | Algorithm::Aes_128
+            | Algorithm::Aes_192
+            | Algorithm::Aes_256 => Kind::Mac,
+
+            Algorithm::Es256 | Algorithm::Es384 | Algorithm::Ed25519 => Kind::Signature,
+        }
+    }
+}
+impl TryFrom<Algorithm> for navajo::aead::Algorithm {
+    type Error = String;
+
+    fn try_from(value: Algorithm) -> Result<Self, Self::Error> {
+        match value {
+            Algorithm::Aes_128_Gcm => Ok(navajo::aead::Algorithm::Aes128Gcm),
+            Algorithm::Aes_256_Gcm => Ok(navajo::aead::Algorithm::Aes256Gcm),
+            Algorithm::Chacha20Poly1305 => Ok(navajo::aead::Algorithm::ChaCha20Poly1305),
+            Algorithm::Xchacha20Poly1305 => Ok(navajo::aead::Algorithm::XChaCha20Poly1305),
+            _ => Err(format!("Algorithm {value} is not AEAD")),
+        }
+    }
+}
+impl TryFrom<Algorithm> for navajo::daead::Algorithm {
+    type Error = String;
+
+    fn try_from(value: Algorithm) -> Result<Self, Self::Error> {
+        match value {
+            Algorithm::AesSiv => Ok(navajo::daead::Algorithm::AesSiv),
+            _ => Err(format!("Algorithm {value} is not DAED")),
+        }
+    }
+}
+impl TryFrom<Algorithm> for navajo::signature::Algorithm {
+    type Error = String;
+
+    fn try_from(value: Algorithm) -> Result<Self, Self::Error> {
+        match value {
+            Algorithm::Es256 => Ok(navajo::signature::Algorithm::Es256),
+            Algorithm::Es384 => Ok(navajo::signature::Algorithm::Es384),
+            Algorithm::Ed25519 => Ok(navajo::signature::Algorithm::Ed25519),
+            _ => Err(format!("Algorithm {value} is not Signature")),
+        }
+    }
+}
+
+impl TryFrom<Algorithm> for navajo::mac::Algorithm {
+    type Error = String;
+    fn try_from(value: Algorithm) -> Result<Self, Self::Error> {
+        match value {
+            Algorithm::Blake3 => Ok(navajo::mac::Algorithm::Blake3),
+            Algorithm::Sha2_256 => Ok(navajo::mac::Algorithm::Sha256),
+            Algorithm::Sha2_384 => Ok(navajo::mac::Algorithm::Sha384),
+            Algorithm::Sha2_512 => Ok(navajo::mac::Algorithm::Sha512),
+            Algorithm::Sha3_256 => Ok(navajo::mac::Algorithm::Sha3_256),
+            Algorithm::Sha3_224 => Ok(navajo::mac::Algorithm::Sha3_224),
+            Algorithm::Sha3_384 => Ok(navajo::mac::Algorithm::Sha3_384),
+            Algorithm::Sha3_512 => Ok(navajo::mac::Algorithm::Sha3_512),
+            Algorithm::Aes_128 => Ok(navajo::mac::Algorithm::Aes128),
+            Algorithm::Aes_192 => Ok(navajo::mac::Algorithm::Aes192),
+            Algorithm::Aes_256 => Ok(navajo::mac::Algorithm::Aes256),
+            _ => Err(format!("Algorithm {value} is not MAC")),
+        }
+    }
 }
