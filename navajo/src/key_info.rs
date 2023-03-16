@@ -42,9 +42,9 @@ impl From<crate::aead::AeadKeyInfo> for KeyInfo<crate::aead::Algorithm> {
         Self {
             id: info.id,
             algorithm: info.algorithm,
-            origin: info.origin,
+            origin: Origin::Navajo,
             status: info.status,
-            meta: info.meta,
+            meta: info.metadata,
         }
     }
 }

@@ -348,36 +348,36 @@ mod tests {
         let mut hash_arr = [0; 32];
         let id = crate::keyring::gen_id(&rng);
         let id_bytes = id.to_be_bytes();
-        rng.fill(&mut hash_arr);
+        rng.fill(&mut hash_arr).unwrap();
         let hash = blake3::Hash::from(hash_arr);
         let output = Output::Blake3(crate::mac::output::Blake3Output::from(hash));
-        let entry = Entry::new(id, true, id_bytes.to_vec(), output.clone());
+        let entry = Entry::new(true, id_bytes.to_vec(), output.clone());
         let tag = Tag::new(core::iter::once(entry));
         let other = tag.clone();
         assert_eq!(tag, other);
 
         let output_1 = output;
-        let entry_1 = Entry::new(id, false, id_bytes.to_vec(), output_1);
+        let entry_1 = Entry::new(false, id_bytes.to_vec(), output_1);
 
         let id_2 = crate::keyring::gen_id(&rng);
         let id_bytes_2 = id_2.to_be_bytes();
         let mut hash_arr_2 = [0; 32];
-        rng.fill(&mut hash_arr_2);
+        rng.fill(&mut hash_arr_2).unwrap();
         let hash_2 = blake3::Hash::from(hash_arr_2);
         let output_2 = Output::Blake3(crate::mac::output::Blake3Output::from(hash_2));
-        let entry_2 = Entry::new(id, true, id_bytes_2.to_vec(), output_2.clone());
+        let entry_2 = Entry::new(true, id_bytes_2.to_vec(), output_2.clone());
         let tag_2 = Tag::new([entry_1.clone(), entry_2].iter().cloned());
 
         assert_eq!(tag, tag_2);
 
-        let entry_2 = Entry::new(id, false, id_bytes_2.to_vec(), output_2);
+        let entry_2 = Entry::new(false, id_bytes_2.to_vec(), output_2);
         let id_3 = crate::keyring::gen_id(&rng);
         let id_bytes_3 = id_3.to_be_bytes();
         let mut hash_arr_3 = [0; 32];
-        rng.fill(&mut hash_arr_3);
+        rng.fill(&mut hash_arr_3).unwrap();
         let hash_3 = blake3::Hash::from(hash_arr_3);
         let output_3 = Output::Blake3(crate::mac::output::Blake3Output::from(hash_3));
-        let entry_3 = Entry::new(id, true, id_bytes_3.to_vec(), output_3);
+        let entry_3 = Entry::new(true, id_bytes_3.to_vec(), output_3);
         let tag_3 = Tag::new([entry_1, entry_2, entry_3].iter().cloned());
 
         assert_eq!(tag_2, tag_3);

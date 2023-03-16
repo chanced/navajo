@@ -1,7 +1,6 @@
 use crate::{key::Key, mac::output};
 use alloc::vec::Vec;
 
-
 use super::{
     entry::Entry,
     material::{BackendKey, Material, RustCryptoKey},
@@ -9,7 +8,6 @@ use super::{
 };
 
 pub(super) struct Context {
-    key_id: u32,
     is_primary: bool,
     inner: Inner,
     header: Vec<u8>,
@@ -17,7 +15,6 @@ pub(super) struct Context {
 impl Context {
     pub(super) fn new(key: &Key<Material>) -> Self {
         Self {
-            key_id: key.id(),
             is_primary: key.is_primary(),
             inner: Inner::new(key.new_backend_key()),
             header: key.header(),
@@ -26,23 +23,18 @@ impl Context {
     pub(super) fn update(&mut self, data: &[u8]) {
         self.inner.update(data)
     }
-    pub(super) fn is_primary(&self) -> bool {
-        self.is_primary
-    }
-    pub(super) fn key_id(&self) -> u32 {
-        self.key_id
-    }
+    // pub(super) fn is_primary(&self) -> bool {
+    //     self.is_primary
+    // }
+    // pub(super) fn key_id(&self) -> u32 {
+    //     self.key_id
+    // }
 
     pub(super) fn finalize(self) -> Entry {
-        Entry::new(
-            self.key_id,
-            self.is_primary,
-            self.header,
-            self.inner.finalize(),
-        )
+        Entry::new(self.is_primary, self.header, self.inner.finalize())
     }
 }
-
+#[allow(clippy::large_enum_variant)]
 enum Inner {
     #[cfg(feature = "blake3")]
     Blake3(Blake3Context),

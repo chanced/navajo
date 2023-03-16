@@ -6,10 +6,10 @@ use zeroize::ZeroizeOnDrop;
 use super::cipher::Cipher;
 use super::Algorithm;
 use crate::primitive::Kind;
+use crate::Rng;
 use crate::{
     key::{Key, KeyMaterial},
     sensitive::Bytes,
-    Buffer,
 };
 
 #[derive(Clone, Debug, ZeroizeOnDrop, Eq, Serialize, Deserialize)]
@@ -34,8 +34,13 @@ impl KeyMaterial for Material {
     }
 }
 impl Material {
-    pub(super) fn new(algorithm: Algorithm) -> Self {
-        let bytes = vec![0u8; algorithm.key_len()].into();
+    pub(super) fn generate<G>(rng: &G, algorithm: Algorithm) -> Self
+    where
+        G: Rng,
+    {
+        let mut bytes = vec![0u8; algorithm.key_len()];
+        rng.fill(&mut bytes).unwrap();
+        let bytes = bytes.into();
         Self {
             value: bytes,
             algorithm,
@@ -60,19 +65,19 @@ impl Key<Material> {
     pub fn len(&self) -> usize {
         self.bytes().len()
     }
-    pub fn nonce_len(&self) -> usize {
-        self.algorithm().nonce_len()
-    }
-    pub fn tag_len(&self) -> usize {
-        self.algorithm().tag_len()
-    }
-    pub fn nonce_prefix_len(&self) -> usize {
-        self.algorithm().nonce_prefix_len()
-    }
-    pub fn online_header_len(&self) -> usize {
-        self.algorithm().online_header_len()
-    }
-    pub fn streaming_header_len(&self) -> usize {
-        self.algorithm().streaming_header_len()
-    }
+    // pub fn nonce_len(&self) -> usize {
+    //     self.algorithm().nonce_len()
+    // }
+    // pub fn tag_len(&self) -> usize {
+    //     self.algorithm().tag_len()
+    // }
+    // pub fn nonce_prefix_len(&self) -> usize {
+    //     self.algorithm().nonce_prefix_len()
+    // }
+    // pub fn online_header_len(&self) -> usize {
+    //     self.algorithm().online_header_len()
+    // }
+    // pub fn streaming_header_len(&self) -> usize {
+    //     self.algorithm().streaming_header_len()
+    // }
 }

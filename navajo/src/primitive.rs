@@ -1,7 +1,5 @@
 use core::{fmt::Display, str::FromStr};
 
-// todo: provide appropriate error messages when a primitive is correct but not enabled
-
 use alloc::{
     format,
     string::{String, ToString},
@@ -12,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    envelope::is_cleartext,
+    envelope::{self, is_plaintext},
     error::{OpenError, SealError},
     keyring::{open_keyring_value, open_keyring_value_sync, Keyring},
     Aad,
@@ -32,6 +30,28 @@ pub enum Kind {
     Mac,
     #[serde(rename = "Signature")]
     Signature,
+}
+
+pub async fn seal<A, E>(
+    primitive: impl Into<Primitive>,
+    aad: Aad<A>,
+    envelope: &E,
+) -> Result<Vec<u8>, SealError>
+where
+    A: 'static + AsRef<[u8]> + Send + Sync,
+    E: 'static + Envelope,
+{
+    let primitive = primitive.into();
+    Primitive::seal(&primitive, aad, envelope).await
+}
+
+pub async fn open<A, C, E>(aad: Aad<A>, ciphertext: C, envelope: &E) -> Result<Primitive, OpenError>
+where
+    A: 'static + AsRef<[u8]> + Send + Sync,
+    C: 'static + AsRef<[u8]> + Send + Sync,
+    E: 'static + Envelope,
+{
+    Primitive::open(aad, ciphertext, envelope).await
 }
 
 impl Kind {
@@ -78,7 +98,6 @@ impl From<Kind> for u8 {
         pt.as_u8()
     }
 }
-
 impl TryFrom<u8> for Kind {
     type Error = String;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -105,65 +124,50 @@ pub enum Primitive {
     Signature(crate::Signer),
 }
 impl Primitive {
-    pub async fn seal<'a, A, E>(&self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
+    pub async fn seal<A, E>(&self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
     where
         A: 'static + AsRef<[u8]> + Send + Sync,
-        E: Envelope + 'static,
+        E: 'static + Envelope,
     {
-        if is_cleartext(envelope) {
-            self.serialize_cleartext()
-        } else {
-            let sealed = match self {
-                #[cfg(feature = "aead")]
-                Primitive::Aead(aead) => aead.keyring().seal(aad, envelope).await?,
-                #[cfg(feature = "daead")]
-                Primitive::Daead(daead) => daead.keyring().seal(aad, envelope).await?,
-                #[cfg(feature = "mac")]
-                Primitive::Mac(mac) => mac.keyring().seal(aad, envelope).await?,
-                #[cfg(feature = "signature")]
-                Primitive::Signature(sig) => sig.keyring().seal(aad, envelope).await?,
-            };
-            Ok(sealed)
+        if is_plaintext(envelope) {
+            return self.serialize_plaintext();
         }
+        let sealed = self.seal_keyring(aad, envelope, vec![0u8; 8]).await?;
+        finalize_seal(sealed)
     }
+
     pub fn seal_sync<'a, A, E>(&'a self, aad: Aad<A>, envelope: &'a E) -> Result<Vec<u8>, SealError>
     where
         A: AsRef<[u8]>,
-        E: 'static + crate::envelope::sync::Envelope,
+        E: 'static + envelope::sync::Envelope,
     {
-        if is_cleartext(envelope) {
-            self.serialize_cleartext()
-        } else {
-            let mut res = vec![self.kind().as_u8()];
-            let sealed = match self {
-                #[cfg(feature = "aead")]
-                Primitive::Aead(aead) => aead.keyring().seal_sync(aad, envelope)?,
-                #[cfg(feature = "daead")]
-                Primitive::Daead(daead) => daead.keyring().seal_sync(aad, envelope)?,
-                #[cfg(feature = "mac")]
-                Primitive::Mac(mac) => mac.keyring().seal_sync(aad, envelope)?,
-                #[cfg(feature = "signature")]
-                Primitive::Signature(sig) => sig.keyring().seal_sync(aad, envelope)?,
-            };
-            res.extend(sealed.into_iter());
-            Ok(res)
+        if is_plaintext(envelope) {
+            return self.serialize_plaintext();
         }
+        let sealed = self.seal_keyring_sync(aad, envelope, vec![0u8; 8])?;
+        finalize_seal(sealed)
     }
+
     pub async fn open<A, C, E>(aad: Aad<A>, ciphertext: C, envelope: &E) -> Result<Self, OpenError>
     where
         A: 'static + AsRef<[u8]> + Send + Sync,
         C: 'static + AsRef<[u8]> + Send + Sync,
-        E: Envelope + 'static,
+        E: 'static + Envelope,
     {
-        if ciphertext.as_ref().is_empty() {
+        let ciphertext = ciphertext.as_ref();
+        if ciphertext.is_empty() {
             return Err("keyring data is empty".into());
         }
-        if is_cleartext(envelope) {
-            Self::deserialize_cleartext(ciphertext.as_ref())
-        } else {
-            let (kind, value) = open_keyring_value(aad, ciphertext, envelope).await?;
-            Self::open_value(kind, value)
+        if is_plaintext(envelope) {
+            return Self::deserialize_cleartext(ciphertext);
         }
+        let len = read_len(ciphertext)?;
+
+        // todo: revisit this
+        // there is probably a way to avoid copying this into a vec
+        let ciphertext = ciphertext[8..len + 8].to_vec();
+        let (kind, value) = open_keyring_value(aad, ciphertext, envelope).await?;
+        Self::open_value(kind, value)
     }
 
     pub fn open_sync<A, C, E>(aad: Aad<A>, ciphertext: C, envelope: &E) -> Result<Self, OpenError>
@@ -172,15 +176,15 @@ impl Primitive {
         C: AsRef<[u8]>,
         E: 'static + crate::envelope::sync::Envelope,
     {
-        let sealed = ciphertext.as_ref();
-        if sealed.is_empty() {
-            return Err("keyring data is empty".into());
+        let ciphertext = ciphertext.as_ref();
+        if ciphertext.is_empty() {
+            return Err("sealed data is empty".into());
         }
-
-        if is_cleartext(envelope) {
-            Self::deserialize_cleartext(sealed)
+        if is_plaintext(envelope) {
+            Self::deserialize_cleartext(ciphertext)
         } else {
-            let (kind, value) = open_keyring_value_sync(aad, sealed, envelope)?;
+            let len = read_len(ciphertext)?;
+            let (kind, value) = open_keyring_value_sync(aad, &ciphertext[8..len], envelope)?;
             Self::open_value(kind, value)
         }
     }
@@ -330,7 +334,7 @@ impl Primitive {
         }
     }
 
-    fn serialize_cleartext(&self) -> Result<Vec<u8>, SealError> {
+    fn serialize_plaintext(&self) -> Result<Vec<u8>, SealError> {
         let keyring = match self {
             #[cfg(feature = "aead")]
             Primitive::Aead(aead) => serde_json::to_value(aead.keyring())?,
@@ -345,14 +349,140 @@ impl Primitive {
             kind: self.kind(),
             keyring,
         };
-        serde_json::to_vec(&data).map_err(|e| SealError(e.to_string()))
+        let mut v = serde_json::to_vec(&data).map_err(|e| SealError(e.to_string()))?;
+        v.push(b'\n');
+        Ok(v)
+    }
+    async fn seal_keyring<A, E>(
+        &self,
+        aad: Aad<A>,
+        envelope: &E,
+        mut v: Vec<u8>,
+    ) -> Result<Vec<u8>, SealError>
+    where
+        A: 'static + AsRef<[u8]> + Send + Sync,
+        E: 'static + Envelope,
+    {
+        v.append(&mut match self {
+            #[cfg(feature = "aead")]
+            Primitive::Aead(aead) => aead.keyring().seal(aad, envelope).await?,
+            #[cfg(feature = "daead")]
+            Primitive::Daead(daead) => daead.keyring().seal(aad, envelope).await?,
+            #[cfg(feature = "mac")]
+            Primitive::Mac(mac) => mac.keyring().seal(aad, envelope).await?,
+            #[cfg(feature = "signature")]
+            Primitive::Signature(sig) => sig.keyring().seal(aad, envelope).await?,
+        });
+        Ok(v)
+    }
+    fn seal_keyring_sync<A, E>(
+        &self,
+        aad: Aad<A>,
+        envelope: &E,
+        mut v: Vec<u8>,
+    ) -> Result<Vec<u8>, SealError>
+    where
+        A: AsRef<[u8]>,
+        E: envelope::sync::Envelope,
+    {
+        v.append(&mut match self {
+            #[cfg(feature = "aead")]
+            Primitive::Aead(aead) => aead.keyring().seal_sync(aad, envelope)?,
+            #[cfg(feature = "daead")]
+            Primitive::Daead(daead) => daead.keyring().seal_sync(aad, envelope)?,
+            #[cfg(feature = "mac")]
+            Primitive::Mac(mac) => mac.keyring().seal_sync(aad, envelope)?,
+            #[cfg(feature = "signature")]
+            Primitive::Signature(sig) => sig.keyring().seal_sync(aad, envelope)?,
+        });
+        Ok(v)
     }
 }
+fn read_len(ciphertext: &[u8]) -> Result<usize, OpenError> {
+    if ciphertext.len() <= 8 {
+        Err(OpenError("keyring data too short".to_string()))?
+    }
+
+    let len = u64::from_be_bytes(
+        ciphertext[0..8]
+            .try_into()
+            .map_err(|_| OpenError("keyring data too short".to_string()))?,
+    );
+    if ciphertext.as_ref().len() < len as usize + 8 {
+        Err(OpenError("keyring data too short".to_string()))?
+    }
+    if len > usize::MAX as u64 {
+        Err(OpenError(
+            "keyring data exceeds system len limits".to_string(),
+        ))?
+    }
+    let len = len as usize;
+    if ciphertext.len() < len + 8 {
+        return Err("invalid keydata".into());
+    }
+
+    Ok(len)
+}
+fn finalize_seal(mut sealed: Vec<u8>) -> Result<Vec<u8>, SealError> {
+    let len = sealed.len() - 8;
+    let len_bytes = len.to_be_bytes();
+    sealed.splice(0..8, len_bytes.into_iter());
+    sealed.push(b'\n');
+    Ok(sealed)
+}
+
 #[derive(Serialize, Deserialize)]
 struct PrimitiveData {
     #[serde(rename = "kind")]
     kind: Kind,
     keyring: Value,
+}
+
+impl From<crate::Aead> for Primitive {
+    fn from(value: crate::Aead) -> Self {
+        Primitive::Aead(value)
+    }
+}
+impl From<crate::Daead> for Primitive {
+    fn from(value: crate::Daead) -> Self {
+        Primitive::Daead(value)
+    }
+}
+
+impl From<crate::Mac> for Primitive {
+    fn from(value: crate::Mac) -> Self {
+        Primitive::Mac(value)
+    }
+}
+
+impl From<crate::Signer> for Primitive {
+    fn from(value: crate::Signer) -> Self {
+        Primitive::Signature(value)
+    }
+}
+
+impl From<&crate::Aead> for Primitive {
+    fn from(value: &crate::Aead) -> Self {
+        Primitive::Aead(value.clone())
+    }
+}
+
+impl From<&crate::Daead> for Primitive {
+    fn from(value: &crate::Daead) -> Self {
+        Primitive::Daead(value.clone())
+    }
+}
+
+impl From<&crate::Mac> for Primitive {
+    fn from(value: &crate::Mac) -> Self {
+        Primitive::Mac(value.clone())
+    }
+}
+
+impl From<&crate::Signer> for Primitive {
+    fn from(value: &crate::Signer) -> Self {
+        Primitive::Signature(value.clone())
+    }
 }
 
 #[cfg(test)]

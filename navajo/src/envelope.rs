@@ -176,14 +176,15 @@ impl envelope::sync::Envelope for InMemory {
     }
 }
 
-/// `CleartextJson` implements [`Envelope`] but does not encrypt or decrypt the
+/// `PlaintextJson` implements [`Envelope`] but does not encrypt or decrypt the
 /// Data Encryption Key (DEK). Keyrings have special handling for the usage of
-/// `CleartextJson`as an [`Envelope`]. The output of `seal` is raw, unencrypted
+/// `PlaintextJson`as an [`Envelope`]. The output of `seal` is raw, unencrypted
 /// JSON while `unseal` will deserialize json.
 ///
-pub struct CleartextJson;
+#[derive(Debug, Clone)]
+pub struct PlaintextJson;
 
-impl Envelope for CleartextJson {
+impl Envelope for PlaintextJson {
     type EncryptError = serde_json::Error;
     type DecryptError = serde_json::Error;
 
@@ -212,7 +213,7 @@ impl Envelope for CleartextJson {
     }
 }
 
-impl envelope::sync::Envelope for CleartextJson {
+impl envelope::sync::Envelope for PlaintextJson {
     type EncryptError = serde_json::Error;
     type DecryptError = serde_json::Error;
     fn encrypt_dek<A, P>(&self, _aad: Aad<A>, _plaintext: P) -> Result<Vec<u8>, Self::EncryptError>
@@ -231,9 +232,9 @@ impl envelope::sync::Envelope for CleartextJson {
         Ok(vec![])
     }
 }
-pub(crate) fn is_cleartext<'a, T: Any + 'a>(envelope: &T) -> bool {
+pub(crate) fn is_plaintext<'a, T: Any + 'a>(envelope: &T) -> bool {
     let envelope = envelope as &dyn Any;
-    envelope.downcast_ref::<CleartextJson>().is_some()
+    envelope.downcast_ref::<PlaintextJson>().is_some()
 }
 
 #[cfg(test)]
@@ -254,7 +255,7 @@ mod tests {
 
         let m_keys = m.keys();
 
-        let envelope = CleartextJson;
+        let envelope = PlaintextJson;
         let result = Mac::seal(&m, Aad::empty(), &envelope).await.unwrap();
         println!("{}", String::from_utf8(result.clone()).unwrap());
         let value = serde_json::from_slice::<serde_json::Value>(&result);

@@ -165,11 +165,7 @@ impl Aead {
         *ciphertext = result;
         Ok(())
     }
-    pub fn decrypt_stream<S, A>(
-        &self,
-        stream: S,
-        aad: Aad<A>,
-    ) -> DecryptStream<S, Self, A, SystemRng>
+    pub fn decrypt_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptStream<S, Self, A>
     where
         S: Stream,
         S::Item: AsRef<[u8]>,
@@ -178,11 +174,7 @@ impl Aead {
         DecryptStream::new(stream, self.clone(), aad)
     }
 
-    pub fn decrypt_try_stream<S, A>(
-        &self,
-        stream: S,
-        aad: Aad<A>,
-    ) -> DecryptTryStream<S, Self, A, SystemRng>
+    pub fn decrypt_try_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptTryStream<S, Self, A>
     where
         S: TryStream,
         S::Ok: AsRef<[u8]>,
@@ -193,20 +185,13 @@ impl Aead {
     }
 
     #[cfg(feature = "std")]
-    pub fn decrypt_reader<R, A>(
-        &self,
-        reader: R,
-        aad: Aad<A>,
-    ) -> DecryptReader<R, A, &Self, SystemRng>
+    pub fn decrypt_reader<R, A>(&self, reader: R, aad: Aad<A>) -> DecryptReader<R, A, &Self>
     where
         R: std::io::Read,
         A: AsRef<[u8]>,
     {
         DecryptReader::new(reader, aad, self)
     }
-}
-
-impl Aead {
     pub fn new(algorithm: Algorithm, meta: Option<Value>) -> Self {
         Self::generate(&SystemRng, algorithm, meta)
     }
@@ -222,7 +207,12 @@ impl Aead {
         G: Rng,
     {
         Self {
-            keyring: Keyring::new(rng, Material::new(algorithm), crate::Origin::Navajo, meta),
+            keyring: Keyring::new(
+                rng,
+                Material::generate(rng, algorithm),
+                crate::Origin::Navajo,
+                meta,
+            ),
         }
     }
 
@@ -236,14 +226,14 @@ impl Aead {
         self.keyring.keys().iter().map(AeadKeyInfo::new).collect()
     }
 
-    pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<Value>) -> &mut Self {
-        self.keyring.add(
+    pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<Value>) -> AeadKeyInfo {
+        let key = self.keyring.add(
             &SystemRng,
-            Material::new(algorithm),
+            Material::generate(&SystemRng, algorithm),
             crate::Origin::Navajo,
             meta,
         );
-        self
+        key.into()
     }
 
     /// Returns [`AeadKeyInfo`] for the primary key.

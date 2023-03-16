@@ -1,15 +1,17 @@
 use alloc::sync::Arc;
+use serde::Serialize;
 
 use crate::{key::Key, Status};
 
 use super::Algorithm;
 
+#[derive(Serialize, Clone, Debug)]
 pub struct AeadKeyInfo {
     pub id: u32,
-    pub(crate) origin: crate::Origin,
     pub algorithm: Algorithm,
     pub status: Status,
-    pub meta: Option<Arc<serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Arc<serde_json::Value>>,
 }
 
 impl AeadKeyInfo {
@@ -17,9 +19,8 @@ impl AeadKeyInfo {
         Self {
             id: key.id(),
             algorithm: key.algorithm(),
-            origin: key.origin(),
             status: key.status(),
-            meta: key.meta(),
+            metadata: key.meta(),
         }
     }
 }

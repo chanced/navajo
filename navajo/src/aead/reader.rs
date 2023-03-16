@@ -3,25 +3,23 @@ use std::io::Read;
 
 use alloc::collections::VecDeque;
 
-use crate::{error::DecryptError, rand::Rng, Aad, Aead, SystemRng};
+use crate::{error::DecryptError, Aad, Aead};
 
 use super::Decryptor;
 
-pub struct DecryptReader<R, A, C, G = SystemRng>
+pub struct DecryptReader<R, A, C>
 where
     R: Read,
     A: AsRef<[u8]>,
     C: AsRef<Aead>,
-    G: Rng,
 {
     reader: R,
     _marker: PhantomData<C>,
     aad: Aad<A>,
-    deserializer: Option<Decryptor<C, Vec<u8>, G>>,
+    deserializer: Option<Decryptor<C, Vec<u8>>>,
     buffer: VecDeque<u8>,
-    rng: G,
 }
-impl<R, A, C> DecryptReader<R, A, C, SystemRng>
+impl<R, A, C> DecryptReader<R, A, C>
 where
     R: Read,
     A: AsRef<[u8]>,
@@ -34,27 +32,6 @@ where
             aad,
             deserializer: Some(Decryptor::new(cipher, Vec::new())),
             buffer: VecDeque::new(),
-            rng: SystemRng,
-        }
-    }
-}
-
-impl<R, A, C, G> DecryptReader<R, A, C, G>
-where
-    R: Read,
-    A: AsRef<[u8]>,
-    C: AsRef<Aead>,
-    G: Rng,
-{
-    #[cfg(test)]
-    pub fn new_with_rng(rng: G, reader: R, aad: Aad<A>, cipher: C) -> Self {
-        Self {
-            reader,
-            _marker: PhantomData,
-            aad,
-            deserializer: Some(Decryptor::new_with_rng(rng.clone(), cipher, Vec::new())),
-            buffer: VecDeque::new(),
-            rng,
         }
     }
     fn update(&mut self, mut ctr: usize, iter: impl Iterator<Item = u8>, buf: &mut [u8]) -> usize {
@@ -158,7 +135,7 @@ mod tests {
     fn test_read() {
         let mut data = vec![0u8; 6024];
         let rng = SystemRng::new();
-        rng.fill(&mut data);
+        rng.fill(&mut data).unwrap();
         let aead = Aead::new(Algorithm::ChaCha20Poly1305, None);
         let mut encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), Vec::new());
         encryptor.update(Aad::empty(), &data).unwrap();

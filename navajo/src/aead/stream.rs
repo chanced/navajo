@@ -9,8 +9,7 @@ use pin_project::pin_project;
 
 use crate::{
     error::{DecryptError, EncryptError},
-    rand::Rng,
-    Aad, Aead, SystemRng,
+    Aad, Aead,
 };
 
 use super::{Decryptor, Encryptor, Segment};
@@ -25,7 +24,7 @@ pub trait AeadStream: Stream {
     {
         EncryptStream::new(self, segment, aad, aead)
     }
-    fn decrypt<C, A>(self, aad: Aad<A>, cipher: C) -> DecryptStream<Self, C, A, SystemRng>
+    fn decrypt<C, A>(self, aad: Aad<A>, cipher: C) -> DecryptStream<Self, C, A>
     where
         Self: Sized,
         Self::Item: AsRef<[u8]>,
@@ -150,22 +149,21 @@ where
     }
 }
 #[pin_project]
-pub struct DecryptStream<S, C, A, G = SystemRng>
+pub struct DecryptStream<S, C, A>
 where
     S: Stream + Sized,
     C: AsRef<Aead> + Send + Sync,
     A: AsRef<[u8]>,
-    G: Rng,
 {
     #[pin]
     stream: Fuse<S>,
-    decryptor: Option<Decryptor<C, Vec<u8>, G>>,
+    decryptor: Option<Decryptor<C, Vec<u8>>>,
     queue: VecDeque<Vec<u8>>,
     aad: Aad<A>,
     done: bool,
 }
 
-impl<S, C, A> DecryptStream<S, C, A, SystemRng>
+impl<S, C, A> DecryptStream<S, C, A>
 where
     S: Stream,
     C: AsRef<Aead> + Send + Sync,
@@ -182,27 +180,13 @@ where
         }
     }
 }
-#[cfg(not(feature = "std"))]
-impl<S, C, D, G> DecryptStream<S, C, D, G> {
-    pub fn new_with_rng(rng: G, stream: S, cipher: C, aad: Aad<A>) -> Self {
-        let decryptor = Decryptor::new(cipher, vec![]);
-        Self {
-            aad,
-            stream: stream.fuse(),
-            decryptor: Some(decryptor),
-            queue: VecDeque::new(),
-            done: false,
-            rng: G,
-        }
-    }
-}
-impl<S, C, D, G> Stream for DecryptStream<S, C, D, G>
+
+impl<S, C, D> Stream for DecryptStream<S, C, D>
 where
     S: Stream,
     S::Item: AsRef<[u8]>,
     C: AsRef<Aead> + Send + Sync,
     D: AsRef<[u8]> + Send + Sync,
-    G: Rng,
 {
     type Item = Result<Vec<u8>, DecryptError>;
     fn poll_next(
@@ -289,8 +273,8 @@ mod tests {
     #[tokio::test]
     async fn test_stream_with_aad_roundtrip() {
         let mut data = vec![0u8; 5556];
-        let rng = SystemRng::new();
-        rng.fill(&mut data);
+        let rng = crate::SystemRng::new();
+        rng.fill(&mut data).unwrap();
         let data_stream = stream::iter(data.chunks(122).map(Vec::from));
         let algorithm = Algorithm::Aes256Gcm;
         let aead = Aead::new(algorithm, None);

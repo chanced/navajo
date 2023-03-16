@@ -6,8 +6,7 @@ use crate::{
     error::DecryptError,
     hkdf::{self, Salt},
     key::Key,
-    rand::Rng,
-    Aad, Aead, Buffer, SystemRng,
+    Aad, Aead, Buffer,
 };
 #[cfg(not(feature = "std"))]
 use alloc::vec;
@@ -19,10 +18,9 @@ use std::vec::IntoIter;
 
 use super::{cipher::Cipher, nonce::Nonce, Algorithm, Method};
 
-pub struct Decryptor<C, B, G>
+pub struct Decryptor<C, B>
 where
     C: AsRef<Aead>,
-    G: Rng,
 {
     cipher: C,
     buf: B,
@@ -31,10 +29,9 @@ where
     nonce: Option<Nonce>,
     backend: Option<Cipher>,
     method: Option<Method>,
-    rng: G,
 }
 
-impl<C, B> Decryptor<C, B, SystemRng>
+impl<C, B> Decryptor<C, B>
 where
     C: AsRef<Aead>,
     B: Buffer,
@@ -48,29 +45,9 @@ where
             nonce: None,
             backend: None,
             method: None,
-            rng: SystemRng,
         }
     }
-}
-impl<C, B, G> Decryptor<C, B, G>
-where
-    C: AsRef<Aead>,
-    B: Buffer,
-    G: Rng,
-{
-    #[cfg(test)]
-    pub fn new_with_rng(rng: G, cipher: C, buf: B) -> Self {
-        Self {
-            cipher,
-            buf,
-            key: None,
-            key_id: None,
-            nonce: None,
-            backend: None,
-            method: None,
-            rng,
-        }
-    }
+
     pub fn algorithm(&self) -> Option<Algorithm> {
         self.key.as_ref().map(|c| c.algorithm())
     }
@@ -360,9 +337,9 @@ mod tests {
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
         let key = aead.keyring.primary();
         let key_id = key.id();
-        let mut nonce = vec![0u8; key.nonce_len()];
+        let mut nonce = vec![0u8; key.algorithm().nonce_len()];
         let rng = SystemRng::new();
-        rng.fill(&mut nonce);
+        rng.fill(&mut nonce).unwrap();
         let buf = [
             &method.to_be_bytes()[..],
             &key_id.to_be_bytes()[..],
@@ -377,7 +354,7 @@ mod tests {
         let n = dec.nonce.as_ref().unwrap();
         match n {
             Nonce::Single(n) => {
-                assert_eq!(n.bytes(), &nonce[..]);
+                assert_eq!(n, &nonce[..]);
             }
             Nonce::Sequence(_) => {
                 panic!("expected nonce, got nonce sequence");
@@ -394,10 +371,10 @@ mod tests {
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
         let key_id = aead.primary_key().id;
         let mut seed = vec![0u8; aead.primary_key().algorithm.key_len()];
-        rng.fill(&mut seed);
+        rng.fill(&mut seed).unwrap();
         // rand::fill(&mut seed);
         let nonce = vec![0u8; aead.primary_key().algorithm.nonce_prefix_len()];
-        rng.fill(&mut seed);
+        rng.fill(&mut seed).unwrap();
         let buf = [
             &method.to_be_bytes()[..],
             &key_id.to_be_bytes()[..],
@@ -448,7 +425,7 @@ mod tests {
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
         let mut data = vec![0u8; 65536];
         let rng = SystemRng::new();
-        rng.fill(&mut data);
+        rng.fill(&mut data).unwrap();
         let encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), data.clone());
         let enc_seg: Vec<Vec<u8>> = encryptor.finalize(Aad::empty()).unwrap().collect();
         let ciphertext = enc_seg.concat();
@@ -495,7 +472,7 @@ mod tests {
     fn test_with_aad_roundtrip() {
         let mut data = vec![0u8; 5556];
         let rng = SystemRng::default();
-        rng.fill(&mut data);
+        rng.fill(&mut data).unwrap();
         let chunks = data.chunks(122).map(Vec::from);
         let algorithm = Algorithm::Aes256Gcm;
         let aead = Aead::new(algorithm, None);

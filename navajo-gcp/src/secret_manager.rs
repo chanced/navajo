@@ -1,13 +1,13 @@
 use gcloud_sdk::{
     google::cloud::secretmanager::v1::{
-        secret, secret_manager_service_client::SecretManagerServiceClient,
-        AccessSecretVersionRequest, AccessSecretVersionResponse, GetSecretRequest,
+        secret_manager_service_client::SecretManagerServiceClient, AccessSecretVersionRequest,
+        GetSecretRequest,
     },
     GoogleApi, GoogleAuthMiddleware,
 };
 use navajo::{secret_store::SecretStore, sensitive};
 use secret_vault_value::SecretValue;
-use std::{fmt::Display, ops::Deref, sync::Arc};
+use std::{fmt::Display, sync::Arc};
 use tokio::sync::OnceCell;
 use tonic::{Request, Status};
 
@@ -73,7 +73,7 @@ impl Default for SecretManager {
 
 impl SecretStore for SecretManager {
     type Error = SecretManagerError;
-    fn get<N: ToString>(
+    fn get_secret<N: ToString>(
         &self,
         name: N,
     ) -> std::pin::Pin<
@@ -104,16 +104,29 @@ impl SecretStore for SecretManager {
 pub mod sync {
     use std::sync::Arc;
 
-    pub struct SecretManger {
+    use navajo::secret_store::{sync::SecretStore, SecretStore as _};
+
+    pub struct SecretManager {
         inner: super::SecretManager,
         runtime: Arc<tokio::runtime::Runtime>,
     }
-    impl SecretManger {
+    impl SecretManager {
         pub fn new() -> Self {
             Self {
                 inner: super::SecretManager::new(),
                 runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
             }
+        }
+    }
+    impl SecretStore for SecretManager {
+        type Error = super::SecretManagerError;
+        fn get<N: ToString>(&self, name: N) -> Result<navajo::sensitive::Bytes, Self::Error> {
+            self.runtime.block_on(self.inner.get_secret(name))
+        }
+    }
+    impl Default for SecretManager {
+        fn default() -> Self {
+            Self::new()
         }
     }
 }
@@ -220,7 +233,7 @@ mod tests {
     use super::*;
     #[tokio::test]
     async fn test_get_secret_version() {
-        let project_id = std::env::var("PROJECT_ID").unwrap();
+        let _project_id = std::env::var("PROJECT_ID").unwrap();
         let secret_manager = SecretManager::new();
         let secret = secret_manager.secret("test-secret").await.unwrap();
         let secret_version = secret.latest().await.unwrap();
@@ -231,7 +244,7 @@ mod tests {
         let project_id = std::env::var("PROJECT_ID").unwrap();
         let secret_name = format!("projects/{project_id}/secrets/test-secret2/version/1");
         let secret_manager = SecretManager::new();
-        let secret = secret_manager.get(secret_name).await.unwrap();
+        let secret = secret_manager.get_secret(secret_name).await.unwrap();
         println!("{:?}", String::from_utf8_lossy(secret.as_ref()))
     }
 }

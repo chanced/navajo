@@ -8,11 +8,11 @@ use typenum::{U12, U24};
 
 use crate::error::UnspecifiedError;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NonceSize {
-    Twelve,
-    TwentyFour,
-}
+// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// pub enum NonceSize {
+//     Twelve,
+//     TwentyFour,
+// }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Nonce {
@@ -36,7 +36,11 @@ pub(crate) enum SingleNonce {
     /// boxed.
     TwentyFour(Box<[u8; 24]>),
 }
-
+impl core::cmp::PartialEq<[u8]> for SingleNonce {
+    fn eq(&self, other: &[u8]) -> bool {
+        self.as_ref() == other
+    }
+}
 impl SingleNonce {
     pub(crate) fn new<R>(rng: R, size: usize) -> Self
     where
@@ -297,15 +301,15 @@ mod tests {
 
         let mut seq = NonceSequence::new(rand, 12);
 
-        assert_ne!(seq.seed()[..7], [0u8; 7]);
-        assert_eq!(seq.seed()[7..], [0u8; 5]);
+        assert_ne!(seq.seed_mut()[..7], [0u8; 7]);
+        assert_eq!(seq.seed_mut()[7..], [0u8; 5]);
 
         let next = seq.next().unwrap();
-        assert_eq!(next.as_ref()[..7], seq.seed()[..7]);
+        assert_eq!(next.as_ref()[..7], seq.seed_mut()[..7]);
         assert_eq!(next.as_ref()[7..], vec![0, 0, 0, 0, 0]);
 
         let next = seq.next().unwrap();
-        assert_eq!(next.as_ref()[..7], seq.seed()[..7]);
+        assert_eq!(next.as_ref()[..7], seq.seed_mut()[..7]);
         assert_eq!(next.as_ref()[7..], vec![0, 0, 0, 1, 0]);
 
         let next = seq.next().unwrap();
@@ -325,15 +329,15 @@ mod tests {
         assert!(bounds_check.next().is_err());
 
         let mut seq = NonceSequence::new(rand, 24);
-        assert_ne!(seq.seed()[..19], [0u8; 19]);
-        assert_eq!(seq.seed()[19..], [0u8; 5]);
+        assert_ne!(seq.seed_mut()[..19], [0u8; 19]);
+        assert_eq!(seq.seed_mut()[19..], [0u8; 5]);
 
         let next = seq.next().unwrap();
-        assert_eq!(next.as_ref()[..19], seq.seed()[..19]);
+        assert_eq!(next.as_ref()[..19], seq.seed_mut()[..19]);
         assert_eq!(next.as_ref()[19..], vec![0, 0, 0, 0, 0]);
 
         let next = seq.next().unwrap();
-        assert_eq!(next.as_ref()[..19], seq.seed()[..19]);
+        assert_eq!(next.as_ref()[..19], seq.seed_mut()[..19]);
         assert_eq!(next.as_ref()[19..], vec![0, 0, 0, 1, 0]);
 
         let next = seq.next().unwrap();

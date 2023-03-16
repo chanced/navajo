@@ -2,8 +2,15 @@ use clap::Parser;
 use navajo_cli::Cli;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    Cli::parse()
-        .execute(tokio::io::stdin(), tokio::io::stdout())
+async fn main() {
+    match Cli::parse()
+        .run(tokio::io::stdin(), tokio::io::stdout())
         .await
+    {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
+    }
 }

@@ -1,7 +1,5 @@
 use crate::error::InvalidLengthError;
 
-use super::Algorithm;
-
 /// Psuedo-random key
 #[derive(Clone, Debug)]
 pub struct Prk {
@@ -102,27 +100,27 @@ impl RustCryptoPrk {
         Ok(())
     }
 
-    #[cfg(any(
-        feature = "ring",
-        all(feature = "sha2", feature = "hmac"),
-        all(feature = "sha3", feature = "hmac")
-    ))]
-    fn algorithm(&self) -> Algorithm {
-        match self {
-            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
-            RustCryptoPrk::Sha256(_) => Algorithm::Sha256,
-            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
-            RustCryptoPrk::Sha384(_) => Algorithm::Sha384,
-            #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
-            RustCryptoPrk::Sha512(_) => Algorithm::Sha512,
-            #[cfg(all(feature = "sha3", feature = "hmac"))]
-            RustCryptoPrk::Sha3_256(_) => Algorithm::Sha256,
-            #[cfg(all(feature = "sha3", feature = "hmac"))]
-            RustCryptoPrk::Sha3_224(_) => Algorithm::Sha3_224,
-            #[cfg(all(feature = "sha3", feature = "hmac"))]
-            RustCryptoPrk::Sha3_384(_) => Algorithm::Sha3_384,
-            #[cfg(all(feature = "sha3", feature = "hmac"))]
-            RustCryptoPrk::Sha3_512(_) => Algorithm::Sha3_512,
-        }
-    }
+    // #[cfg(any(
+    //     feature = "ring",
+    //     all(feature = "sha2", feature = "hmac"),
+    //     all(feature = "sha3", feature = "hmac")
+    // ))]
+    // fn algorithm(&self) -> Algorithm {
+    //     match self {
+    //         #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+    //         RustCryptoPrk::Sha256(_) => Algorithm::Sha256,
+    //         #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+    //         RustCryptoPrk::Sha384(_) => Algorithm::Sha384,
+    //         #[cfg(all(not(feature = "ring"), feature = "sha2", feature = "hmac"))]
+    //         RustCryptoPrk::Sha512(_) => Algorithm::Sha512,
+    //         #[cfg(all(feature = "sha3", feature = "hmac"))]
+    //         RustCryptoPrk::Sha3_256(_) => Algorithm::Sha256,
+    //         #[cfg(all(feature = "sha3", feature = "hmac"))]
+    //         RustCryptoPrk::Sha3_224(_) => Algorithm::Sha3_224,
+    //         #[cfg(all(feature = "sha3", feature = "hmac"))]
+    //         RustCryptoPrk::Sha3_384(_) => Algorithm::Sha3_384,
+    //         #[cfg(all(feature = "sha3", feature = "hmac"))]
+    //         RustCryptoPrk::Sha3_512(_) => Algorithm::Sha3_512,
+    //     }
+    // }
 }

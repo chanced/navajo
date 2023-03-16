@@ -12,6 +12,7 @@ pub enum Algorithm {
     /// AEAD - AES-128-GCM
     #[clap(
         alias = "AES-128-GCM",
+        alias = "aes128gcm",
         alias = "AES128GCM",
         alias = "AES_128_GCM",
         alias = "aes-128-gcm",
@@ -22,6 +23,7 @@ pub enum Algorithm {
     /// AEAD - AES-256-GCM
     #[clap(
         alias = "AES-256-GCM",
+        alias = "aes256gcm",
         alias = "AES256GCM",
         alias = "AES_256_GCM",
         alias = "aes-256-gcm",

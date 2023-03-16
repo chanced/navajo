@@ -23,14 +23,6 @@ pub struct SystemRng;
 impl Sealed for SystemRng {}
 impl CryptoRng for SystemRng {}
 
-/// Reports whether or not a slice of bytes is fully repeating
-pub(crate) fn is_fully_repeating(key: &[u8]) -> bool {
-    if key.len() < 2 {
-        return false;
-    }
-    !key.iter().cloned().all(|b| b == key[0])
-}
-
 pub(crate) fn is_zero(key: &[u8]) -> bool {
     key.iter().cloned().all(|b| b == 0)
 }
@@ -147,8 +139,8 @@ impl RngCore for SystemRng {
 
 #[cfg(all(test, feature = "std"))]
 mockall::mock! {
-    pub RandomInner {}
-    impl Rng for RandomInner {
+    pub RngInner {}
+    impl Rng for RngInner {
         fn fill(&self, dst: &mut [u8]) -> Result<(), RandomError>;
         fn u8(&self) -> Result<u8, RandomError>;
         fn u16(&self) -> Result<u16, RandomError>;
@@ -160,10 +152,10 @@ mockall::mock! {
 
 }
 #[cfg(all(test, feature = "std"))]
-impl Sealed for MockRandomInner {}
+impl Sealed for MockRngInner {}
 
 #[cfg(all(test, feature = "std"))]
-impl Clone for MockRandomInner {
+impl Clone for MockRngInner {
     fn clone(&self) -> Self {
         panic!("MockRandomInner cannot be cloned; clone must be called on MockRandom")
     }
@@ -171,35 +163,35 @@ impl Clone for MockRandomInner {
 
 #[cfg(all(test, feature = "std"))]
 #[derive(Clone)]
-pub struct MockRandom {
-    inner: std::sync::Arc<std::sync::Mutex<MockRandomInner>>,
+pub struct MockRng {
+    inner: std::sync::Arc<std::sync::Mutex<MockRngInner>>,
 }
 #[cfg(all(test, feature = "std"))]
-impl Sealed for MockRandom {}
+impl Sealed for MockRng {}
 #[cfg(all(test, feature = "std"))]
-impl CryptoRng for MockRandom {}
+impl CryptoRng for MockRng {}
 
 #[cfg(all(test, feature = "std"))]
-impl MockRandom {
+impl MockRng {
     pub fn new() -> Self {
         Self {
-            inner: std::sync::Arc::new(std::sync::Mutex::new(MockRandomInner::new())),
+            inner: std::sync::Arc::new(std::sync::Mutex::new(MockRngInner::new())),
         }
     }
-    pub fn lock(&self) -> std::sync::MutexGuard<'_, MockRandomInner> {
+    pub fn lock(&self) -> std::sync::MutexGuard<'_, MockRngInner> {
         self.inner.lock().unwrap()
     }
 }
 
 #[cfg(all(test, feature = "std"))]
-impl Default for MockRandom {
+impl Default for MockRng {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[cfg(all(test, feature = "std"))]
-impl RngCore for MockRandom {
+impl RngCore for MockRng {
     fn next_u32(&mut self) -> u32 {
         self.lock().u32().unwrap()
     }

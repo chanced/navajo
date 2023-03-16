@@ -440,8 +440,8 @@ impl From<serde_json::Error> for OpenError {
 }
 
 impl From<chacha20poly1305::Error> for OpenError {
-    fn from(e: chacha20poly1305::Error) -> Self {
-        Self(e.to_string())
+    fn from(_: chacha20poly1305::Error) -> Self {
+        Self("error decrypting with chacha20poly1305".to_string())
     }
 }
 impl From<crypto_common::InvalidLength> for OpenError {

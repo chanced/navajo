@@ -2,29 +2,24 @@ use alloc::vec::Vec;
 
 use crate::{constant_time::verify_slices_are_equal, error::MacVerificationError};
 
-use super::output::{DigestOutput, Output};
+use super::output::Output;
 
 #[derive(Clone, Debug)]
 pub(super) struct Entry {
-    key_id: u32,
     is_primary: bool,
     header: Vec<u8>,
     output: Output,
 }
 
 impl Entry {
-    pub(super) fn new(key_id: u32, is_primary: bool, header: Vec<u8>, output: Output) -> Self {
+    pub(super) fn new(is_primary: bool, header: Vec<u8>, output: Output) -> Self {
         Self {
-            key_id,
             is_primary,
             header,
             output,
         }
     }
 
-    pub(super) fn key_id(&self) -> u32 {
-        self.key_id
-    }
     pub(super) fn is_primary(&self) -> bool {
         self.is_primary
     }
@@ -81,13 +76,13 @@ impl Entry {
     pub(super) fn output_bytes(&self) -> &[u8] {
         self.output.as_bytes()
     }
-    pub(super) fn output(&self) -> &Output {
-        &self.output
-    }
+    // pub(super) fn output(&self) -> &Output {
+    //     &self.output
+    // }
 
-    pub(super) fn truncatable(&self) -> bool {
-        self.output.truncatable()
-    }
+    // pub(super) fn truncatable(&self) -> bool {
+    //     self.output.truncatable()
+    // }
 }
 
 #[cfg(feature = "blake3")]
@@ -104,10 +99,10 @@ mod tests {
         let mut hash_arr = [0; 32];
         let id = crate::keyring::gen_id(&rng);
         let id_bytes = id.to_be_bytes();
-        rng.fill(&mut hash_arr);
+        rng.fill(&mut hash_arr).unwrap();
         let hash = blake3::Hash::from(hash_arr);
         let output = Output::Blake3(crate::mac::output::Blake3Output::from(hash));
-        let entry = Entry::new(id, true, id_bytes.to_vec(), output);
+        let entry = Entry::new(true, id_bytes.to_vec(), output);
 
         let tag_with_header = [&id_bytes[..], &hash_arr[..]].concat();
         assert!(entry.verify(&hash_arr, None).is_ok());

@@ -279,7 +279,7 @@ mod tests {
         let key = aead.keyring.primary();
         let mut buf = vec![0u8; 100];
         let rng = SystemRng::new();
-        rng.fill(&mut buf);
+        rng.fill(&mut buf).unwrap();
         let encryptor = Encryptor::new(&aead, None, buf);
         let result = encryptor.finalize(Aad([])).unwrap().next().unwrap();
         assert!(result.len() > 100);
@@ -293,7 +293,7 @@ mod tests {
         let aead = Aead::new(algorithm, None);
         let mut buf = vec![0u8; 65536];
         let rng = SystemRng::new();
-        rng.fill(&mut buf);
+        rng.fill(&mut buf).unwrap();
         let encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), buf);
 
         let expected = FOUR_KB
@@ -311,7 +311,7 @@ mod tests {
         let key = aead.keyring.primary();
         let rng = SystemRng::new();
         let mut buf = vec![0u8; 65536];
-        rng.fill(&mut buf);
+        rng.fill(&mut buf).unwrap();
         let encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), buf);
         let result: Vec<Vec<u8>> = encryptor.finalize(Aad::empty()).unwrap().collect();
         assert!(result.len() == 17);
@@ -355,7 +355,7 @@ mod tests {
     fn test_chunked_segment() {
         let mut data = vec![0u8; 5556];
         let rng = SystemRng::new();
-        rng.fill(&mut data);
+        rng.fill(&mut data).unwrap();
         let chunks = data.chunks(122).map(Vec::from);
         let algorithm = Algorithm::Aes256Gcm;
         let aead = Aead::new(algorithm, None);

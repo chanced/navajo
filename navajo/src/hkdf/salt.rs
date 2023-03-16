@@ -69,14 +69,14 @@ enum SaltInner {
 #[cfg(feature = "ring")]
 struct RingSalt {
     salt: Arc<ring::hkdf::Salt>,
-    algorithm: Algorithm,
+    // algorithm: Algorithm,
 }
 #[cfg(feature = "ring")]
 impl RingSalt {
     fn new(algorithm: Algorithm, value: &[u8]) -> Self {
         Self {
             salt: Arc::new(ring::hkdf::Salt::new(algorithm.into(), value)),
-            algorithm,
+            // algorithm,
         }
     }
     fn extract(&self, secret: &[u8]) -> Prk {

@@ -23,8 +23,8 @@ impl Kms {
             client: Default::default(),
         }
     }
-    pub fn key<N: ToString>(&self, name: N) -> Key {
-        Key {
+    pub fn key<N: ToString>(&self, name: N) -> CryptoKey {
+        CryptoKey {
             name: name.to_string(),
             client: self.client.clone(),
         }
@@ -38,11 +38,11 @@ impl Default for Kms {
 }
 
 #[derive(Clone)]
-pub struct Key {
+pub struct CryptoKey {
     name: String,
     client: Arc<OnceCell<GoogleApi<KeyManagementServiceClient<GoogleAuthMiddleware>>>>,
 }
-impl Debug for Key {
+impl Debug for CryptoKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("GcpKmsKey")
             .field("name", &self.name)
@@ -50,14 +50,14 @@ impl Debug for Key {
     }
 }
 
-impl Key {
+impl CryptoKey {
     async fn try_get_client(
         &self,
     ) -> Result<KeyManagementServiceClient<GoogleAuthMiddleware>, KmsError> {
         Ok(self.client.get_or_try_init(init_client).await?.get())
     }
 }
-impl Envelope for Key {
+impl Envelope for CryptoKey {
     type EncryptError = KmsError;
     type DecryptError = KmsError;
 
@@ -182,7 +182,7 @@ pub mod sync {
 
     #[derive(Clone, Debug)]
     pub struct Key {
-        key: Arc<super::Key>,
+        key: Arc<super::CryptoKey>,
         runtime: Arc<tokio::runtime::Runtime>,
     }
 

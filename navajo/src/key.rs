@@ -55,13 +55,6 @@ where
     pub(crate) fn meta(&self) -> Option<Arc<Value>> {
         self.meta.clone()
     }
-    pub(crate) fn meta_as_ref(&self) -> Option<&Value> {
-        self.meta.as_ref().map(Arc::as_ref)
-    }
-
-    pub(crate) fn can_delete(&self) -> bool {
-        !self.status.is_primary()
-    }
     pub(crate) fn disable(
         &mut self,
     ) -> Result<KeyInfo<M::Algorithm>, DisableKeyError<M::Algorithm>> {
@@ -127,6 +120,9 @@ where
     pub(crate) fn is_disabled(&self) -> bool {
         self.status.is_disabled()
     }
+    pub(crate) fn can_delete(&self) -> bool {
+        !self.status.is_primary()
+    }
 }
 impl<M> PartialEq for Key<M>
 where
@@ -179,7 +175,7 @@ pub(crate) mod test {
     impl Material {
         pub(crate) fn new(algorithm: Algorithm) -> Self {
             let mut value = [0u8; 32];
-            crate::SystemRng.fill(&mut value);
+            // crate::Systemrng.fill(&mut value).unwrap();
             Self { algorithm, value }
         }
     }
@@ -239,8 +235,8 @@ pub(crate) mod test {
             Material::new(Algorithm::Pancakes),
             Some("(╯°□°）╯︵ ┻━┻".into()),
         );
-        assert_eq!(key.meta_as_ref(), Some("(╯°□°）╯︵ ┻━┻".into()).as_ref());
+        assert_eq!(key.meta.as_deref(), Some("(╯°□°）╯︵ ┻━┻".into()).as_ref());
         key.update_meta(Some("┬─┬ノ( º _ ºノ)".into()));
-        assert_eq!(key.meta_as_ref(), Some("┬─┬ノ( º _ ºノ)".into()).as_ref());
+        assert_eq!(key.meta.as_deref(), Some("┬─┬ノ( º _ ºノ)".into()).as_ref());
     }
 }

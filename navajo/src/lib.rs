@@ -22,7 +22,7 @@ pub mod daead;
 pub use daead::Daead;
 
 pub mod envelope;
-pub use envelope::{CleartextJson, Envelope};
+pub use envelope::{Envelope, PlaintextJson};
 
 pub mod error;
 

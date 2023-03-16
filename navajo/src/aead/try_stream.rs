@@ -159,17 +159,17 @@ where
         }
     }
 }
+
 #[pin_project]
-pub struct DecryptTryStream<S, C, A, G = SystemRng>
+pub struct DecryptTryStream<S, C, A>
 where
     S: TryStream + Sized,
     C: AsRef<Aead> + Send + Sync,
     A: AsRef<[u8]> + Send + Sync,
-    G: Rng,
 {
     #[pin]
     stream: S,
-    decryptor: Option<Decryptor<C, Vec<u8>, G>>,
+    decryptor: Option<Decryptor<C, Vec<u8>>>,
     queue: VecDeque<Vec<u8>>,
     aad: Aad<A>,
     done: bool,
@@ -298,7 +298,7 @@ mod tests {
     async fn test_stream_with_aad_roundtrip() {
         let mut data = vec![0u8; 5556];
         let rng = SystemRng::new();
-        rng.fill(&mut data);
+        rng.fill(&mut data).unwrap();
         let data_stream = stream::iter(data.chunks(122).map(Vec::from)).map(to_try_stream);
         let algorithm = Algorithm::Aes256Gcm;
         let aead = Aead::new(algorithm, None);

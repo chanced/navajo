@@ -68,9 +68,9 @@ impl<M> Keys<M>
 where
     M: KeyMaterial,
 {
-    fn len(&self) -> usize {
-        self.0.len()
-    }
+    // fn len(&self) -> usize {
+    //     self.0.len()
+    // }
     fn get(&self, id: u32) -> Option<(usize, &Key<M>)> {
         self.position(id).map(|idx| (idx, &self.0[idx]))
     }
@@ -103,14 +103,14 @@ where
         self.0 = Arc::from(keys);
         Ok(&self.0[idx])
     }
-    fn demote(&mut self, id: u32) -> Result<&Key<M>, KeyNotFoundError> {
-        let idx = self.position(id).ok_or(KeyNotFoundError(id))?;
-        let mut keys = self.0.iter().cloned().collect::<Vec<_>>();
-        let key = keys.get_mut(idx).unwrap();
-        key.demote();
-        self.0 = Arc::from(keys);
-        Ok(&self.0[idx])
-    }
+    // fn demote(&mut self, id: u32) -> Result<&Key<M>, KeyNotFoundError> {
+    //     let idx = self.position(id).ok_or(KeyNotFoundError(id))?;
+    //     let mut keys = self.0.iter().cloned().collect::<Vec<_>>();
+    //     let key = keys.get_mut(idx).unwrap();
+    //     key.demote();
+    //     self.0 = Arc::from(keys);
+    //     Ok(&self.0[idx])
+    // }
 }
 impl<M> Deref for Keys<M>
 where
@@ -481,27 +481,27 @@ where
     }
 }
 
-pub(crate) async fn open_keyring_value<A, C, E>(
+pub(crate) async fn open_keyring_value<A, E>(
     aad: Aad<A>,
-    ciphertext: C,
+    ciphertext: Vec<u8>,
     envelope: &E,
 ) -> Result<(Kind, Value), OpenError>
 where
-    A: 'static + Send + Sync + AsRef<[u8]>,
-    C: 'static + Send + Sync + AsRef<[u8]>,
+    A: 'static + AsRef<[u8]>,
     E: Envelope,
 {
-    let c = ciphertext.as_ref();
-    let sealed_cipher_and_nonce = read_sealed_cipher_and_nonce(c)?;
+    let sealed_cipher_and_nonce = read_sealed_cipher_and_nonce(&ciphertext)?;
+
     let key = envelope
         .decrypt_dek(Aad(aad.as_ref().to_vec()), sealed_cipher_and_nonce.clone())
         .await
         .map_err(|e| e.to_string())?;
 
-    let value = open_and_deserialize(key, aad, ciphertext.as_ref(), &sealed_cipher_and_nonce)?;
+    let value = open_and_deserialize(key, aad, &ciphertext, &sealed_cipher_and_nonce)?;
     let kind = get_kind(&value)?;
     Ok((kind, value))
 }
+
 pub(crate) fn open_keyring_value_sync<A, S, E>(
     aad: Aad<A>,
     sealed: S,
@@ -663,7 +663,7 @@ mod tests {
             let first = keyring.primary();
             let first_id = first.id();
             assert_eq!(first.status(), Status::Primary);
-            assert_eq!(first.meta_as_ref(), Some("test".into()).as_ref());
+            assert_eq!(first.meta().as_deref(), Some("test".into()).as_ref());
             assert_eq!(first.origin(), Origin::Navajo);
             assert_ne!(first.id(), 0);
             assert_eq!(first.algorithm(), Algorithm::Pancakes);

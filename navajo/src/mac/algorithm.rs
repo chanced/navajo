@@ -1,15 +1,12 @@
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
-use strum::{AsStaticStr, Display, EnumIter, IntoStaticStr};
+use strum::{Display, EnumIter, IntoStaticStr};
 
 use crate::{error::KeyError, rand::Rng};
 
 const SHA2_256_KEY_LEN: usize = 32;
-const SHA2_224_KEY_LEN: usize = 32;
 const SHA2_384_KEY_LEN: usize = 48;
 const SHA2_512_KEY_LEN: usize = 64;
-const SHA2_512_224_KEY_LEN: usize = 64;
-const SHA2_512_256_KEY_LEN: usize = 64;
 const SHA3_224_KEY_LEN: usize = 32;
 const SHA3_256_KEY_LEN: usize = 32;
 const SHA3_384_KEY_LEN: usize = 48;
