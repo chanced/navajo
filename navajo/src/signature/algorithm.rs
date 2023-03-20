@@ -39,6 +39,21 @@ pub enum Algorithm {
     // Ps512,
 }
 impl Algorithm {
+    pub fn jwt_alg(&self) -> &'static str {
+        match self {
+            Algorithm::Es256 => "ES256",
+            Algorithm::Es384 => "ES384",
+            Algorithm::Ed25519 => "EdDSA",
+        }
+    }
+    pub fn from_jwt_alg(alg: &str) -> Result<Self, &str> {
+        match alg.to_uppercase().as_str() {
+            "ES256" => Ok(Algorithm::Es256),
+            "ES384" => Ok(Algorithm::Es384),
+            "EDDSA" => Ok(Algorithm::Ed25519),
+            _ => Err("unsupported algorithm: \"{alg}\""),
+        }
+    }
     #[cfg(feature = "ring")]
     pub(super) fn ring_ecdsa_signing_algorithm(
         &self,

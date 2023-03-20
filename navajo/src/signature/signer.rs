@@ -6,11 +6,11 @@ use crate::{
     KeyInfo,
 };
 
-use super::{Algorithm, Material};
+use super::{Algorithm, Material, Signature, SigningKey};
 
 #[derive(Clone, Debug)]
 pub struct Signer {
-    keyring: Keyring<Material>,
+    keyring: Keyring<SigningKey>,
 }
 impl Signer {
     pub(crate) fn keyring(&self) -> &Keyring<Material> {
@@ -21,14 +21,12 @@ impl Signer {
     }
 
     pub fn new(
-        _algorithm: Algorithm,
-        _pub_id: Option<String>,
-        _meta: Option<serde_json::Value>,
+        algorithm: Algorithm,
+        pub_id: Option<String>,
+        meta: Option<serde_json::Value>,
     ) -> Self {
+        // let signing_key = crate::signature::signing_key::
         todo!()
-        // let material = Material::new(algorithm)
-        // let keyring = Keyring::new();
-        // Signature { keyring:  }
     }
 
     pub fn keys(&self) -> Vec<KeyInfo<crate::signature::Algorithm>> {
@@ -41,6 +39,10 @@ impl Signer {
         metadata: Option<serde_json::Value>,
     ) -> KeyInfo<Algorithm> {
         todo!()
+    }
+
+    pub fn sign(&self, message: &[u8]) -> Signature {
+        self.keyring.primary().sign(message)
     }
 
     pub fn promote_key(&mut self, key_id: u32) -> Result<KeyInfo<Algorithm>, KeyNotFoundError> {

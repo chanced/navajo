@@ -1,23 +1,24 @@
 mod algorithm;
-mod material;
+mod key_pair;
 mod signature;
 mod signer;
 mod signing_key;
 mod verifier;
 mod verifying_key;
 
+pub mod jwt;
+
 pub use algorithm::Algorithm;
 
-pub(crate) use material::Material;
-
+pub use signature::Signature;
 pub use signer::Signer;
 pub use verifier::Verifier;
 
-use material::KeyPair;
+use key_pair::KeyPair;
+use signing_key::SigningKey;
+use verifying_key::VerifyingKey;
 
-pub use signature::Signature;
-
-
+pub(crate) type Material = SigningKey;
 
 // #[derive(Clone, Debug, ZeroizeOnDrop)]
 // pub struct Signature {

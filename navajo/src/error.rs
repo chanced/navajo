@@ -674,4 +674,22 @@ impl From<ed25519_dalek::SignatureError> for KeyError {
     }
 }
 
-pub enum VerificationError {}
+impl From<elliptic_curve::Error> for KeyError {
+    fn from(e: elliptic_curve::Error) -> Self {
+        Self(e.to_string())
+    }
+}
+
+impl From<sec1::Error> for KeyError {
+    fn from(e: sec1::Error) -> Self {
+        Self(e.to_string())
+    }
+}
+#[derive(Debug, Clone)]
+pub struct VerificationError(pub String);
+
+impl Display for VerificationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "verification failed: {}", self.0)
+    }
+}

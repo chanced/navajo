@@ -2,8 +2,7 @@
 
 navajo is Rust library that provides secure and easy to use cryptographic APIs.
 
-The project is in on-going development. The long-term plan is to extend to other
-languages via WASI once fuzzing is finished.
+The project is in on-going development.
 
 ## Security Note
 

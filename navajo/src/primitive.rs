@@ -227,9 +227,10 @@ impl Primitive {
             Kind::Signature => {
                 #[cfg(feature = "signature")]
                 {
-                    let keyring: Keyring<crate::signature::Material> =
-                        serde_json::from_value(value)?;
-                    Ok(Self::Signature(crate::Signer::from_keyring(keyring)))
+                    // let keyring: Keyring<crate::signature::Signer> =
+                    // serde_json::from_value(value)?;
+                    // Ok(Self::Signature(crate::Signer::from_keyring(keyring)))
+                    todo!()
                 }
                 #[cfg(not(feature = "signature"))]
                 {
@@ -322,9 +323,10 @@ impl Primitive {
             Kind::Signature => {
                 #[cfg(feature = "signature")]
                 {
-                    let keyring: Keyring<crate::signature::Material> =
-                        serde_json::from_value(data.keyring)?;
-                    Ok(Primitive::Signature(crate::Signer::from_keyring(keyring)))
+                    todo!()
+                    // let keyring: Keyring<crate::signature::Material> =
+                    //     serde_json::from_value(data.keyring)?;
+                    // Ok(Primitive::Signature(crate::Signer::from_keyring(keyring)))
                 }
                 #[cfg(not(feature = "signature"))]
                 {

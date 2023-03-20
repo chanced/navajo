@@ -15,6 +15,7 @@ pub(crate) trait KeyMaterial:
     fn algorithm(&self) -> Self::Algorithm;
     fn kind() -> Kind;
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize, ZeroizeOnDrop)]
 pub(crate) struct Key<M>
 where
@@ -30,6 +31,7 @@ where
     #[serde(skip_serializing_if = "Option::is_none")]
     meta: Option<Arc<Value>>,
 }
+
 impl<M> Key<M>
 where
     M: KeyMaterial,

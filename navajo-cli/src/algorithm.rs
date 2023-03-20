@@ -321,16 +321,24 @@ impl TryFrom<Algorithm> for navajo::mac::Algorithm {
     type Error = String;
     fn try_from(value: Algorithm) -> Result<Self, Self::Error> {
         match value {
+            #[cfg(feature = "blake3")]
             Algorithm::Blake3 => Ok(navajo::mac::Algorithm::Blake3),
             Algorithm::Sha2_256 => Ok(navajo::mac::Algorithm::Sha256),
             Algorithm::Sha2_384 => Ok(navajo::mac::Algorithm::Sha384),
             Algorithm::Sha2_512 => Ok(navajo::mac::Algorithm::Sha512),
+            #[cfg(feature = "sha3")]
             Algorithm::Sha3_256 => Ok(navajo::mac::Algorithm::Sha3_256),
+            #[cfg(feature = "sha3")]
             Algorithm::Sha3_224 => Ok(navajo::mac::Algorithm::Sha3_224),
+            #[cfg(feature = "sha3")]
             Algorithm::Sha3_384 => Ok(navajo::mac::Algorithm::Sha3_384),
+            #[cfg(feature = "sha3")]
             Algorithm::Sha3_512 => Ok(navajo::mac::Algorithm::Sha3_512),
+            #[cfg(feature = "aes")]
             Algorithm::Aes_128 => Ok(navajo::mac::Algorithm::Aes128),
+            #[cfg(feature = "aes")]
             Algorithm::Aes_192 => Ok(navajo::mac::Algorithm::Aes192),
+            #[cfg(feature = "aes")]
             Algorithm::Aes_256 => Ok(navajo::mac::Algorithm::Aes256),
             _ => Err(format!("Algorithm {value} is not MAC")),
         }

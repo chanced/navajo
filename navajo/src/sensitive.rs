@@ -85,4 +85,21 @@ impl core::hash::Hash for Bytes {
     }
 }
 
+impl<const N: usize> TryFrom<Bytes> for [u8; N] {
+    type Error = Bytes;
+    fn try_from(bytes: Bytes) -> Result<Self, Self::Error> {
+        if bytes.len() == N {
+            let mut array = [0u8; N];
+            array.copy_from_slice(&bytes);
+            Ok(array)
+        } else {
+            Err(bytes)
+        }
+    }
+}
+
+fn x(v: Vec<u8>) {
+    let a: [u8; 32] = v.try_into().map_err(|e| {}).unwrap();
+}
+
 impl ZeroizeOnDrop for Bytes {}
