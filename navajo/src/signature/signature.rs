@@ -31,24 +31,6 @@ pub enum Signature {
 }
 
 impl Signature {
-    pub fn to_vec(&self) -> Vec<u8> {
-        #[cfg(feature = "ring")]
-        {
-            match self {
-                Signature::Ed25519(sig) => sig.as_ref().to_vec(),
-                Signature::P256(sig) => sig.as_ref().to_vec(),
-                Signature::P384(sig) => sig.as_ref().to_vec(),
-            }
-        }
-        #[cfg(not(feature = "ring"))]
-        {
-            match self {
-                Signature::Ed25519(sig) => sig.to_bytes().to_vec(),
-                Signature::P256(sig) => sig.to_bytes().to_vec(),
-                Signature::P384(sig) => sig.to_bytes().to_vec(),
-            }
-        }
-    }
     pub fn algorithm(&self) -> Algorithm {
         #[cfg(feature = "ring")]
         {
@@ -61,9 +43,9 @@ impl Signature {
         #[cfg(not(feature = "ring"))]
         {
             match self {
-                Signature::Ed25519(_) => Algorithm::Ed25519,
-                Signature::P256(_) => Algorithm::Es256,
-                Signature::P384(_) => Algorithm::Es384,
+                Signature::Ed25519(_, _) => Algorithm::Ed25519,
+                Signature::P256(_, _) => Algorithm::Es256,
+                Signature::P384(_, _) => Algorithm::Es384,
             }
         }
     }
@@ -114,9 +96,9 @@ impl AsRef<[u8]> for Signature {
         #[cfg(not(feature = "ring"))]
         {
             match self {
-                Signature::Ed25519(sig) => &sig.to_bytes(),
-                Signature::P256(sig) => &sig.to_bytes(),
-                Signature::P384(sig) => &sig.to_bytes(),
+                Signature::Ed25519(_, bytes) => bytes,
+                Signature::P256(_, bytes) => bytes,
+                Signature::P384(_, bytes) => bytes,
             }
         }
     }

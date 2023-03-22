@@ -1,4 +1,5 @@
 mod algorithm;
+mod key_info;
 mod key_pair;
 mod signature;
 mod signer;
@@ -9,7 +10,7 @@ mod verifying_key;
 pub mod jwt;
 
 pub use algorithm::Algorithm;
-
+pub use key_info::SignatureKeyInfo;
 pub use signature::Signature;
 pub use signer::Signer;
 pub use verifier::Verifier;

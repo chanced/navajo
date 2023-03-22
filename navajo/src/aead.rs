@@ -16,9 +16,10 @@ mod try_stream;
 use crate::{
     envelope,
     error::{EncryptError, KeyNotFoundError, RemoveKeyError},
+    key::Key,
     keyring::Keyring,
     rand::Rng,
-    Aad, Buffer, Envelope, SystemRng,
+    Aad, Buffer, Envelope, Origin, Status, SystemRng,
 };
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
@@ -56,6 +57,28 @@ pub struct Aead {
 }
 
 impl Aead {
+    pub fn new(algorithm: Algorithm, meta: Option<Value>) -> Self {
+        Self::create(&SystemRng, algorithm, meta)
+    }
+
+    pub fn new_with_rng<G>(rng: &G, algorithm: Algorithm, meta: Option<Value>) -> Self
+    where
+        G: Rng,
+    {
+        Self::create(rng, algorithm, meta)
+    }
+
+    fn create<G>(rng: &G, algorithm: Algorithm, meta: Option<Value>) -> Self
+    where
+        G: Rng,
+    {
+        let id = rng.u32().unwrap();
+        let material = Material::generate(rng, algorithm);
+        let key = Key::new(id, Status::Primary, Origin::Navajo, material, meta);
+        let keyring = Keyring::new(key);
+        Self { keyring }
+    }
+
     pub fn encrypt_in_place<A, T>(&self, aad: Aad<A>, plaintext: &mut T) -> Result<(), EncryptError>
     where
         A: AsRef<[u8]>,
@@ -69,7 +92,7 @@ impl Aead {
         *plaintext = result;
         Ok(())
     }
-    /// encrypt...
+    ///
     pub fn encrypt<A, T>(&self, aad: Aad<A>, plaintext: T) -> Result<Vec<u8>, EncryptError>
     where
         A: AsRef<[u8]>,
@@ -192,29 +215,6 @@ impl Aead {
     {
         DecryptReader::new(reader, aad, self)
     }
-    pub fn new(algorithm: Algorithm, meta: Option<Value>) -> Self {
-        Self::generate(&SystemRng, algorithm, meta)
-    }
-    #[cfg(test)]
-    pub fn new_with_rng<G>(rng: &G, algorithm: Algorithm, meta: Option<Value>) -> Self
-    where
-        G: Rng,
-    {
-        Self::generate(rng, algorithm, meta)
-    }
-    fn generate<G>(rng: &G, algorithm: Algorithm, meta: Option<Value>) -> Self
-    where
-        G: Rng,
-    {
-        Self {
-            keyring: Keyring::new(
-                rng,
-                Material::generate(rng, algorithm),
-                crate::Origin::Navajo,
-                meta,
-            ),
-        }
-    }
 
     pub(crate) fn from_keyring(keyring: Keyring<Material>) -> Self {
         Self { keyring }
@@ -227,13 +227,12 @@ impl Aead {
     }
 
     pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<Value>) -> AeadKeyInfo {
-        let key = self.keyring.add(
-            &SystemRng,
-            Material::generate(&SystemRng, algorithm),
-            crate::Origin::Navajo,
-            meta,
-        );
-        key.into()
+        let id = self.keyring.next_id(&SystemRng);
+        let material = Material::generate(&SystemRng, algorithm);
+        let key = Key::new(id, Status::Secondary, Origin::Navajo, material, meta);
+        let info = AeadKeyInfo::new(&key);
+        self.keyring.add(key);
+        info
     }
 
     /// Returns [`AeadKeyInfo`] for the primary key.

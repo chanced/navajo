@@ -216,6 +216,7 @@ features = ["alloc"]
 # https://docs.rs/ed25519-dalek/2.0.0-pre.0/ed25519_dalek/index.html
 [dependencies.ed25519-dalek]
 version = "2.0.0-pre.0"
+git = "https://github.com/dalek-cryptography/ed25519-dalek"
 optional = true
 default-features = false
 features = ["alloc", "rand_core", "pkcs8", "pem", "zeroize", "serde"]
@@ -291,7 +292,7 @@ features = ["full"] # todo: reduce this.
 
 [features]
 default = [
-	#"ring",
+	"ring",
 	"std",       # todo: remove
 	"aead",
 	"signature",

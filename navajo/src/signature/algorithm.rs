@@ -39,7 +39,7 @@ pub enum Algorithm {
     // Ps512,
 }
 impl Algorithm {
-    pub fn jwt_alg(&self) -> &'static str {
+    pub fn jwt_algorithm(&self) -> &'static str {
         match self {
             Algorithm::Es256 => "ES256",
             Algorithm::Es384 => "ES384",
@@ -54,6 +54,21 @@ impl Algorithm {
             _ => Err("unsupported algorithm: \"{alg}\""),
         }
     }
+    pub fn curve(&self) -> Option<&'static str> {
+        match self {
+            Algorithm::Es256 => Some("P-256"),
+            Algorithm::Es384 => Some("P-384"),
+            Algorithm::Ed25519 => Some("Ed25519"),
+        }
+    }
+    pub fn key_type(&self) -> &'static str {
+        match self {
+            Algorithm::Es256 => "EC",
+            Algorithm::Es384 => "EC",
+            Algorithm::Ed25519 => "OKP",
+        }
+    }
+
     #[cfg(feature = "ring")]
     pub(super) fn ring_ecdsa_signing_algorithm(
         &self,

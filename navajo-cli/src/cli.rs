@@ -221,6 +221,8 @@ pub struct AddKey {
     /// string.
     #[command(flatten)]
     pub metadata: Metadata,
+    #[arg(value_name = "PUB_ID", long = "public-id", short = 'p')]
+    pub_id: Option<String>,
 }
 
 impl AddKey {
@@ -234,6 +236,7 @@ impl AddKey {
             envelope,
             algorithm,
             metadata,
+            pub_id,
         } = self;
         let (input, output) = io.get(stdin, stdout).await?;
         let aad = envelope.get_aad().await?;
@@ -251,7 +254,7 @@ impl AddKey {
                 mac.add_key(algorithm.try_into()?, metadata);
             }
             Primitive::Signature(ref mut sig) => {
-                sig.add_key(algorithm.try_into()?, metadata);
+                sig.add_key(algorithm.try_into()?, pub_id, metadata);
             }
         }
         envelope.seal_and_write(output, aad, primitive).await

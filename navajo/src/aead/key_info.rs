@@ -40,3 +40,8 @@ impl From<&Key<super::Material>> for AeadKeyInfo {
         Self::new(key)
     }
 }
+impl From<Key<super::Material>> for AeadKeyInfo {
+    fn from(key: Key<super::Material>) -> Self {
+        Self::new(&key)
+    }
+}

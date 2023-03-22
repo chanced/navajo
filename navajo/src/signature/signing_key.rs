@@ -33,10 +33,17 @@ pub(crate) struct SigningKey {
 }
 
 impl Key<SigningKey> {
+    pub(crate) fn pub_id(&self) -> &str {
+        &self.material().pub_id
+    }
+    pub(crate) fn verifying_key(&self) -> VerifyingKey {
+        self.material().verifying_key.clone()
+    }
+
     pub(crate) fn sign(&self, data: &[u8]) -> Signature {
         self.material().sign(data)
     }
-    pub(crate) fn sign_jwt(&self, payload: impl Serialize) -> Result<String, serde_json::Error> {
+    pub(crate) fn sign_jwt(&self, payload: &impl Serialize) -> Result<String, serde_json::Error> {
         let header = serde_json::to_vec(&Header {
             algorithm: self.algorithm(),
             key_id: Some(Cow::Borrowed(&self.material().pub_id)),
@@ -48,10 +55,6 @@ impl Key<SigningKey> {
         let signature = b64::URL_SAFE_NO_PAD.encode(signature);
 
         Ok(format!("{header}.{payload}.{signature}"))
-    }
-
-    pub(crate) fn pub_id(&self) -> &str {
-        &self.material().pub_id
     }
 }
 
@@ -77,7 +80,7 @@ impl SigningKey {
         key_pair: KeyPair,
     ) -> Result<Self, KeyError> {
         let inner = Arc::new(Inner::from_key_pair(algorithm, &key_pair)?);
-        let verifying_key = VerifyingKey::from_key_pair(algorithm, &key_pair)?;
+        let verifying_key = VerifyingKey::from_material(algorithm, pub_id.clone(), &key_pair)?;
         Ok(Self {
             key_pair,
             pub_id,
@@ -87,19 +90,20 @@ impl SigningKey {
         })
     }
 
-    fn generate<G>(rng: &G, algorithm: Algorithm, pub_id: String) -> Self
+    pub(super) fn generate<G>(rng: &G, algorithm: Algorithm, pub_id: String) -> Self
     where
-        G: Rng + CryptoRng + CryptoRngCore,
+        G: Rng,
     {
         let key_pair = Inner::generate_key_pair(rng, algorithm);
         let inner = Arc::new(Inner::from_key_pair(algorithm, &key_pair).unwrap());
-        let verifying_key = VerifyingKey::from_key_pair(algorithm, &key_pair).unwrap();
+        let verifying_key =
+            VerifyingKey::from_material(algorithm, pub_id.clone(), &key_pair).unwrap();
         Self {
             key_pair,
             inner,
             algorithm,
             verifying_key,
-            pub_id: String::new(),
+            pub_id,
         }
     }
 }
@@ -168,7 +172,7 @@ impl Debug for Inner {
 impl Inner {
     fn generate_key_pair<G>(rng: &G, algorithm: Algorithm) -> KeyPair
     where
-        G: Rng + CryptoRng + CryptoRngCore,
+        G: Rng,
     {
         match algorithm {
             Algorithm::Ed25519 => Ed25519::generate_key_pair(rng, algorithm),
@@ -225,11 +229,11 @@ impl Ecdsa {
                 }
             }
             Algorithm::Es384 => {
-                let mut key = [0u8; 32];
+                let mut key = [0u8; 48];
                 while is_zero(&key) {
                     rng.fill(&mut key).unwrap();
                 }
-                let signing_key = p256::ecdsa::SigningKey::from_bytes(&key).unwrap();
+                let signing_key = p384::ecdsa::SigningKey::from_bytes(&key).unwrap();
                 let public_key = signing_key.verifying_key();
                 let encoded_point = public_key.to_encoded_point(false);
                 KeyPair {
@@ -363,12 +367,26 @@ impl Ed25519 {
 #[cfg(test)]
 mod tests {
 
+    use crate::{Origin, Status};
+
     use super::*;
 
     #[test]
     fn test_generate() {
         let rng = crate::rand::SystemRng;
+        let k = SigningKey::generate(&rng, Algorithm::Es384, "test".to_string());
+        let pk = k.key_pair.public.as_ref();
+        println!("{}: {pk:?}", pk.len());
+
         let k = SigningKey::generate(&rng, Algorithm::Es256, "test".to_string());
-        println!("{:?}", k.sign(&[1, 2, 3, 4, 5]));
+        let pk = k.key_pair.public.as_ref();
+        println!("{}: {pk:?}", pk.len());
+
+        let key = Key::new(3423, Status::Primary, Origin::Navajo, k, None);
+        let mut payload = serde_json::Map::new();
+        payload.insert("sub".to_string(), "test".into());
+        payload.insert("name".to_string(), "chance".into());
+        let jwt = key.sign_jwt(&payload).unwrap();
+        println!("{jwt}");
     }
 }

@@ -12,7 +12,6 @@ use crate::key::KeyMaterial;
 use crate::primitive::Kind;
 use crate::rand::Rng;
 use crate::Aad;
-use crate::Origin;
 use crate::Status;
 
 use aes_gcm::Aes256Gcm;
@@ -221,9 +220,7 @@ impl<M> Keyring<M>
 where
     M: KeyMaterial,
 {
-    pub(crate) fn new<G: Rng>(rng: &G, material: M, origin: Origin, meta: Option<Value>) -> Self {
-        let id = gen_id(rng);
-        let key = Key::new(id, Status::Primary, origin, material, meta);
+    pub(crate) fn new(key: Key<M>) -> Self {
         Self {
             version: 0,
             keys: [key].into(),
@@ -252,19 +249,8 @@ where
             .ok_or(KeyNotFoundError(id))
     }
 
-    pub(crate) fn add<G>(
-        &mut self,
-        rng: &G,
-        material: M,
-        origin: Origin,
-        meta: Option<Value>,
-    ) -> &Key<M>
-    where
-        G: Rng,
-    {
-        let id = self.gen_unique_id(rng);
-        let key = Key::new(id, Status::Secondary, origin, material, meta);
-        self.keys.push(key)
+    pub(crate) fn add(&mut self, key: Key<M>) {
+        self.keys.push(key);
     }
 
     pub(crate) fn update_meta(
@@ -342,7 +328,7 @@ where
         &self.keys
     }
 
-    fn gen_unique_id<G>(&self, rng: &G) -> u32
+    pub(crate) fn next_id<G>(&self, rng: &G) -> u32
     where
         G: Rng,
     {
@@ -612,14 +598,21 @@ mod tests {
     use super::*;
     use crate::key::test::Algorithm;
     use crate::key::test::Material;
+    use crate::Origin;
     use crate::SystemRng;
-
     #[test]
     fn test_serde() {
         let rand = crate::rand::SystemRng::new(); // TODO: Replace with MockRandom.
 
         let material = Material::new(Algorithm::Waffles);
-        let keyring = Keyring::new(&rand, material, Origin::Navajo, Some("test".into()));
+        let key = Key::new(
+            0,
+            Status::Primary,
+            Origin::Navajo,
+            material,
+            Some("test".into()),
+        );
+        let keyring = Keyring::new(key);
         let ser = serde_json::to_string(&keyring).unwrap();
         let de = serde_json::from_str::<Keyring<Material>>(&ser).unwrap();
         assert_eq!(keyring, de);
@@ -630,16 +623,25 @@ mod tests {
     async fn test_seal_and_open() {
         use crate::rand::SystemRng;
 
-        let _rand = SystemRng::new(); // TODO: Replace with MockRandom.
+        let rand = SystemRng::new(); // TODO: Replace with MockRandom.
 
         let material = Material::new(Algorithm::Waffles);
-        let mut keyring = Keyring::new(&SystemRng, material, Origin::Navajo, Some("test".into()));
-        keyring.add(
-            &SystemRng,
-            Material::new(Algorithm::Cereal),
+        let key = Key::new(
+            0,
+            Status::Primary,
             Origin::Navajo,
-            None,
+            material,
+            Some("test".into()),
         );
+        let mut keyring = Keyring::new(key);
+        let second_key = Key::new(
+            1,
+            Status::Secondary,
+            Origin::Navajo,
+            Material::new(Algorithm::Cereal),
+            Some("test".into()),
+        );
+        keyring.add(second_key);
         let ser = serde_json::to_vec(&keyring).unwrap();
         let de = serde_json::from_slice::<Keyring<Material>>(&ser).unwrap();
         assert_eq!(keyring, de);
@@ -657,32 +659,37 @@ mod tests {
 
     #[test]
     fn test_key_status() {
+        let rng = SystemRng;
         let material = Material::new(Algorithm::Pancakes);
-        let mut keyring = Keyring::new(&SystemRng, material, Origin::Navajo, Some("test".into()));
+        let key = Key::new(
+            rng.u32().unwrap(),
+            Status::Primary,
+            Origin::Navajo,
+            material,
+            Some("test".into()),
+        );
+        let mut keyring = Keyring::new(key);
+
         let first_id = {
             let first = keyring.primary();
             let first_id = first.id();
             assert_eq!(first.status(), Status::Primary);
             assert_eq!(first.meta().as_deref(), Some("test".into()).as_ref());
             assert_eq!(first.origin(), Origin::Navajo);
-            assert_ne!(first.id(), 0);
             assert_eq!(first.algorithm(), Algorithm::Pancakes);
             first_id
         };
 
-        let second_id = {
-            let second = keyring.add(
-                &SystemRng,
-                Material::new(Algorithm::Waffles),
-                Origin::Navajo,
-                None,
-            );
-            assert_eq!(second.status(), Status::Secondary);
-            assert_eq!(second.meta(), None);
-            assert_eq!(second.origin(), Origin::Navajo);
-            assert_ne!(second.id(), 0);
-            second.id()
-        };
+        let second_id = keyring.next_id(&SystemRng);
+        let second_material = Material::new(Algorithm::Waffles);
+        let second_key = Key::new(
+            second_id,
+            Status::Secondary,
+            Origin::Navajo,
+            second_material,
+            None,
+        );
+        keyring.add(second_key);
         {
             let second = keyring.get(second_id).unwrap();
             assert_eq!(second.status(), Status::Secondary);

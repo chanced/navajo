@@ -110,3 +110,5 @@ pub(crate) const NEW_ISSUE_URL: &str = "https://github.com/chanced/navajo/issues
 pub(crate) mod sealed;
 
 pub mod secret_store;
+
+pub mod jwk;
