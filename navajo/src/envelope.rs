@@ -96,19 +96,7 @@ impl Envelope for InMemory {
         A: 'static + AsRef<[u8]> + Send + Sync,
         P: 'static + AsRef<[u8]> + Send + Sync,
     {
-        let nonce = self.nonce;
-        let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
-        let cipher = ChaCha20Poly1305::new(&self.key.into());
-        Box::pin(async move {
-            let ciphertext = cipher.encrypt(
-                &nonce,
-                Payload {
-                    aad: aad.as_ref(),
-                    msg: plaintext.as_ref(),
-                },
-            )?;
-            Ok(ciphertext)
-        })
+        Box::pin(async move { envelope::sync::Envelope::encrypt_dek(self, aad, plaintext) })
     }
 
     fn decrypt_dek<'a, A, C>(
@@ -120,20 +108,7 @@ impl Envelope for InMemory {
         A: 'static + AsRef<[u8]> + Send + Sync,
         C: 'static + AsRef<[u8]> + Send + Sync,
     {
-        let nonce = self.nonce;
-        let nonce = chacha20poly1305::Nonce::from_slice(&nonce).to_owned();
-        let cipher = ChaCha20Poly1305::new(&self.key.into());
-        let aad = aad.as_ref().to_vec();
-        Box::pin(async move {
-            let plaintext = cipher.decrypt(
-                &nonce,
-                Payload {
-                    aad: aad.as_ref(),
-                    msg: ciphertext.as_ref(),
-                },
-            )?;
-            Ok(plaintext)
-        })
+        Box::pin(async move { envelope::sync::Envelope::decrypt_dek(self, aad, ciphertext) })
     }
 }
 impl envelope::sync::Envelope for InMemory {
@@ -232,7 +207,7 @@ impl envelope::sync::Envelope for PlaintextJson {
         Ok(vec![])
     }
 }
-pub(crate) fn is_plaintext<'a, T: Any + 'a>(envelope: &T) -> bool {
+pub(crate) fn is_plaintext<'a, T: Any + 'a>(envelope: &'a T) -> bool {
     let envelope = envelope as &dyn Any;
     envelope.downcast_ref::<PlaintextJson>().is_some()
 }

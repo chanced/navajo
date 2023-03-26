@@ -232,6 +232,7 @@ mod tests {
     use super::SecretStore;
     use super::*;
     #[tokio::test]
+    #[ignore]
     async fn test_get_secret_version() {
         let _project_id = std::env::var("PROJECT_ID").unwrap();
         let secret_manager = SecretManager::new();
@@ -240,6 +241,7 @@ mod tests {
         println!("{secret_version:?}")
     }
     #[tokio::test]
+    #[ignore]
     async fn test_secret_store() {
         let project_id = std::env::var("PROJECT_ID").unwrap();
         let secret_name = format!("projects/{project_id}/secrets/test-secret2/version/1");

@@ -262,6 +262,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore]
     async fn test_encrypt() {
         // todo: need to figure out how to safely run this in CI
         let gcp = Kms::new();

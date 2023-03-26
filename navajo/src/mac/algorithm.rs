@@ -156,7 +156,7 @@ impl Algorithm {
         let mut key = alloc::vec![0u8; self.default_key_len()];
         rng.fill(&mut key).unwrap();
         key
-    }
+}
     pub fn tag_len(&self) -> usize {
         match self {
             #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]

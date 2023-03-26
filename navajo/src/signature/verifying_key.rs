@@ -1,10 +1,11 @@
 use crate::{
+    b64,
     error::{KeyError, SignatureError},
     jose::{Algorithm as JwkAlgorithm, Jwk, KeyOperation, KeyUse},
     sensitive,
 };
-use alloc::sync::Arc;
 use alloc::vec::Vec;
+use alloc::{borrow::Cow, sync::Arc};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{Deserialize, Serialize};
 
@@ -48,7 +49,7 @@ impl Serialize for VerifyingKey {
                 let x = URL_SAFE_NO_PAD.encode(self.key.as_ref());
                 Jwk {
                     key_id: Some(self.pub_id.clone()),
-                    key_use: self.key_use.clone(),
+                    key_use: Some(KeyUse::Signature),
                     key_type: alg.key_type().into(),
                     algorithm: alg.jwt_algorithm().into(),
                     curve: alg.curve().map(Into::into),
@@ -57,8 +58,8 @@ impl Serialize for VerifyingKey {
                 }
             }
             Inner::Ecdsa(ecdsa) => match ecdsa {
-                Ecdsa::P256(_) => todo!(),
-                Ecdsa::P384(_) => todo!(),
+                Ecdsa::P256(_) => Default::default(),
+                Ecdsa::P384(_) => Default::default(),
             },
         };
         todo!()
@@ -91,7 +92,6 @@ impl VerifyingKey {
             },
         }
     }
-
     pub(super) fn from_material(
         algorithm: Algorithm,
         pub_id: String,

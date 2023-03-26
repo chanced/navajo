@@ -455,9 +455,9 @@ impl From<serde_json::Error> for OpenError {
     }
 }
 
-impl From<chacha20poly1305::Error> for OpenError {
-    fn from(_: chacha20poly1305::Error) -> Self {
-        Self("error decrypting with chacha20poly1305".to_string())
+impl From<aes_gcm::Error> for OpenError {
+    fn from(_: aes_gcm::Error) -> Self {
+        Self("error decrypting keyring".to_string())
     }
 }
 impl From<crypto_common::InvalidLength> for OpenError {

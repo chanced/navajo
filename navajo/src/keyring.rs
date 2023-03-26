@@ -19,15 +19,14 @@ use aes_gcm::Aes256Gcm;
 use alloc::sync::Arc;
 #[cfg(not(feature = "std"))]
 use alloc::{format, string::String, vec, vec::Vec};
-use chacha20poly1305::aead::{AeadCore, KeyInit};
+use rust_crypto_aead::AeadCore;
+use rust_crypto_aead::KeyInit;
+// use chacha20poly1305::aead::{AeadCore, KeyInit};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use zeroize::ZeroizeOnDrop;
-// const CHACHA20_POLY1305_KEY_SIZE: usize = 32;
-// const CHACHA20_POLY1305_NONCE_SIZE: usize = 12;
-// const CHACHA20_POLY1305_TAG_SIZE: usize = 16;
 
 const AES_256_GCM_KEY_SIZE: usize = 32;
 const AES_256_GCM_NONCE_SIZE: usize = 12;
@@ -120,6 +119,7 @@ where
     }
 }
 impl<Material> ZeroizeOnDrop for Keys<Material> where Material: KeyMaterial {}
+
 impl<Material> Index<usize> for Keys<Material>
 where
     Material: KeyMaterial,
@@ -331,7 +331,6 @@ where
         G: Rng,
     {
         let mut id = gen_id(rng);
-
         while self.keys.iter().any(|k| k.id() == id) {
             id = gen_id(rng);
         }
@@ -472,7 +471,7 @@ where
 
 pub(crate) fn open_keyring_value_sync<A, S, E>(
     aad: Aad<A>,
-    sealed: S,
+    ciphertext: S,
     envelope: &E,
 ) -> Result<(Kind, Value), OpenError>
 where
@@ -480,13 +479,13 @@ where
     S: AsRef<[u8]>,
     E: crate::envelope::sync::Envelope,
 {
-    let sealed = sealed.as_ref();
-    let sealed_cipher_and_nonce = read_sealed_cipher_and_nonce(sealed)?;
+    let ciphertext = ciphertext.as_ref();
+    let sealed_cipher_and_nonce = read_sealed_cipher_and_nonce(ciphertext)?;
     let key = envelope
         .decrypt_dek(Aad(aad.as_ref()), sealed_cipher_and_nonce.clone())
         .map_err(|e| e.to_string())?;
 
-    let value = open_and_deserialize(key, aad, sealed, &sealed_cipher_and_nonce)?;
+    let value = open_and_deserialize(key, aad, ciphertext, &sealed_cipher_and_nonce)?;
     let kind = get_kind(&value)?;
     Ok((kind, value))
 }
@@ -585,6 +584,7 @@ mod tests {
             Some("test".into()),
         );
         let keyring = Keyring::new(key);
+
         let ser = serde_json::to_string(&keyring).unwrap();
         let de = serde_json::from_str::<Keyring<Material>>(&ser).unwrap();
         assert_eq!(keyring, de);
@@ -601,6 +601,7 @@ mod tests {
             material,
             Some("test".into()),
         );
+
         let mut keyring = Keyring::new(key);
         let second_key = Key::new(
             1,
@@ -618,7 +619,6 @@ mod tests {
         let sealed = keyring.seal(Aad(&[]), &in_mem).await.unwrap();
         assert_ne!(ser, sealed);
         println!("sealed len: {}", sealed.len());
-
         let (kind, opened) = open_keyring_value(Aad(&[]), sealed.clone(), &in_mem)
             .await
             .unwrap();
@@ -659,7 +659,6 @@ mod tests {
         );
 
         keyring.add(second_key);
-
         {
             let second = keyring.get(second_id).unwrap();
             assert_eq!(second.status(), Status::Secondary);

@@ -184,7 +184,7 @@ impl Primitive {
             Self::deserialize_cleartext(ciphertext)
         } else {
             let len = read_len(ciphertext)?;
-            let (kind, value) = open_keyring_value_sync(aad, &ciphertext[8..len], envelope)?;
+            let (kind, value) = open_keyring_value_sync(aad, &ciphertext[8..len + 8], envelope)?;
             Self::open_value(kind, value)
         }
     }
@@ -410,8 +410,8 @@ fn read_len(ciphertext: &[u8]) -> Result<usize, OpenError> {
             .try_into()
             .map_err(|_| OpenError("keyring data too short".to_string()))?,
     );
-    if ciphertext.as_ref().len() < len as usize + 8 {
-        Err(OpenError("keyring data too short".to_string()))?
+    if ciphertext.len() < len as usize + 8 {
+        Err(OpenError("invalid keyring data".to_string()))?
     }
     if len > usize::MAX as u64 {
         Err(OpenError(

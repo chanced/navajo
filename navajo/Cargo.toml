@@ -303,7 +303,7 @@ features = ["full"] # todo: reduce this.
 
 [features]
 default = [
-	# "ring",
+	#"ring",
 	"std",       # todo: remove
 	"aead",
 	"signature",

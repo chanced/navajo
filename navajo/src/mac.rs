@@ -62,7 +62,7 @@ impl Mac {
     ///     // InMemory is only suitable for testing.
     ///     let in_mem = InMemory::default();
     ///     let data = Mac::seal(&mac, Aad::empty(), &in_mem).await.unwrap();
-    ///     let mac = Mac::open(Aad::empty(), &data, &in_mem).await.unwrap();
+    ///     let mac = Mac::open(Aad::empty(), data, &in_mem).await.unwrap();
     ///     assert_eq!(mac.primary_key(), primary_key);
     /// }
     /// ```
@@ -136,7 +136,7 @@ impl Mac {
     ///     // InMemory is only suitable for testing.
     ///     let in_mem = InMemory::default();
     ///     let data = Mac::seal(&mac, Aad::empty(), &in_mem).await.unwrap();
-    ///     let mac = Mac::open(Aad::empty(), &data, &in_mem).await.unwrap();
+    ///     let mac = Mac::open(Aad::empty(), data, &in_mem).await.unwrap();
     ///     assert_eq!(mac.primary_key(), primary_key);
     /// }
     /// ```
@@ -171,9 +171,9 @@ impl Mac {
     pub fn seal_sync<A, E>(mac: &Self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
     where
         A: AsRef<[u8]>,
-        E: crate::envelope::sync::Envelope,
+        E: 'static + crate::envelope::sync::Envelope,
     {
-        Keyring::seal_sync(mac.keyring(), aad, envelope)
+        Primitive::Mac(mac.clone()).seal_sync(aad, envelope)
     }
 
     /// Create a new MAC keyring by generating a key for the given [`Algorithm`]
@@ -622,5 +622,40 @@ impl Mac {
 impl AsRef<Mac> for Mac {
     fn as_ref(&self) -> &Self {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use crate::envelope::InMemory;
+    use crate::mac::{Algorithm, Mac};
+    use crate::Aad;
+
+    #[test]
+    fn test_seal_unseal_sync() {
+        let mac = Mac::new(Algorithm::Sha256, None);
+        let primary_key = mac.primary_key();
+        // in a real application, you would use a real key management service.
+        // InMemory is only suitable for testing.
+        let in_mem = InMemory::default();
+        let ciphertext = Mac::seal_sync(&mac, Aad::empty(), &in_mem).unwrap();
+        let mac = Mac::open_sync(Aad::empty(), ciphertext, &in_mem).unwrap();
+        assert_eq!(mac.primary_key(), primary_key);
+    }
+
+    #[cfg(feature = "std")]
+    #[tokio::test]
+    async fn test_seal_unseal() {
+        let mac = Mac::new(Algorithm::Sha256, None);
+        let primary_key = mac.primary_key();
+        // in a real application, you would use a real key management service.
+        // InMemory is only suitable for testing.
+        let in_mem = InMemory::default();
+
+        let data = Mac::seal(&mac, Aad::empty(), &in_mem).await.unwrap();
+
+        let mac = Mac::open(Aad::empty(), data, &in_mem).await.unwrap();
+        assert_eq!(mac.primary_key(), primary_key);
     }
 }
