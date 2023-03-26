@@ -23,6 +23,11 @@ version = "0.3"
 [dependencies.pin-project]
 version = "1.0"
 
+# miniz_oxide
+# https://docs.rs/miniz_oxide/0.7.1/miniz_oxide/
+[dependencies.miniz_oxide]
+version = "0.7"
+
 # rayon
 # https://docs.rs/rayon/1.7.0/rayon/
 [dependencies.rayon]
@@ -51,6 +56,12 @@ features = ["alloc", "raw_value"]
 version = "0.21"
 default-features = false
 features = ["alloc"]
+
+# url
+# https://docs.rs/url/2.3.1/url/
+[dependencies.url]
+version = "2.3"
+features = ["serde"]
 
 # inherent
 # https://docs.rs/inherent/1.0.6/inherent/
@@ -216,6 +227,7 @@ features = ["alloc"]
 # https://docs.rs/ed25519-dalek/2.0.0-pre.0/ed25519_dalek/index.html
 [dependencies.ed25519-dalek]
 version = "2.0.0-pre.0"
+git = "https://github.com/dalek-cryptography/ed25519-dalek"
 optional = true
 default-features = false
 features = ["alloc", "rand_core", "pkcs8", "pem", "zeroize", "serde"]
@@ -291,7 +303,7 @@ features = ["full"] # todo: reduce this.
 
 [features]
 default = [
-	#"ring",
+	# "ring",
 	"std",       # todo: remove
 	"aead",
 	"signature",
@@ -310,6 +322,7 @@ hkdf = ["sha2", "hmac"]
 aead = ["hkdf"]
 daead = ["aes-siv"]
 std = [
+	"miniz_oxide/std",
 	"ring?/std",
 	"hex/std",
 	"serde/std",

@@ -12,25 +12,22 @@ use crate::key::KeyMaterial;
 use crate::primitive::Kind;
 use crate::rand::Rng;
 use crate::Aad;
-use crate::Origin;
 use crate::Status;
 
+use aes_gcm::aead::AeadInPlace;
 use aes_gcm::Aes256Gcm;
 use alloc::sync::Arc;
 #[cfg(not(feature = "std"))]
 use alloc::{format, string::String, vec, vec::Vec};
-use chacha20poly1305::{
-    aead::{AeadCore, KeyInit},
-    ChaCha20Poly1305,
-};
+use chacha20poly1305::aead::{AeadCore, KeyInit};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use zeroize::ZeroizeOnDrop;
-const CHACHA20_POLY1305_KEY_SIZE: usize = 32;
-const CHACHA20_POLY1305_NONCE_SIZE: usize = 12;
-const CHACHA20_POLY1305_TAG_SIZE: usize = 16;
+// const CHACHA20_POLY1305_KEY_SIZE: usize = 32;
+// const CHACHA20_POLY1305_NONCE_SIZE: usize = 12;
+// const CHACHA20_POLY1305_TAG_SIZE: usize = 16;
 
 const AES_256_GCM_KEY_SIZE: usize = 32;
 const AES_256_GCM_NONCE_SIZE: usize = 12;
@@ -221,9 +218,7 @@ impl<M> Keyring<M>
 where
     M: KeyMaterial,
 {
-    pub(crate) fn new<G: Rng>(rng: &G, material: M, origin: Origin, meta: Option<Value>) -> Self {
-        let id = gen_id(rng);
-        let key = Key::new(id, Status::Primary, origin, material, meta);
+    pub(crate) fn new(key: Key<M>) -> Self {
         Self {
             version: 0,
             keys: [key].into(),
@@ -252,19 +247,8 @@ where
             .ok_or(KeyNotFoundError(id))
     }
 
-    pub(crate) fn add<G>(
-        &mut self,
-        rng: &G,
-        material: M,
-        origin: Origin,
-        meta: Option<Value>,
-    ) -> &Key<M>
-    where
-        G: Rng,
-    {
-        let id = self.gen_unique_id(rng);
-        let key = Key::new(id, Status::Secondary, origin, material, meta);
-        self.keys.push(key)
+    pub(crate) fn add(&mut self, key: Key<M>) {
+        self.keys.push(key);
     }
 
     pub(crate) fn update_meta(
@@ -342,7 +326,7 @@ where
         &self.keys
     }
 
-    fn gen_unique_id<G>(&self, rng: &G) -> u32
+    pub(crate) fn next_id<G>(&self, rng: &G) -> u32
     where
         G: Rng,
     {
@@ -383,36 +367,16 @@ where
         Ok(result)
     }
 
-    fn seal_first_pass(&self, aad: &[u8]) -> Result<Vec<u8>, SealError> {
-        let mut serialized = self.serialize_for_sealing()?;
-        // serialized = lz4_flex::compress_prepend_size(&serialized);
-        use aes_gcm::aead::AeadInPlace;
-        // Round 1: AES-256-GCM
+    fn encrypt(&self, aad: &[u8], mut data: Vec<u8>) -> Result<(Vec<u8>, Vec<u8>), SealError> {
         let key = Aes256Gcm::generate_key(&mut crate::SystemRng);
         let cipher = Aes256Gcm::new(&key);
         let nonce = Aes256Gcm::generate_nonce(&mut crate::SystemRng);
-        serialized.reserve(AES_256_GCM_TAG_SIZE);
-        cipher.encrypt_in_place(&nonce, aad, &mut serialized)?;
-        let result = [key.as_slice(), nonce.as_slice(), serialized.as_slice()].concat();
-        Ok(result)
+        data.reserve(AES_256_GCM_TAG_SIZE);
+        cipher.encrypt_in_place(&nonce, aad, &mut data)?;
+        let key_and_nonce = [key.as_slice(), nonce.as_slice()].concat().to_vec();
+        Ok((key_and_nonce, data))
     }
 
-    fn seal_second_pass(&self, data: &mut Vec<u8>, aad: &[u8]) -> Result<Vec<u8>, SealError> {
-        let key = ChaCha20Poly1305::generate_key(&mut crate::SystemRng);
-        let cipher = ChaCha20Poly1305::new(&key);
-        let nonce = ChaCha20Poly1305::generate_nonce(&mut crate::SystemRng);
-        use chacha20poly1305::aead::AeadInPlace;
-        data.reserve(CHACHA20_POLY1305_TAG_SIZE);
-        cipher.encrypt_in_place(&nonce, aad, data)?;
-        let cipher_and_nonce = [key.as_slice(), nonce.as_slice()].concat();
-        Ok(cipher_and_nonce)
-    }
-
-    fn serialize_and_seal_locally(&self, aad: &[u8]) -> Result<(Vec<u8>, Vec<u8>), SealError> {
-        let mut serialized_and_sealed = self.seal_first_pass(aad)?;
-        let cipher_and_nonce = self.seal_second_pass(&mut serialized_and_sealed, aad)?;
-        Ok((serialized_and_sealed, cipher_and_nonce))
-    }
     fn encode_serialized(
         &self,
         locally_serialized_and_sealed: &[u8],
@@ -447,8 +411,10 @@ where
         A: 'static + AsRef<[u8]> + Send + Sync,
         E: Envelope,
     {
-        let (locally_serialized_and_sealed, cipher_and_nonce) =
-            self.serialize_and_seal_locally(aad.as_ref())?;
+        let serialized = self.serialize_for_sealing()?;
+        let compressed = compress(serialized);
+        let (cipher_and_nonce, locally_serialized_and_sealed) =
+            self.encrypt(aad.as_ref(), compressed)?;
 
         let sealed_cipher_and_nonce = envelope
             .encrypt_dek(aad, cipher_and_nonce.clone())
@@ -466,8 +432,10 @@ where
         A: AsRef<[u8]>,
         E: crate::envelope::sync::Envelope,
     {
-        let (locally_serialized_and_sealed, cipher_and_nonce) =
-            self.serialize_and_seal_locally(aad.as_ref())?;
+        let serialized = self.serialize_for_sealing()?;
+        let compressed = compress(serialized);
+        let (cipher_and_nonce, locally_serialized_and_sealed) =
+            self.encrypt(aad.as_ref(), compressed)?;
 
         let sealed_cipher_and_nonce = envelope
             .encrypt_dek(aad, &cipher_and_nonce)
@@ -567,28 +535,18 @@ fn read_sealed_cipher_and_nonce(sealed: &[u8]) -> Result<Vec<u8>, OpenError> {
     Ok(sealed_cipher_and_nonce.to_vec())
 }
 
-fn open_first_pass(mut key: Vec<u8>, buffer: &mut Vec<u8>, aad: &[u8]) -> Result<usize, OpenError> {
-    use chacha20poly1305::aead::AeadInPlace;
-    if key.len() != CHACHA20_POLY1305_KEY_SIZE + CHACHA20_POLY1305_NONCE_SIZE {
-        return Err("kms returned invalid data".into());
+fn decrypt(mut key_and_nonce: Vec<u8>, aad: &[u8], buffer: &mut Vec<u8>) -> Result<(), OpenError> {
+    if key_and_nonce.len() != AES_256_GCM_KEY_SIZE + AES_256_GCM_NONCE_SIZE {
+        return Err("invalid data returned from envelope".into());
     }
-    let nonce = key.split_off(CHACHA20_POLY1305_KEY_SIZE);
-    let nonce = chacha20poly1305::Nonce::from_slice(&nonce);
-    let cipher = ChaCha20Poly1305::new_from_slice(&key)?;
-    cipher.decrypt_in_place(nonce, aad, buffer)?;
-    Ok(nonce.len() + key.len())
-}
-
-fn open_second_pass(buffer: &mut Vec<u8>, aad: &[u8]) -> Result<(), OpenError> {
-    use aes_gcm::aead::AeadInPlace;
-    let mut data = buffer.split_off(AES_256_GCM_KEY_SIZE + AES_256_GCM_NONCE_SIZE);
-    let nonce = buffer.split_off(AES_256_GCM_KEY_SIZE);
+    let nonce = key_and_nonce.split_off(AES_256_GCM_KEY_SIZE);
+    let key = key_and_nonce;
     let nonce = aes_gcm::Nonce::from_slice(&nonce);
-    let cipher = Aes256Gcm::new_from_slice(buffer)?;
-    cipher.decrypt_in_place(nonce, aad, &mut data)?;
-    *buffer = data;
+    let cipher = Aes256Gcm::new_from_slice(&key)?;
+    cipher.decrypt_in_place(nonce, aad, buffer)?;
     Ok(())
 }
+
 fn open_and_deserialize<A>(
     key: Vec<u8>,
     aad: Aad<A>,
@@ -599,12 +557,14 @@ where
     A: AsRef<[u8]>,
 {
     let mut buffer = sealed[4 + sealed_cipher_and_nonce.len()..].to_vec();
-    open_first_pass(key, &mut buffer, aad.as_ref())?;
-    open_second_pass(&mut buffer, aad.as_ref())?;
-    // let buffer = lz4_flex::decompress_size_prepended(&buffer)
-    //     .map_err(|e| "failed to decompress keyring: ".to_string() + e.to_string().as_str())?;
+    decrypt(key, aad.as_ref(), &mut buffer)?;
+    let buffer = miniz_oxide::inflate::decompress_to_vec(&buffer)?;
     let result: Value = serde_json::from_slice(&buffer)?;
     Ok(result)
+}
+
+fn compress(data: Vec<u8>) -> Vec<u8> {
+    miniz_oxide::deflate::compress_to_vec(&data, 1)
 }
 
 #[cfg(test)]
@@ -612,14 +572,19 @@ mod tests {
     use super::*;
     use crate::key::test::Algorithm;
     use crate::key::test::Material;
+    use crate::Origin;
     use crate::SystemRng;
-
     #[test]
     fn test_serde() {
-        let rand = crate::rand::SystemRng::new(); // TODO: Replace with MockRandom.
-
         let material = Material::new(Algorithm::Waffles);
-        let keyring = Keyring::new(&rand, material, Origin::Navajo, Some("test".into()));
+        let key = Key::new(
+            0,
+            Status::Primary,
+            Origin::Navajo,
+            material,
+            Some("test".into()),
+        );
+        let keyring = Keyring::new(key);
         let ser = serde_json::to_string(&keyring).unwrap();
         let de = serde_json::from_str::<Keyring<Material>>(&ser).unwrap();
         assert_eq!(keyring, de);
@@ -628,18 +593,23 @@ mod tests {
     #[cfg(feature = "std")]
     #[tokio::test]
     async fn test_seal_and_open() {
-        use crate::rand::SystemRng;
-
-        let _rand = SystemRng::new(); // TODO: Replace with MockRandom.
-
         let material = Material::new(Algorithm::Waffles);
-        let mut keyring = Keyring::new(&SystemRng, material, Origin::Navajo, Some("test".into()));
-        keyring.add(
-            &SystemRng,
-            Material::new(Algorithm::Cereal),
+        let key = Key::new(
+            0,
+            Status::Primary,
             Origin::Navajo,
-            None,
+            material,
+            Some("test".into()),
         );
+        let mut keyring = Keyring::new(key);
+        let second_key = Key::new(
+            1,
+            Status::Secondary,
+            Origin::Navajo,
+            Material::new(Algorithm::Cereal),
+            Some("test".into()),
+        );
+        keyring.add(second_key);
         let ser = serde_json::to_vec(&keyring).unwrap();
         let de = serde_json::from_slice::<Keyring<Material>>(&ser).unwrap();
         assert_eq!(keyring, de);
@@ -647,6 +617,8 @@ mod tests {
         let in_mem = crate::envelope::InMemory::new();
         let sealed = keyring.seal(Aad(&[]), &in_mem).await.unwrap();
         assert_ne!(ser, sealed);
+        println!("sealed len: {}", sealed.len());
+
         let (kind, opened) = open_keyring_value(Aad(&[]), sealed.clone(), &in_mem)
             .await
             .unwrap();
@@ -657,32 +629,37 @@ mod tests {
 
     #[test]
     fn test_key_status() {
+        let rng = SystemRng;
         let material = Material::new(Algorithm::Pancakes);
-        let mut keyring = Keyring::new(&SystemRng, material, Origin::Navajo, Some("test".into()));
+        let key = Key::new(
+            rng.u32().unwrap(),
+            Status::Primary,
+            Origin::Navajo,
+            material,
+            Some("test".into()),
+        );
+        let mut keyring = Keyring::new(key);
         let first_id = {
             let first = keyring.primary();
             let first_id = first.id();
             assert_eq!(first.status(), Status::Primary);
-            assert_eq!(first.meta().as_deref(), Some("test".into()).as_ref());
+            assert_eq!(first.metadata().as_deref(), Some("test".into()).as_ref());
             assert_eq!(first.origin(), Origin::Navajo);
-            assert_ne!(first.id(), 0);
             assert_eq!(first.algorithm(), Algorithm::Pancakes);
             first_id
         };
+        let second_id = keyring.next_id(&SystemRng);
+        let second_material = Material::new(Algorithm::Waffles);
+        let second_key = Key::new(
+            second_id,
+            Status::Secondary,
+            Origin::Navajo,
+            second_material,
+            None,
+        );
 
-        let second_id = {
-            let second = keyring.add(
-                &SystemRng,
-                Material::new(Algorithm::Waffles),
-                Origin::Navajo,
-                None,
-            );
-            assert_eq!(second.status(), Status::Secondary);
-            assert_eq!(second.meta(), None);
-            assert_eq!(second.origin(), Origin::Navajo);
-            assert_ne!(second.id(), 0);
-            second.id()
-        };
+        keyring.add(second_key);
+
         {
             let second = keyring.get(second_id).unwrap();
             assert_eq!(second.status(), Status::Secondary);
