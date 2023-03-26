@@ -41,20 +41,20 @@ where
         status: Status,
         origin: Origin,
         material: M,
-        meta: Option<serde_json::Value>,
+        metadata: Option<serde_json::Value>,
     ) -> Self {
         Self {
             id,
             status,
             origin,
             material,
-            meta: meta.map(Arc::new),
+            meta: metadata.map(Arc::new),
         }
     }
     pub(crate) fn id(&self) -> u32 {
         self.id
     }
-    pub(crate) fn meta(&self) -> Option<Arc<Value>> {
+    pub(crate) fn metadata(&self) -> Option<Arc<Value>> {
         self.meta.clone()
     }
     pub(crate) fn disable(
@@ -116,15 +116,15 @@ where
     pub(crate) fn is_primary(&self) -> bool {
         self.status.is_primary()
     }
-    pub(crate) fn is_secondary(&self) -> bool {
-        self.status.is_secondary()
-    }
-    pub(crate) fn is_disabled(&self) -> bool {
-        self.status.is_disabled()
-    }
-    pub(crate) fn can_delete(&self) -> bool {
-        !self.status.is_primary()
-    }
+    // pub(crate) fn is_secondary(&self) -> bool {
+    //     self.status.is_secondary()
+    // }
+    // pub(crate) fn is_disabled(&self) -> bool {
+    //     self.status.is_disabled()
+    // }
+    // pub(crate) fn can_delete(&self) -> bool {
+    //     !self.status.is_primary()
+    // }
 }
 impl<M> PartialEq for Key<M>
 where
@@ -177,7 +177,7 @@ pub(crate) mod test {
     impl Material {
         pub(crate) fn new(algorithm: Algorithm) -> Self {
             let mut value = [0u8; 32];
-            // crate::Systemrng.fill(&mut value).unwrap();
+            crate::SystemRng.fill(&mut value).unwrap();
             Self { algorithm, value }
         }
     }
@@ -224,9 +224,9 @@ pub(crate) mod test {
         key.demote();
         assert!(key.disable().is_ok());
         key.promote();
-        assert!(!key.can_delete());
+        assert!(!key.status.is_secondary());
         key.demote();
-        assert!(key.can_delete());
+        assert!(key.status.is_secondary());
     }
     #[test]
     fn test_meta() {

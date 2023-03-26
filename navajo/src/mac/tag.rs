@@ -337,13 +337,14 @@ impl Eq for Tag {}
 
 #[cfg(test)]
 mod tests {
-    use crate::mac::output::Output;
-    use crate::SystemRng;
 
-    use super::*;
     #[cfg(feature = "blake3")]
     #[test]
     fn test_verify_bake3() {
+        use crate::mac::output::Output;
+        use crate::SystemRng;
+
+        use super::*;
         let rng = SystemRng::new();
         let mut hash_arr = [0; 32];
         let id = crate::keyring::gen_id(&rng);

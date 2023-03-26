@@ -1,10 +1,8 @@
 use std::io::Write;
 
-
-
 use crate::{Aad, Aead};
 
-use super::{Buffer, Encryptor, Segment};
+use super::{Encryptor, Segment};
 
 /// Implements [`std::io::Write`] for encrypting data. This type is used
 /// internally by [`Aead`] for the method

@@ -171,6 +171,7 @@ impl RustCryptoKey {
             Algorithm::Aes192 => Self::Aes192(cmac::Mac::new_from_slice(bytes)?),
             #[cfg(all(feature = "aes", feature = "cmac"))]
             Algorithm::Aes256 => Self::Aes256(cmac::Mac::new_from_slice(bytes)?),
+            #[allow(unreachable_patterns)]
             _ => unreachable!(
                 "{algorithm} is either not supported by rust crypto, disabled, or should be handled by ring\nthis is a bug\nplease report it to {NEW_ISSUE_URL}",
             ),

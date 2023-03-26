@@ -1,5 +1,3 @@
-use alloc::sync::Arc;
-
 use crate::Rng;
 
 use super::{

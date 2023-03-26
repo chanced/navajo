@@ -24,7 +24,7 @@ impl Cli {
         stdin: impl 'static + AsyncRead + Unpin,
         stdout: impl 'static + AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        self.command.execute(stdin, stdout).await
+        self.command.run(stdin, stdout).await
     }
 }
 
@@ -85,22 +85,22 @@ pub enum Command {
 }
 
 impl Command {
-    pub async fn execute(
+    pub async fn run(
         self,
         stdin: impl 'static + AsyncRead + Unpin,
         stdout: impl 'static + AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         match self {
-            Command::New(cmd) => cmd.execute(stdin, stdout).await,
-            Command::Inpsect(cmd) => cmd.execute(stdin, stdout).await,
-            Command::Migrate(cmd) => cmd.execute(stdin, stdout).await,
-            Command::CreatePublic(cmd) => cmd.execute(stdin, stdout).await,
-            Command::AddKey(cmd) => cmd.execute(stdin, stdout).await,
-            Command::PromoteKey(cmd) => cmd.execute(stdin, stdout).await,
-            Command::EnableKey(cmd) => cmd.execute(stdin, stdout).await,
-            Command::DisableKey(cmd) => cmd.execute(stdin, stdout).await,
-            Command::DeleteKey(cmd) => cmd.execute(stdin, stdout).await,
-            Command::SetKeyMetadata(cmd) => cmd.execute(stdin, stdout).await,
+            Command::New(cmd) => cmd.run(stdin, stdout).await,
+            Command::Inpsect(cmd) => cmd.run(stdin, stdout).await,
+            Command::Migrate(cmd) => cmd.run(stdin, stdout).await,
+            Command::CreatePublic(cmd) => cmd.run(stdin, stdout).await,
+            Command::AddKey(cmd) => cmd.run(stdin, stdout).await,
+            Command::PromoteKey(cmd) => cmd.run(stdin, stdout).await,
+            Command::EnableKey(cmd) => cmd.run(stdin, stdout).await,
+            Command::DisableKey(cmd) => cmd.run(stdin, stdout).await,
+            Command::DeleteKey(cmd) => cmd.run(stdin, stdout).await,
+            Command::SetKeyMetadata(cmd) => cmd.run(stdin, stdout).await,
         }
     }
 }
@@ -122,7 +122,7 @@ pub struct New {
 }
 
 impl New {
-    pub async fn execute(
+    pub async fn run(
         self,
         _stdin: impl 'static + AsyncRead + Unpin,
         stdout: impl 'static + AsyncWrite + Unpin,
@@ -180,7 +180,7 @@ pub struct Inspect {
 }
 
 impl Inspect {
-    pub async fn execute(
+    pub async fn run(
         self,
         stdin: impl 'static + AsyncRead + Unpin,
         stdout: impl 'static + AsyncWrite + Unpin,
@@ -221,10 +221,12 @@ pub struct AddKey {
     /// string.
     #[command(flatten)]
     pub metadata: Metadata,
+    #[arg(value_name = "PUB_ID", long = "public-id", short = 'p')]
+    pub_id: Option<String>,
 }
 
 impl AddKey {
-    pub async fn execute(
+    pub async fn run(
         self,
         stdin: impl 'static + AsyncRead + Unpin,
         stdout: impl 'static + AsyncWrite + Unpin,
@@ -234,6 +236,7 @@ impl AddKey {
             envelope,
             algorithm,
             metadata,
+            pub_id,
         } = self;
         let (input, output) = io.get(stdin, stdout).await?;
         let aad = envelope.get_aad().await?;
@@ -251,7 +254,7 @@ impl AddKey {
                 mac.add_key(algorithm.try_into()?, metadata);
             }
             Primitive::Signature(ref mut sig) => {
-                sig.add_key(algorithm.try_into()?, metadata);
+                sig.add_key(algorithm.try_into()?, pub_id, metadata)?;
             }
         }
         envelope.seal_and_write(output, aad, primitive).await
@@ -268,7 +271,7 @@ pub struct PromoteKey {
     pub key_id: u32,
 }
 impl PromoteKey {
-    pub async fn execute(
+    pub async fn run(
         self,
         stdin: impl 'static + AsyncRead + Unpin,
         stdout: impl 'static + AsyncWrite + Unpin,
@@ -309,7 +312,7 @@ pub struct EnableKey {
     pub key_id: u32,
 }
 impl EnableKey {
-    pub async fn execute(
+    pub async fn run(
         self,
         stdin: impl 'static + AsyncRead + Unpin,
         stdout: impl 'static + AsyncWrite + Unpin,
@@ -350,7 +353,7 @@ pub struct DisableKey {
     pub key_id: u32,
 }
 impl DisableKey {
-    pub async fn execute(
+    pub async fn run(
         self,
         stdin: impl 'static + AsyncRead + Unpin,
         stdout: impl 'static + AsyncWrite + Unpin,
@@ -392,7 +395,7 @@ pub struct DeleteKey {
     pub key_id: u32,
 }
 impl DeleteKey {
-    pub async fn execute(
+    pub async fn run(
         self,
         stdin: impl 'static + AsyncRead + Unpin,
         stdout: impl 'static + AsyncWrite + Unpin,
@@ -417,7 +420,7 @@ impl DeleteKey {
                 mac.remove_key(key_id)?;
             }
             Primitive::Signature(sig) => {
-                sig.remove_key(key_id)?;
+                sig.remove(key_id)?;
             }
         }
         envelope.seal_and_write(output, aad, primitive).await
@@ -447,7 +450,7 @@ pub struct Migrate {
 }
 
 impl Migrate {
-    pub async fn execute(
+    pub async fn run(
         self,
         stdin: impl 'static + AsyncRead + Unpin,
         stdout: impl 'static + AsyncWrite + Unpin,
@@ -489,16 +492,31 @@ impl Migrate {
 pub struct CreatePublic {
     #[command(flatten)]
     pub io: IoArgs,
+    #[command(flatten)]
+    pub envelope: IntegrationArgs,
 }
 
 impl CreatePublic {
-    pub async fn execute(
+    pub async fn run(
         self,
         stdin: impl 'static + AsyncRead + Unpin,
         stdout: impl 'static + AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let (input, output) = self.io.get(stdin, stdout).await?;
-        todo!()
+        let CreatePublic { io, envelope } = self;
+        let (input, mut output) = io.get(stdin, stdout).await?;
+        let aad = envelope.get_aad().await?;
+        let envelope = envelope.get_envelope()?;
+        let primitive = envelope.open(aad.clone(), input).await?;
+        if let Primitive::Signature(sig) = primitive {
+            let public = sig.verifier();
+            let jwks = serde_json::to_vec_pretty(&public)?;
+            output.write_all(&jwks).await?;
+            output.write_all(b"\n").await?;
+            output.flush().await?;
+        } else {
+            return Err("only signature keyrings support public keysets".into());
+        }
+        Ok(())
     }
 }
 
@@ -521,7 +539,7 @@ pub struct SetKeyMetadata {
     pub clear_metadata: bool,
 }
 impl SetKeyMetadata {
-    pub async fn execute(
+    pub async fn run(
         self,
         stdin: impl 'static + AsyncRead + Unpin,
         stdout: impl 'static + AsyncWrite + Unpin,
@@ -664,7 +682,6 @@ impl IntegrationArgs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::io::*;
 
     #[tokio::test]
     async fn test_migrate() {

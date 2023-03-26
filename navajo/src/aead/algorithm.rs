@@ -1,11 +1,15 @@
-use crate::keyring::KEY_ID_LEN;
+use core::str::FromStr;
+
+use crate::{
+    error::InvalidAlgorithmError, keyring::KEY_ID_LEN, strings::to_upper_remove_seperators,
+};
 
 use super::{
     size::{AES_128_GCM, AES_256_GCM, CHACHA20_POLY1305, XCHACHA20_POLY1305},
     Method,
 };
 use serde::{Deserialize, Serialize};
-use strum::{Display, EnumIter, FromRepr, IntoStaticStr};
+use strum::{Display, EnumIter, IntoStaticStr};
 
 use super::Size;
 
@@ -22,7 +26,6 @@ use super::Size;
     IntoStaticStr,
     Display,
     EnumIter,
-    FromRepr,
 )]
 pub enum Algorithm {
     /// AES-128-GCM is an authenticated encryption algorithm that combines the
@@ -30,14 +33,14 @@ pub enum Algorithm {
     /// authentication code for secure communication.
     #[serde(rename = "AES-128-GCM")]
     #[strum(serialize = "AES-128-GCM")]
-    Aes128Gcm,
+    Aes128Gcm = 0,
 
     /// AES-256-GCM is an authenticated encryption algorithm that combines the
     /// AES256 symmetric key cipher in Galois/Counter Mode (GCM) with a message
     /// authentication code for secure communication.
     #[serde(rename = "AES-256-GCM")]
     #[strum(serialize = "AES-256-GCM")]
-    Aes256Gcm,
+    Aes256Gcm = 1,
 
     /// ChaCha20-Poly1305 is an authenticated encryption algorithm that combines
     /// the ChaCha20 stream cipher for encryption and the Poly1305 message
@@ -46,7 +49,7 @@ pub enum Algorithm {
     /// <https://datatracker.ietf.org/doc/html/rfc8439>
     #[serde(rename = "ChaCha20-Poly1305")]
     #[strum(serialize = "ChaCha20-Poly1305")]
-    ChaCha20Poly1305,
+    ChaCha20Poly1305 = 2,
 
     /// XChaCha20-Poly1305 is an extension of the ChaCha20-Poly1305
     /// authenticated encryption algorithm that uses an extended nonce for
@@ -55,7 +58,7 @@ pub enum Algorithm {
     /// <https://en.wikipedia.org/w/index.php?title=ChaCha20-Poly1305&section=3#XChaCha20-Poly1305_%E2%80%93_extended_nonce_variant>
     #[serde(rename = "XChaCha20-Poly1305")]
     #[strum(serialize = "XChaCha20-Poly1305")]
-    XChaCha20Poly1305,
+    XChaCha20Poly1305 = 3,
 }
 
 impl Algorithm {
@@ -90,5 +93,19 @@ impl Algorithm {
 impl From<Algorithm> for u8 {
     fn from(alg: Algorithm) -> Self {
         alg as u8
+    }
+}
+
+impl FromStr for Algorithm {
+    type Err = InvalidAlgorithmError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match to_upper_remove_seperators(s).as_str() {
+            "AES128GCM" => Ok(Algorithm::Aes128Gcm),
+            "AES256GCM" => Ok(Algorithm::Aes256Gcm),
+            "CHACHA20POLY1305" => Ok(Algorithm::ChaCha20Poly1305),
+            "XCHACHA20POLY1305" => Ok(Algorithm::XChaCha20Poly1305),
+            _ => Err(InvalidAlgorithmError(s.to_string())),
+        }
     }
 }

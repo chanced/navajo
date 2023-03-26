@@ -37,6 +37,7 @@ mod id;
     feature = "signature",
 ))]
 mod key;
+
 #[cfg(any(
     feature = "aead",
     feature = "daead",
@@ -44,6 +45,7 @@ mod key;
     feature = "signature",
 ))]
 pub(crate) use key::{Key, KeyMaterial};
+
 #[cfg(any(
     feature = "aead",
     feature = "daead",
@@ -51,6 +53,7 @@ pub(crate) use key::{Key, KeyMaterial};
     feature = "signature",
 ))]
 mod key_info;
+
 #[cfg(any(
     feature = "aead",
     feature = "daead",
@@ -66,6 +69,7 @@ pub use key_info::KeyInfo;
     feature = "signature",
 ))]
 mod keyring;
+
 #[cfg(any(
     feature = "aead",
     feature = "daead",
@@ -76,6 +80,7 @@ pub(crate) use keyring::Keyring;
 
 #[cfg(feature = "mac")]
 pub mod mac;
+
 #[cfg(feature = "mac")]
 pub use mac::Mac;
 
@@ -100,6 +105,7 @@ pub use status::Status;
 
 #[cfg(feature = "signature")]
 pub mod signature;
+
 #[cfg(feature = "signature")]
 pub use signature::{Signer, Verifier};
 
@@ -110,3 +116,7 @@ pub(crate) const NEW_ISSUE_URL: &str = "https://github.com/chanced/navajo/issues
 pub(crate) mod sealed;
 
 pub mod secret_store;
+
+pub mod jose;
+
+pub(crate) mod strings;

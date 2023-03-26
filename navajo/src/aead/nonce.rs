@@ -20,6 +20,7 @@ pub(crate) enum Nonce {
     Sequence(NonceSequence),
 }
 impl Nonce {
+    #[allow(dead_code)]
     pub(crate) fn bytes(&self) -> &[u8] {
         match self {
             Self::Single(nonce) => nonce.bytes(),
@@ -188,7 +189,7 @@ impl NonceSequence {
             NonceSequence::TwentyFour(ctr, _) => *ctr,
         }
     }
-
+    #[allow(dead_code)]
     fn seed(&self) -> &[u8] {
         match self {
             Self::Twelve(_, seed) => seed.as_ref(),

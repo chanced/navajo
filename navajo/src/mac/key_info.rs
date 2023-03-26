@@ -36,7 +36,7 @@ impl MacKeyInfo {
             status: key.status(),
             external_prefix: key.material().prefix().map(|p| p.to_vec()),
             header: key.header().to_vec(),
-            meta: key.meta(),
+            meta: key.metadata(),
         }
     }
 }

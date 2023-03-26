@@ -20,7 +20,7 @@ impl AeadKeyInfo {
             id: key.id(),
             algorithm: key.algorithm(),
             status: key.status(),
-            metadata: key.meta(),
+            metadata: key.metadata(),
         }
     }
 }
@@ -38,5 +38,10 @@ impl From<&AeadKeyInfo> for u32 {
 impl From<&Key<super::Material>> for AeadKeyInfo {
     fn from(key: &Key<super::Material>) -> Self {
         Self::new(key)
+    }
+}
+impl From<Key<super::Material>> for AeadKeyInfo {
+    fn from(key: Key<super::Material>) -> Self {
+        Self::new(&key)
     }
 }

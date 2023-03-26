@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use super::{
     entry::Entry,
     material::{BackendKey, Material, RustCryptoKey},
-    output::{Output, RustCryptoOutput},
+    output::RustCryptoOutput,
 };
 
 pub(super) struct Context {

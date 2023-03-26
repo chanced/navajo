@@ -1,5 +1,13 @@
+use core::str::FromStr;
+
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoStaticStr};
+
+use crate::{
+    error::InvalidAlgorithmError,
+    jose::{Algorithm as JwkAlgorithm, Curve, KeyType},
+    strings::to_upper_remove_seperators,
+};
 
 #[derive(
     Debug,
@@ -38,12 +46,26 @@ pub enum Algorithm {
     // /// RSA PSS 2048-8192 bits SHA-512
     // Ps512,
 }
+
+impl FromStr for Algorithm {
+    type Err = InvalidAlgorithmError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match to_upper_remove_seperators(s).as_str() {
+            "ES256" => Ok(Algorithm::Es256),
+            "ES384" => Ok(Algorithm::Es384),
+            "ED25519" => Ok(Algorithm::Ed25519),
+            _ => Err(InvalidAlgorithmError(s.to_string())),
+        }
+    }
+}
+
 impl Algorithm {
-    pub fn jwt_alg(&self) -> &'static str {
+    pub fn jwt_algorithm(&self) -> JwkAlgorithm {
         match self {
-            Algorithm::Es256 => "ES256",
-            Algorithm::Es384 => "ES384",
-            Algorithm::Ed25519 => "EdDSA",
+            Algorithm::Es256 => JwkAlgorithm::Es256,
+            Algorithm::Es384 => JwkAlgorithm::Es384,
+            Algorithm::Ed25519 => JwkAlgorithm::EdDsa,
         }
     }
     pub fn from_jwt_alg(alg: &str) -> Result<Self, &str> {
@@ -54,6 +76,21 @@ impl Algorithm {
             _ => Err("unsupported algorithm: \"{alg}\""),
         }
     }
+    pub fn curve(&self) -> Option<Curve> {
+        match self {
+            Algorithm::Es256 => Some(Curve::P256),
+            Algorithm::Es384 => Some(Curve::P384),
+            Algorithm::Ed25519 => Some(Curve::Ed25519),
+        }
+    }
+    pub fn key_type(&self) -> KeyType {
+        match self {
+            Algorithm::Es256 => KeyType::Ec,
+            Algorithm::Es384 => KeyType::Ec,
+            Algorithm::Ed25519 => KeyType::Okp,
+        }
+    }
+
     #[cfg(feature = "ring")]
     pub(super) fn ring_ecdsa_signing_algorithm(
         &self,

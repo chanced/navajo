@@ -690,8 +690,7 @@ dependencies = [
 [[package]]
 name = "ed25519-dalek"
 version = "2.0.0-pre.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bd577ba9d4bcab443cac60003d8fd32c638e7024a3ec92c200d7af5d2c397ed"
+source = "git+https://github.com/dalek-cryptography/ed25519-dalek#7dc1bbd85527306e67bc4741968bd79ea1ae25b1"
 dependencies = [
  "curve25519-dalek",
  "ed25519",
@@ -829,7 +828,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8a2db397cb1c8772f31494cb8917e48cd1e64f0fa7efac59fbd741a0a8ce841"
 dependencies = [
  "crc32fast",
- "miniz_oxide",
+ "miniz_oxide 0.6.2",
 ]
 
 [[package]]
@@ -1488,6 +1487,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "miniz_oxide"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7810e0be55b428ada41041c41f32c9f1a42817901b4ccf45fa3d4b6561e74c7"
+dependencies = [
+ "adler",
+]
+
+[[package]]
 name = "mio"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1550,6 +1558,7 @@ dependencies = [
  "hkdf",
  "hmac",
  "inherent",
+ "miniz_oxide 0.7.1",
  "mockall",
  "p256",
  "p384",
@@ -1572,6 +1581,7 @@ dependencies = [
  "subtle",
  "tokio",
  "typenum",
+ "url",
  "zeroize",
 ]
 
@@ -3065,6 +3075,7 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]

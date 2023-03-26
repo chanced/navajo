@@ -25,7 +25,7 @@ impl Prk {
         }
     }
 }
-
+#[cfg(feature = "ring")]
 struct Length(usize);
 #[cfg(feature = "ring")]
 impl ring::hkdf::KeyType for Length {

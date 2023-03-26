@@ -1,8 +1,13 @@
+use core::str::FromStr;
+
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoStaticStr};
 
-use crate::{error::KeyError, rand::Rng};
+use crate::{
+    error::{InvalidAlgorithmError, KeyError},
+    rand::Rng, strings::to_upper_remove_seperators,
+};
 
 const SHA2_256_KEY_LEN: usize = 32;
 const SHA2_384_KEY_LEN: usize = 48;
@@ -11,9 +16,13 @@ const SHA3_224_KEY_LEN: usize = 32;
 const SHA3_256_KEY_LEN: usize = 32;
 const SHA3_384_KEY_LEN: usize = 48;
 const SHA3_512_KEY_LEN: usize = 64;
+#[cfg(feature = "blake3")]
 const BLAKE3_KEY_LEN: usize = 32;
+#[cfg(feature = "aes")]
 const AES128_KEY_LEN: usize = 16;
+#[cfg(feature = "aes")]
 const AES192_KEY_LEN: usize = 24;
+#[cfg(feature = "aes")]
 const AES256_KEY_LEN: usize = 32;
 
 #[derive(
@@ -86,6 +95,57 @@ pub enum Algorithm {
     #[serde(rename = "AES-256")]
     #[strum(serialize = "AES-256")]
     Aes256,
+}
+impl FromStr for Algorithm {
+    type Err = InvalidAlgorithmError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        
+        match to_upper_remove_seperators(s).as_str() {
+            #[cfg(feature = "blake3")]
+            "BLAKE3" => return OK(Algorithm::Blake3),
+            "SHA256" | "SHA2256" => return Ok(Algorithm::Sha256),
+            "SHA384" | "SHA2384" => return Ok(Algorithm::Sha384),
+            "SHA512" | "SHA2512" => return Ok(Algorithm::Sha512),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            "SHA3256" => return Ok(Algorithm::Sha3_256),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            "SHA3224" => Ok(Algorithm::Sha3_224),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            "SHA3384" => Ok(Algorithm::Sha3_384),
+            #[cfg(all(feature = "sha3", feature = "hmac"))]
+            "SHA3512" => Ok(Algorithm::Sha3_512),
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            "AES128" => Ok(Algorithm::Aes128),
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            "AES192" => Ok(Algorithm::Aes192),
+            #[cfg(all(feature = "aes", feature = "cmac"))]
+            "AES256" => Ok(Algorithm::Aes256),
+            _ => Err(InvalidAlgorithmError(s.into())),
+        }
+    }
+}
+
+impl TryFrom<String> for Algorithm {
+    type Error = InvalidAlgorithmError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Algorithm::from_str(&value)
+    }
+}
+impl TryFrom<&String> for Algorithm {
+    type Error = InvalidAlgorithmError;
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        Algorithm::from_str(value)
+    }
+}
+impl TryFrom<&str> for Algorithm {
+    type Error = InvalidAlgorithmError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Algorithm::from_str(value)
+    }
 }
 
 impl Algorithm {

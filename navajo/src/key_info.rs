@@ -5,7 +5,7 @@ use serde_json::Value;
 #[cfg(feature = "std")]
 use std::sync::Arc;
 
-use crate::{KeyMaterial, Origin, Status};
+use crate::{Origin, Status};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Metadata for a particular key.

@@ -297,21 +297,31 @@ impl fmt::Display for MalformedError {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct InvalidAlgorithm(pub u8);
-impl Error for InvalidAlgorithm {}
+#[derive(Clone, Debug)]
+pub struct InvalidAlgorithmError(pub String);
+impl Error for InvalidAlgorithmError {}
 
-impl fmt::Display for InvalidAlgorithm {
+impl fmt::Display for InvalidAlgorithmError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "navajo: invalid algorithm \"{}\"", self.0)
+        write!(
+            f,
+            "navajo: invalid or unsupported algorithm: \"{}\"",
+            self.0
+        )
     }
 }
 
-impl From<u8> for InvalidAlgorithm {
-    fn from(v: u8) -> Self {
+impl From<String> for InvalidAlgorithmError {
+    fn from(v: String) -> Self {
         Self(v)
     }
 }
+impl From<&str> for InvalidAlgorithmError {
+    fn from(v: &str) -> Self {
+        Self(v.to_string())
+    }
+}
+
 #[derive(Debug)]
 pub enum TruncationError {
     NotTruncatable(String),
@@ -427,6 +437,12 @@ impl From<String> for OpenError {
         Self(e)
     }
 }
+impl From<miniz_oxide::inflate::DecompressError> for OpenError {
+    fn from(e: miniz_oxide::inflate::DecompressError) -> Self {
+        Self(e.to_string())
+    }
+}
+
 impl From<&str> for OpenError {
     fn from(e: &str) -> Self {
         Self(e.to_string())
@@ -686,10 +702,59 @@ impl From<sec1::Error> for KeyError {
     }
 }
 #[derive(Debug, Clone)]
-pub struct VerificationError(pub String);
+pub enum SignatureError {
+    MissingKey(String),
+    Failure(String),
+    InvalidLen(usize),
+}
 
-impl Display for VerificationError {
+impl Error for SignatureError {}
+
+impl Display for SignatureError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "verification failed: {}", self.0)
+        match self {
+            SignatureError::MissingKey(id) => write!(f, "missing key: {id}"),
+            SignatureError::Failure(id) => {
+                write!(f, "verification failed: {id}")
+            }
+            SignatureError::InvalidLen(len) => {
+                write!(f, "invalid signature len: {len}")
+            }
+        }
     }
 }
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct DuplicatePubIdError(pub String);
+
+impl Display for DuplicatePubIdError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "duplicate pub id: {}", self.0)
+    }
+}
+impl Error for DuplicatePubIdError {}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct InvalidCurveError(pub String);
+
+impl Display for InvalidCurveError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid EllipticCurve: {}", self.0)
+    }
+}
+
+impl Error for InvalidCurveError {}
+
+#[derive(Debug)]
+pub enum DecodeError {
+    Serde(serde_json::Error),
+    Base64(base64::DecodeError),
+}
+impl Display for DecodeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DecodeError::Serde(e) => write!(f, "serde error: {}", e),
+            DecodeError::Base64(e) => write!(f, "base64 error: {}", e),
+        }
+    }
+}
+impl Error for DecodeError {}

@@ -1,4 +1,6 @@
-use core::ops::Deref;
+use core::ops::{
+    Deref, Index, Range, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive,
+};
 
 use crate::b64;
 use alloc::{sync::Arc, vec::Vec};
@@ -6,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct Bytes(#[serde(with = "b64::standard")] Arc<[u8]>);
+pub struct Bytes(#[serde(with = "b64::url_safe")] Arc<[u8]>);
 
 impl Bytes {
     pub fn new(bytes: &[u8]) -> Self {
@@ -19,6 +21,50 @@ impl Bytes {
         self.0.as_ref().into()
     }
 }
+impl Index<usize> for Bytes {
+    type Output = u8;
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
+    }
+}
+impl Index<Range<usize>> for Bytes {
+    type Output = [u8];
+    fn index(&self, index: Range<usize>) -> &Self::Output {
+        &self.0[index]
+    }
+}
+impl Index<RangeTo<usize>> for Bytes {
+    type Output = [u8];
+
+    fn index(&self, index: RangeTo<usize>) -> &Self::Output {
+        &self.0[index]
+    }
+}
+impl Index<RangeFrom<usize>> for Bytes {
+    type Output = [u8];
+    fn index(&self, index: RangeFrom<usize>) -> &Self::Output {
+        &self.0[index]
+    }
+}
+impl Index<RangeInclusive<usize>> for Bytes {
+    type Output = [u8];
+    fn index(&self, index: RangeInclusive<usize>) -> &Self::Output {
+        &self.0[index]
+    }
+}
+impl Index<RangeToInclusive<usize>> for Bytes {
+    type Output = [u8];
+    fn index(&self, index: RangeToInclusive<usize>) -> &Self::Output {
+        &self.0[index]
+    }
+}
+impl Index<RangeFull> for Bytes {
+    type Output = [u8];
+    fn index(&self, index: RangeFull) -> &Self::Output {
+        &self.0[index]
+    }
+}
+
 impl core::fmt::Debug for Bytes {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_tuple("Sensitive").field(&"***").finish()
