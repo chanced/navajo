@@ -45,7 +45,7 @@ impl Signer {
         &self.keyring
     }
 
-    pub fn keys(&self) -> Vec<KeyInfo<crate::signature::Algorithm>> {
+    pub fn keys(&self) -> Vec<KeyInfo<crate::sig::Algorithm>> {
         todo!()
     }
 

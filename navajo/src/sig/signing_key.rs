@@ -48,7 +48,19 @@ impl Key<SigningKey> {
         let header = serde_json::to_vec(&Header {
             algorithm: self.algorithm().jwt_algorithm(),
             key_id: Some(Cow::Borrowed(&self.material().pub_id)),
-            content_type: Some("JWT".into()),
+            content_type: None,
+            token_type: None,
+            jwk: None,
+            jwks_url: None,
+            x509_cert_chain: None,
+            x509_cert_sha1_thumbprint: None,
+            x509_cert_sha256_thumbprint: None,
+            x509_url: None,
+            critical: Default::default(),
+            encryption: None,
+            zip: None,
+            iv: None,
+            additional_fields: Default::default(),
         })?;
         let header = b64::URL_SAFE_NO_PAD.encode(header);
         let payload = serde_json::to_vec(&payload)?;
@@ -61,14 +73,10 @@ impl Key<SigningKey> {
 }
 
 impl SigningKey {
-    pub fn new(algorithm: Algorithm, pub_id: String) -> Self {
-        Self::generate(&SystemRng, algorithm, pub_id)
-    }
-
     pub fn sign(&self, data: &[u8]) -> Signature {
         self.inner.sign(data)
     }
-
+    #[cfg(test)]
     pub fn new_with_rng<G>(rng: &G, algorithm: Algorithm, pub_id: String) -> Self
     where
         G: Rng + CryptoRng + CryptoRngCore,
@@ -388,5 +396,21 @@ mod tests {
         payload.insert("name".to_string(), "chance".into());
         let jwt = key.sign_jws(&payload).unwrap();
         println!("{jwt}");
+    }
+    #[test]
+    fn test_sign() {
+        let ed25519 = SigningKey::generate(&SystemRng, Algorithm::Ed25519, "222".to_string());
+        let p256 = SigningKey::generate(&SystemRng, Algorithm::Es256, "222".to_string());
+        let p384 = SigningKey::generate(&SystemRng, Algorithm::Es384, "222".to_string());
+
+        let ed25519_sig = ed25519.sign("test".as_bytes());
+
+        let p256_sig = p256.sign("test".as_bytes());
+
+        let p384_sig = p384.sign("test".as_bytes());
+
+        println!("{p256_sig}");
+
+        println!("{p384_sig}");
     }
 }

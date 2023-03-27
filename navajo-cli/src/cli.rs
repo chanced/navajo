@@ -66,9 +66,9 @@ pub enum Command {
     EnableKey(EnableKey),
 
     #[command(alias = "disable_key", alias = "disable", alias = "d")]
-    /// Disables a key in a keyring.
+    /// Disables a key in a keyring. Disabling a key effectively removes
+    /// the key from the keyring, but leaves it in a recoverable state.
     DisableKey(DisableKey),
-
     /// Deletes a key from a keyring.
     #[command(
         alias = "delete_key",

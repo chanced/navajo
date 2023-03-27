@@ -56,27 +56,14 @@ impl KeyUse {
             KeyUse::Other(s) => s,
         }
     }
-    /// Returns the `KeyUse` if the [`&Value`](serde_json::Value) is an object
-    /// with the `"use"` field or if the [`&Value`](serde_json::Value) is a
-    /// string.
-    pub fn maybe_from_value(value: &Value) -> Option<KeyUse> {
-        match value {
-            Value::Object(obj) => match obj.get("use") {
-                Some(Value::String(str)) => Some(KeyUse::from(str)),
-                _ => None,
-            },
-            Value::String(str) => Some(KeyUse::from(str)),
-            _ => None,
-        }
-    }
 }
-impl TryFrom<&Value> for KeyUse {
-    type Error = ();
-    fn try_from(value: &Value) -> Result<Self, Self::Error> {
-        if let Some(ku) = KeyUse::maybe_from_value(value) {
-            Ok(ku)
-        } else {
-            Err(())
-        }
-    }
-}
+
+// pub(crate) fn key_use_maybe_from_value(value: &Value) -> Option<KeyUse> {
+//     match value {
+//         Value::Object(obj) => match obj.get("use") {
+//             Some(Value::String(str)) => Some(KeyUse::from(str)),
+//             _ => None,
+//         },
+//         _ => None,
+//     }
+// }

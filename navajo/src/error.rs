@@ -13,6 +13,8 @@ pub trait Error: core::fmt::Debug + core::fmt::Display {}
 #[cfg(feature = "std")]
 pub use std::error::Error;
 
+use crate::KeyInfo;
+
 #[derive(Debug)]
 pub struct RandomError(pub rand_core::Error);
 
@@ -49,6 +51,14 @@ impl From<RandomError> for rand_core::Error {
 impl From<rand_core::Error> for RandomError {
     fn from(err: rand_core::Error) -> Self {
         Self(err)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct KeyDisabledError(pub u32);
+impl Display for KeyDisabledError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "navajo: key is disabled: {}", self.0)
     }
 }
 
@@ -186,6 +196,7 @@ pub enum DecryptError {
     KeyNotFound(KeyNotFoundError),
     SegmentLimitExceeded,
     EmptyCiphertext,
+    DisabledKey(KeyDisabledError),
 }
 
 impl Error for DecryptError {}
@@ -225,6 +236,7 @@ impl fmt::Display for DecryptError {
             Self::KeyNotFound(e) => fmt::Display::fmt(e, f),
             Self::SegmentLimitExceeded => fmt::Display::fmt(&SegmentLimitExceededError, f),
             Self::EmptyCiphertext => write!(f, "navajo: ciphertext must not be empty"),
+            Self::DisabledKey(e) => fmt::Display::fmt(e, f),
         }
     }
 }

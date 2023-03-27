@@ -352,7 +352,6 @@ impl Primitive {
             keyring,
         };
         let mut v = serde_json::to_vec(&data).map_err(|e| SealError(e.to_string()))?;
-        v.push(b'\n');
         Ok(v)
     }
     async fn seal_keyring<A, E>(
@@ -429,7 +428,6 @@ fn finalize_seal(mut sealed: Vec<u8>) -> Result<Vec<u8>, SealError> {
     let len = sealed.len() - 8;
     let len_bytes = len.to_be_bytes();
     sealed.splice(0..8, len_bytes.into_iter());
-    sealed.push(b'\n');
     Ok(sealed)
 }
 

@@ -3,7 +3,7 @@ use core::str::FromStr;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoStaticStr};
 
-use crate::{error::InvalidAlgorithmError, signature, strings::to_upper_remove_seperators};
+use crate::{error::InvalidAlgorithmError, sig, strings::to_upper_remove_seperators};
 
 use super::{Curve, KeyType};
 
@@ -76,12 +76,12 @@ impl TryFrom<(KeyType, Curve)> for Algorithm {
     }
 }
 
-impl From<crate::signature::Algorithm> for Algorithm {
-    fn from(alg: crate::signature::Algorithm) -> Self {
+impl From<crate::sig::Algorithm> for Algorithm {
+    fn from(alg: crate::sig::Algorithm) -> Self {
         match alg {
-            signature::Algorithm::Ed25519 => Algorithm::EdDsa,
-            signature::Algorithm::Es256 => Algorithm::Es256,
-            signature::Algorithm::Es384 => Algorithm::Es384,
+            sig::Algorithm::Ed25519 => Algorithm::EdDsa,
+            sig::Algorithm::Es256 => Algorithm::Es256,
+            sig::Algorithm::Es384 => Algorithm::Es384,
         }
     }
 }

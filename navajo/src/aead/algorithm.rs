@@ -28,23 +28,20 @@ use super::Size;
     EnumIter,
 )]
 pub enum Algorithm {
-    /// AES-128-GCM is an authenticated encryption algorithm that combines the
-    /// AES128 symmetric key cipher in Galois/Counter Mode (GCM) with a message
-    /// authentication code for secure communication.
+    /// AES-128-GCM uses the AES block cipher with a 128-bit key and provides
+    /// authenticated encryption by using the Galois/Counter Mode (GCM).
     #[serde(rename = "AES-128-GCM")]
     #[strum(serialize = "AES-128-GCM")]
     Aes128Gcm = 0,
 
-    /// AES-256-GCM is an authenticated encryption algorithm that combines the
-    /// AES256 symmetric key cipher in Galois/Counter Mode (GCM) with a message
-    /// authentication code for secure communication.
+    /// AES-256-GCM uses the AES block cipher with a 256-bit key and provides
+    /// authenticated encryption by using the Galois/Counter Mode (GCM).
     #[serde(rename = "AES-256-GCM")]
     #[strum(serialize = "AES-256-GCM")]
     Aes256Gcm = 1,
 
-    /// ChaCha20-Poly1305 is an authenticated encryption algorithm that combines
-    /// the ChaCha20 stream cipher for encryption and the Poly1305 message
-    /// authentication code for integrity protection.
+    /// ChaCha20-Poly1305 combines the ChaCha20 stream cipher for encryption
+    /// and the Poly1305 message authentication code for integrity protection.
     ///
     /// <https://datatracker.ietf.org/doc/html/rfc8439>
     #[serde(rename = "ChaCha20-Poly1305")]

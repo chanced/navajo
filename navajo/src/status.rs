@@ -1,4 +1,3 @@
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -9,16 +8,16 @@ pub enum Status {
     /// The key will be used for decryption when aplicable (i.e. ciphertext
     /// encrypted with it).
     Primary,
-    /// The indicates that the key is active and can be used for encryption if
-    /// specified.
+    /// Indicates that the key is active and can be used for cryptographic
+    /// purposes.
     ///
-    /// The key will be used for decryption when applicable (i.e. ciphertext
-    /// encrypted with it).
+    /// The key will be used for verification or decryption when applicable
+    /// but will not be used for signing or encryption.
     Secondary,
-
-    /// Indicates that the key is disabled and cannot be used for encryption
-    /// except for [daead] queries. It can still be used to decrypt applicable
-    /// ciphertext.
+    /// A disabled key is not active and cannot be used for cryptographic purposes.
+    ///
+    /// While disabled keys are present in the keyring, they are effectively deleted
+    /// but remain in a recoverable state.
     Disabled,
 }
 
@@ -36,10 +35,10 @@ impl Status {
         *self == Self::Secondary
     }
 
-    /// Returns `true` if `Disabled`.
-    pub fn is_disabled(&self) -> bool {
-        matches!(self, Self::Disabled)
-    }
+    // /// Returns `true` if `Disabled`.
+    // pub fn is_disabled(&self) -> bool {
+    //     matches!(self, Self::Disabled)
+    // }
 }
 
 impl From<Status> for i8 {

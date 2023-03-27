@@ -255,9 +255,9 @@ mod tests {
     #[tokio::test]
     async fn test_stream_roundtrip() {
         let data_stream = stream::iter(vec![
-            Vec::from(&b"hello"[..]),
-            Vec::from(&b" "[..]),
-            Vec::from(&b"world"[..]),
+            Vec::from("hello".as_bytes()),
+            Vec::from(" ".as_bytes()),
+            Vec::from("world".as_bytes()),
         ]);
         let aead = Aead::new(Algorithm::Aes256Gcm, None);
         let encrypt_stream =
@@ -269,6 +269,7 @@ mod tests {
         let result = decrypt_stream.try_concat().await.unwrap();
         assert_eq!(result, b"hello world");
     }
+    
     #[cfg(feature = "std")]
     #[tokio::test]
     async fn test_stream_with_aad_roundtrip() {

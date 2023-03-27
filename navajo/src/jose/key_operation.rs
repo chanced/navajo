@@ -75,6 +75,7 @@ impl From<KeyOperation> for String {
         ko.as_str().to_string()
     }
 }
+
 pub(crate) fn key_ops_from_value(value: Value) -> Vec<KeyOperation> {
     if let Value::Object(obj) = value {
         if let Some(Value::Array(arr)) = obj.get("key_ops") {

@@ -104,10 +104,10 @@ mod status;
 pub use status::Status;
 
 #[cfg(feature = "signature")]
-pub mod signature;
+pub mod sig;
 
 #[cfg(feature = "signature")]
-pub use signature::{Signer, Verifier};
+pub use sig::{Signer, Verifier};
 
 pub(crate) mod b64;
 

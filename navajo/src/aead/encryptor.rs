@@ -30,10 +30,29 @@ use super::{
 /// Encrypts data using either STREAM as desribed in [Online
 /// Authenticated-Encryption and its Nonce-Reuse
 /// Misuse-Resistance](https://eprint.iacr.org/2015/189.pdf) if the finalized
-/// output is less than the specified `Segment` size or AEAD as described in
-/// [RFC 5116](https://tools.ietf.org/html/rfc5116) with a 5 byte header
-/// prepended.
+/// ciphertext is greater than the specified [`Segment`] as described in [RFC
+/// 5116](https://tools.ietf.org/html/rfc5116) with an 5 byte header. Otherwise
+/// traditional "online" AEAD encryption is used.
 ///
+/// If the resulting ciphertext is greater than [`Segment`], the header will be
+/// in the form:
+///
+/// ```plaintext
+/// || Method (1) || Key Id (4) || Salt (variable) || Nonce Prefix (variable) ||
+/// ```
+/// where `Salt` is the length of the algorithm's key and `Nonce Prefix` is
+/// the length of the algorithm's nonce minus 5 bytes (4 for the segment
+/// counter & 1 byte for the last-block flag).
+///
+/// If the resulting ciphertext is less than [`Segment`], the header will be
+/// in the form:
+/// ```plaintext
+/// || Method (1) || Key Id (4) || Nonce (variable) ||
+/// ```
+///
+/// If the resulting ciphertext is greater than [`Segment`] then each segment block will be
+/// be of the size specified by [`Segment`] except for the last, which will be no greater than
+/// [`Segment`].
 #[derive(ZeroizeOnDrop, Debug)]
 pub struct Encryptor<B, G = SystemRng>
 where

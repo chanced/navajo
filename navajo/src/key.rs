@@ -90,7 +90,7 @@ where
             origin: self.origin,
             status: self.status,
             algorithm: self.material.algorithm(),
-            meta: self.meta.clone(),
+            metadata: self.meta.clone(),
         }
     }
     pub(crate) fn update_meta(&mut self, meta: Option<serde_json::Value>) -> &Key<M> {

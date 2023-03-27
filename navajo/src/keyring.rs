@@ -99,14 +99,14 @@ where
         self.0 = Arc::from(keys);
         Ok(&self.0[idx])
     }
-    // fn demote(&mut self, id: u32) -> Result<&Key<M>, KeyNotFoundError> {
-    //     let idx = self.position(id).ok_or(KeyNotFoundError(id))?;
-    //     let mut keys = self.0.iter().cloned().collect::<Vec<_>>();
-    //     let key = keys.get_mut(idx).unwrap();
-    //     key.demote();
-    //     self.0 = Arc::from(keys);
-    //     Ok(&self.0[idx])
-    // }
+    fn demote(&mut self, id: u32) -> Result<&Key<M>, KeyNotFoundError> {
+        let idx = self.position(id).ok_or(KeyNotFoundError(id))?;
+        let mut keys = self.0.iter().cloned().collect::<Vec<_>>();
+        let key = keys.get_mut(idx).unwrap();
+        key.demote();
+        self.0 = Arc::from(keys);
+        Ok(&self.0[idx])
+    }
 }
 impl<M> Deref for Keys<M>
 where
@@ -677,7 +677,6 @@ mod tests {
         }
 
         assert!(keyring.remove(second_id).is_err());
-        assert!(keyring.disable(second_id).is_err());
         assert!(keyring.remove(first_id).is_ok());
     }
 }

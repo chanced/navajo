@@ -14,7 +14,7 @@ pub struct KeyInfo<A> {
     pub status: Status,
     pub origin: Origin,
     pub algorithm: A,
-    pub meta: Option<Arc<Value>>,
+    pub metadata: Option<Arc<Value>>,
 }
 impl<A> PartialEq for KeyInfo<A>
 where
@@ -44,7 +44,7 @@ impl From<crate::aead::AeadKeyInfo> for KeyInfo<crate::aead::Algorithm> {
             algorithm: info.algorithm,
             origin: Origin::Navajo,
             status: info.status,
-            meta: info.metadata,
+            metadata: info.metadata,
         }
     }
 }
@@ -56,7 +56,7 @@ impl From<crate::mac::MacKeyInfo> for KeyInfo<crate::mac::Algorithm> {
             algorithm: info.algorithm,
             origin: info.origin,
             status: info.status,
-            meta: info.meta,
+            metadata: info.meta,
         }
     }
 }

@@ -1,5 +1,8 @@
 use super::{Algorithm, Curve, KeyOperation, KeyType, KeyUse};
-use crate::{b64, signature::{VerifyingKey, self}};
+use crate::{
+    b64,
+    sig::{self, VerifyingKey},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -197,8 +200,8 @@ pub struct Jwk {
     /// specified in the certificate, when it includes this information.
     /// Similarly, if the "alg" member is present, it MUST correspond to the
     /// algorithm specified in the certificate.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub x5u: Option<url::Url>,
+    #[serde(rename = "x5u", skip_serializing_if = "Option::is_none")]
+    pub x509_url: Option<url::Url>,
 
     /// The "x5c" (X.509 certificate chain) parameter contains a chain of one or
     /// more PKIX certificates
@@ -223,13 +226,14 @@ pub struct Jwk {
     /// 4.6](https://www.rfc-editor.org/rfc/rfc7517#section-4.6) for additional
     /// guidance on this.
     #[serde(
+        rename = "x5c",
         with = "b64::optional_seq_url_safe",
         skip_serializing_if = "Option::is_none",
         default
     )]
-    pub x5c: Option<Vec<Vec<u8>>>,
+    pub x509_cert_chain: Option<Vec<Vec<u8>>>,
 
-    /// The "x5t" (X.509 certificate SHA-1 thumbprint) parameter is a
+    /// The `"x5t"` (X.509 certificate SHA-1 thumbprint) parameter is a
     /// base64url-encoded SHA-1 thumbprint (a.k.a. digest) of the DER
     /// encoding of an X.509 certificate [RFC5280].  Note that certificate
     /// thumbprints are also sometimes known as certificate fingerprints.
@@ -243,13 +247,14 @@ pub struct Jwk {
     /// the referenced certificate.  See the last paragraph of Section 4.6
     /// for additional guidance on this.
     #[serde(
+        rename = "x5t",
         with = "b64::optional_url_safe",
         skip_serializing_if = "Option::is_none",
         default
     )]
-    pub x5t: Option<Vec<u8>>,
+    pub x509_cert_sha1_thumbprint: Option<Vec<u8>>,
 
-    /// The "x5t#S256" (X.509 certificate SHA-256 thumbprint) parameter is a
+    /// The `"x5t#S256"` (X.509 certificate SHA-256 thumbprint) parameter is a
     /// base64url-encoded SHA-256 thumbprint (a.k.a. digest) of the DER encoding
     /// of an X.509 certificate [RFC5280].  Note that certificate thumbprints
     /// are also sometimes known as certificate fingerprints. The key in the
@@ -266,12 +271,17 @@ pub struct Jwk {
     ///
     /// <https://www.rfc-editor.org/rfc/rfc7517#section-4.9>
     #[serde(
+        rename = "x5t#S256",
         with = "b64::optional_url_safe",
         skip_serializing_if = "Option::is_none",
-        default,
-        rename = "x5t#S256"
+        default
     )]
-    pub x5t_s256: Option<Vec<u8>>,
+    pub x509_cert_sha256_thumbprint: Option<Vec<u8>>,
+
+    ///
+    /// Unknown, additional fields found in the JWK
+    #[serde(flatten, default)]
+    pub additional_fields: serde_json::Map<String, serde_json::Value>,
 }
 
 impl Jwk {
@@ -296,7 +306,7 @@ impl From<VerifyingKey> for Jwk {
         let bytes = key.bytes();
 
         match key.algorithm() {
-            signature::Algorithm::Es256 => Self {
+            sig::Algorithm::Es256 => Self {
                 key_id: Some(key.pub_id().to_string()),
                 algorithm: key.algorithm().jwt_algorithm().into(),
                 key_type: key.algorithm().key_type().into(),
@@ -306,7 +316,7 @@ impl From<VerifyingKey> for Jwk {
                 y: Some(bytes[33..65].to_vec()),
                 ..Default::default()
             },
-            signature::Algorithm::Es384 => Self {
+            sig::Algorithm::Es384 => Self {
                 key_id: Some(key.pub_id().to_string()),
                 algorithm: key.algorithm().jwt_algorithm().into(),
                 key_type: key.algorithm().key_type().into(),
@@ -316,7 +326,7 @@ impl From<VerifyingKey> for Jwk {
                 y: Some(bytes[49..97].to_vec()),
                 ..Default::default()
             },
-            signature::Algorithm::Ed25519 => Self {
+            sig::Algorithm::Ed25519 => Self {
                 key_id: Some(key.pub_id().to_string()),
                 algorithm: key.algorithm().jwt_algorithm().into(),
                 key_type: key.algorithm().key_type().into(),
@@ -330,4 +340,41 @@ impl From<VerifyingKey> for Jwk {
     }
 }
 
-pub struct Jwks(Vec<Jwk>);
+pub type Jwks = Vec<Jwk>;
+
+#[cfg(test)]
+mod tests {
+    use crate::rand;
+
+    use super::*;
+
+    #[test]
+    fn test_serialize_jwk() {
+        let mut x = [0u8; 64];
+        rand::SystemRng.fill(&mut x).unwrap();
+        let mut y = [0u8; 64];
+        rand::SystemRng.fill(&mut y).unwrap();
+
+        let jwk = Jwk {
+            x: Some(y[..].to_vec()),
+            y: Some(x[..].to_vec()),
+            x509_cert_chain: Some(vec![
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                vec![2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+                vec![3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3],
+                vec![4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+                vec![5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+                vec![6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6],
+                vec![7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7],
+            ]),
+            ..Default::default()
+        };
+
+        let str = serde_json::to_string_pretty(&jwk).unwrap();
+        println!("{str}");
+        let jwk2: Jwk = serde_json::from_str(&str).unwrap();
+
+        assert_eq!(jwk, jwk2)
+    }
+}

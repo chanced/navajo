@@ -8,7 +8,11 @@ pub(crate) use material::Material;
 
 use zeroize::ZeroizeOnDrop;
 
-use crate::{error::{KeyNotFoundError, DisableKeyError, RemoveKeyError}, keyring::Keyring, KeyInfo, SystemRng};
+use crate::{
+    error::{DisableKeyError, KeyNotFoundError, RemoveKeyError},
+    keyring::Keyring,
+    KeyInfo, SystemRng,
+};
 
 #[derive(Clone, Debug, ZeroizeOnDrop)]
 pub struct Daead {
@@ -53,7 +57,10 @@ impl Daead {
         self.keyring.enable(key_id).map(|key| key.info())
     }
 
-    pub fn disable_key(&self, key_id: u32) -> Result<KeyInfo<Algorithm>, DisableKeyError<Algorithm>> {
+    pub fn disable_key(
+        &self,
+        key_id: u32,
+    ) -> Result<KeyInfo<Algorithm>, DisableKeyError<Algorithm>> {
         todo!()
     }
 

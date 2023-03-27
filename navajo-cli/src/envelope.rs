@@ -36,6 +36,7 @@ impl Envelope {
             Envelope::Gcp(envelope) => primitive.seal(aad, envelope).await?,
         };
         write.write_all(&sealed).await?;
+        write.write_all(b"\n").await?;
         write.flush().await?;
         Ok(())
     }

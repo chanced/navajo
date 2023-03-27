@@ -19,7 +19,7 @@ use crate::{
     key::Key,
     keyring::Keyring,
     rand::Rng,
-    Aad, Buffer, Envelope, Origin, Status, SystemRng,
+    Buffer, Envelope, Origin, Status, SystemRng,
 };
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
@@ -29,6 +29,8 @@ pub(crate) use material::Material;
 use serde_json::Value;
 use size::Size;
 use zeroize::ZeroizeOnDrop;
+
+pub use crate::aad::Aad;
 
 pub use algorithm::Algorithm;
 pub use ciphertext_info::CiphertextInfo;
@@ -49,36 +51,44 @@ pub use reader::DecryptReader;
 #[cfg(feature = "std")]
 pub use writer::EncryptWriter;
 
-// use cipher::{ciphers, ring_ciphers, Cipher};
-
+/// Authenticated Encryption with Associated Data (AEAD)
 #[derive(Clone, Debug, ZeroizeOnDrop)]
 pub struct Aead {
     keyring: Keyring<Material>,
 }
-
 impl Aead {
-    pub fn new(algorithm: Algorithm, meta: Option<Value>) -> Self {
-        Self::create(&SystemRng, algorithm, meta)
+    /// Creates a new AEAD keyring with a single key of the given algorithm with
+    /// the provided metadata.
+    pub fn new(algorithm: Algorithm, metadata: Option<Value>) -> Self {
+        Self::create(&SystemRng, algorithm, metadata)
     }
 
+    #[cfg(test)]
     pub fn new_with_rng<G>(rng: &G, algorithm: Algorithm, meta: Option<Value>) -> Self
     where
         G: Rng,
     {
         Self::create(rng, algorithm, meta)
     }
-
-    fn create<G>(rng: &G, algorithm: Algorithm, meta: Option<Value>) -> Self
-    where
-        G: Rng,
-    {
-        let id = rng.u32().unwrap();
-        let material = Material::generate(rng, algorithm);
-        let key = Key::new(id, Status::Primary, Origin::Navajo, material, meta);
-        let keyring = Keyring::new(key);
-        Self { keyring }
-    }
-
+    /// Encrypts the given plaintext with `aad` as additional authenticated
+    /// data. The resulting ciphertext replaces the contents of `plaintext`.
+    /// Note that `aad` is not encrypted and is merely used for authentication.
+    /// As such, there are no secrecy gaurantees for `aad`.
+    ///
+    /// # Errors
+    /// Returns an [`EncryptError`] under the following conditions:
+    /// - `plaintext` is empty
+    /// - the backend fails to encrypt the plaintext
+    ///
+    /// # Example
+    /// ```
+    /// use navajo::aead::{Aead, Algorithm};
+    /// use navajo::Aad;
+    /// let aead = Aead::new(Algorithm::Aes256Gcm, None);
+    /// let mut data = b"Hello, world!".to_vec();
+    /// aead.encrypt_in_place(Aad::empty(), &mut data).unwrap();
+    /// assert_ne!(&data, &b"Hello, world!");
+    /// ```
     pub fn encrypt_in_place<A, T>(&self, aad: Aad<A>, plaintext: &mut T) -> Result<(), EncryptError>
     where
         A: AsRef<[u8]>,
@@ -92,7 +102,25 @@ impl Aead {
         *plaintext = result;
         Ok(())
     }
+    /// Encrypts the given plaintext with `aad` as additional authenticated
+    /// data. The resulting ciphertext is returned. Note that `aad` is not
+    /// encrypted and is merely used for authentication. As such, there are no
+    /// secrecy gaurantees for `aad`.
     ///
+    /// # Errors
+    /// Returns an [`EncryptError`] under the following conditions:
+    /// - `plaintext` is empty
+    /// - the backend fails to encrypt the plaintext
+    ///
+    /// # Example
+    /// ```
+    /// use navajo::aead::{Aead, Algorithm};
+    /// use navajo::Aad;
+    /// let aead = Aead::new(Algorithm::Aes256Gcm, None);
+    /// let mut data = b"Hello, world!".to_vec();
+    /// let ciphertext = aead.encrypt(Aad::empty(), &mut data).unwrap();
+    /// assert_ne!(&data, &ciphertext);
+    /// ```
     pub fn encrypt<A, T>(&self, aad: Aad<A>, plaintext: T) -> Result<Vec<u8>, EncryptError>
     where
         A: AsRef<[u8]>,
@@ -106,6 +134,54 @@ impl Aead {
         Ok(result)
     }
 
+    /// Returns a new [`EncryptStream`] which encrypts data using either STREAM
+    /// as desribed in [Online Authenticated-Encryption and its Nonce-Reuse
+    /// Misuse-Resistance](https://eprint.iacr.org/2015/189.pdf) if the
+    /// finalized ciphertext is greater than the specified [`Segment`] as
+    /// described in [RFC 5116](https://tools.ietf.org/html/rfc5116) with an 5
+    /// byte header. Otherwise traditional "online" AEAD encryption is used.
+    ///
+    /// [`Aad`] `aad` is used for authentication and is not encrypted. As such, there
+    /// are no secrecy gaurantees for `aad`.
+    ///
+    /// If the resulting ciphertext is greater than [`Segment`], the header will
+    /// be in the form:
+    ///
+    /// ```plaintext
+    /// || Method (1) || Key Id (4) || Salt (variable) || Nonce Prefix (variable) ||
+    /// ```
+    /// where `Salt` is the length of the algorithm's key and `Nonce Prefix` is
+    /// the length of the algorithm's nonce minus 5 bytes (4 for the segment
+    /// counter & 1 byte for the last-block flag).
+    ///
+    /// If the resulting ciphertext is less than [`Segment`], the header will be
+    /// in the form:
+    /// ```plaintext
+    /// || Method (1) || Key Id (4) || Nonce (variable) ||
+    /// ```
+    ///
+    /// If the resulting ciphertext is greater than [`Segment`] then each
+    /// segment block will be be of the size specified by [`Segment`] except for
+    /// the last, which will be no greater than [`Segment`].
+    ///
+    /// # Example
+    /// ```
+    /// use navajo::aead::{Aead, Algorithm, Segment};
+    /// use navajo::Aad;
+    /// use futures::{stream, TryStreamExt};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let aead = Aead::new(Algorithm::ChaCha20Poly1305, None);
+    ///     let data = stream::iter(vec![
+    ///         Vec::from("hello".as_bytes()),
+    ///         Vec::from(" ".as_bytes()),
+    ///         Vec::from("world".as_bytes()),
+    ///     ]);
+    ///     let enc_stream = aead.encrypt_stream(data, Aad::empty(), Segment::FourKilobytes);
+    ///     let ciphertext: Vec<u8> = enc_stream.try_concat().await.unwrap();
+    ///     assert_ne!(&ciphertext, &b"hello world");
+    /// }
     pub fn encrypt_stream<S, A>(
         &self,
         stream: S,
@@ -276,6 +352,17 @@ impl Aead {
     pub(crate) fn keyring(&self) -> &Keyring<Material> {
         &self.keyring
     }
+
+    fn create<G>(rng: &G, algorithm: Algorithm, meta: Option<Value>) -> Self
+    where
+        G: Rng,
+    {
+        let id = rng.u32().unwrap();
+        let material = Material::generate(rng, algorithm);
+        let key = Key::new(id, Status::Primary, Origin::Navajo, material, meta);
+        let keyring = Keyring::new(key);
+        Self { keyring }
+    }
 }
 
 impl AsMut<Aead> for Aead {
@@ -316,6 +403,7 @@ impl Envelope for Aead {
         Box::pin(async move { self.decrypt(aad, ciphertext) })
     }
 }
+
 impl envelope::sync::Envelope for Aead {
     type EncryptError = crate::error::EncryptError;
     type DecryptError = crate::error::DecryptError;
