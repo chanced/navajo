@@ -33,14 +33,14 @@ impl SecretManager {
     /// Returns a `SecretManagerError` if the Secret cannot be retrieved from GCP.
     ///
     /// # Example
-    /// ```
-    /// use navajo_gcp::gcp_secret_manager::SecretManager;
+    /// ```no_run
+    /// use navajo_gcp::SecretManager;
     ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let secret_manager = SecretManager::new();
-    ///     let secret = secret_manager.secret("my-secret").await?;
-    ///     let secret_version = secret.latest().await?;
+    ///     let secret = secret_manager.secret("my-secret").await.unwrap();
+    ///     let secret_version = secret.latest().await.unwrap();
     ///     let secret_value = secret_version.value();
     /// }
     ///
@@ -143,13 +143,13 @@ impl Secret {
 
     /// # Example
     /// ```no_run
-    /// use navajo_gcp::gcp_secret_manager::SecretManager;
+    /// use navajo_gcp::SecretManager;
     ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let secret_manager = SecretManager::new();
-    ///     let secret = secret_manager.secret("projects/my-project/secrets/my-secret").await?;
-    ///     let secret_version = secret.version("latest").await?;
+    ///     let secret = secret_manager.secret("projects/my-project/secrets/my-secret").await.unwrap();
+    ///     let secret_version = secret.version("latest").await.unwrap();
     ///     let secret_value = secret_version.value();
     /// }
     ///

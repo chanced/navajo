@@ -1,4 +1,5 @@
 use alloc::{string::String, sync::Arc};
+use serde::Serialize;
 
 use crate::{
     error::{DisableKeyError, DuplicatePubIdError, KeyNotFoundError, RemoveKeyError},
@@ -17,6 +18,7 @@ pub struct Signer {
     keyring: Keyring<SigningKey>,
     verifier: Verifier,
 }
+
 impl Signer {
     pub fn new(
         algorithm: Algorithm,
@@ -29,14 +31,20 @@ impl Signer {
         rng: &G,
         algorithm: Algorithm,
         pub_id: Option<String>,
-        meta: Option<serde_json::Value>,
+        metadata: Option<serde_json::Value>,
     ) -> Self
     where
         G: Rng,
     {
         let id = rng.u32().unwrap();
-        let key = SigningKey::generate(rng, algorithm, pub_id.unwrap_or(id.to_string()));
-        let key = Key::new(0, Status::Primary, crate::Origin::Navajo, key, meta);
+        let metadata = metadata.map(Arc::new);
+        let key = SigningKey::generate(
+            rng,
+            algorithm,
+            pub_id.unwrap_or(id.to_string()),
+            metadata.clone(),
+        );
+        let key = Key::new(0, Status::Primary, crate::Origin::Navajo, key, metadata);
         let keyring = Keyring::new(key);
         let verifier = Verifier::from_keyring(keyring.clone());
         Self { keyring, verifier }
@@ -57,7 +65,8 @@ impl Signer {
     ) -> Result<SignatureKeyInfo, DuplicatePubIdError> {
         let id = self.keyring.next_id(&SystemRng);
         let pub_id = pub_id.unwrap_or(id.to_string());
-        let signing_key = SigningKey::generate(&SystemRng, algorithm, pub_id);
+        let metadata = metadata.map(Arc::new);
+        let signing_key = SigningKey::generate(&SystemRng, algorithm, pub_id, metadata.clone());
         let verifying_key = signing_key.verifying_key.clone();
         let key = Key::new(id, Status::Secondary, Origin::Navajo, signing_key, metadata);
         self.verifier.add_key(verifying_key)?;
@@ -67,6 +76,11 @@ impl Signer {
     pub fn sign(&self, message: &[u8]) -> Signature {
         self.keyring.primary().sign(message)
     }
+
+    pub fn sign_jws(&self, payload: &impl Serialize) -> Result<String, serde_json::Error> {
+        self.keyring.primary().sign_jws(payload)
+    }
+
     pub fn verifier(&self) -> Verifier {
         self.verifier.clone()
     }
@@ -81,10 +95,10 @@ impl Signer {
     }
 
     pub fn disable_key(
-        &self,
+        &mut self,
         key_id: u32,
     ) -> Result<KeyInfo<Algorithm>, DisableKeyError<Algorithm>> {
-        todo!()
+        self.keyring.disable(key_id).map(|k| k.info())
     }
 
     pub fn remove(

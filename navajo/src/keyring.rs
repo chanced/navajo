@@ -581,7 +581,7 @@ mod tests {
             Status::Primary,
             Origin::Navajo,
             material,
-            Some("test".into()),
+            Some(Arc::new("test".into())),
         );
         let keyring = Keyring::new(key);
 
@@ -599,7 +599,7 @@ mod tests {
             Status::Primary,
             Origin::Navajo,
             material,
-            Some("test".into()),
+            Some(Arc::new("test".into())),
         );
 
         let mut keyring = Keyring::new(key);
@@ -608,7 +608,7 @@ mod tests {
             Status::Secondary,
             Origin::Navajo,
             Material::new(Algorithm::Cereal),
-            Some("test".into()),
+            Some(Arc::new("test".into())),
         );
         keyring.add(second_key);
         let ser = serde_json::to_vec(&keyring).unwrap();
@@ -636,7 +636,7 @@ mod tests {
             Status::Primary,
             Origin::Navajo,
             material,
-            Some("test".into()),
+            Some(Arc::new("test".into())),
         );
         let mut keyring = Keyring::new(key);
         let first_id = {

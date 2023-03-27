@@ -8,6 +8,7 @@ use alloc::vec::Vec;
 use alloc::{borrow::Cow, sync::Arc};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use super::{Algorithm, KeyPair};
 
@@ -96,15 +97,34 @@ impl VerifyingKey {
         algorithm: Algorithm,
         pub_id: String,
         key_pair: &KeyPair,
+        metadata: Option<Arc<Value>>,
     ) -> Result<Self, KeyError> {
         let inner = Arc::new(Inner::from_key_pair(algorithm, key_pair)?);
         let key = key_pair.public.clone();
+
+        let (key_operations, key_use) = metadata
+            .map(|v| {
+                let key_operations = v
+                    .get("key_ops")
+                    .and_then(|v| v.as_array())
+                    .map(|v| {
+                        v.iter()
+                            .filter_map(|v| v.as_str())
+                            .map(KeyOperation::from)
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                let key_use = v.get("use").and_then(|v| v.as_str()).map(KeyUse::from);
+                (key_operations, key_use)
+            })
+            .unwrap_or((vec![], None));
+
         Ok(Self {
             pub_id,
             inner,
             key,
-            key_operations: vec![],
-            key_use: None,
+            key_operations,
+            key_use,
         })
     }
 

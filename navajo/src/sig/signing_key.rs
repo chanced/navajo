@@ -1,4 +1,4 @@
-use crate::jose::Header;
+use crate::jose::{Header, KeyUse};
 use core::fmt::Debug;
 
 use super::{verifying_key::VerifyingKey, KeyPair, Signature};
@@ -6,6 +6,7 @@ use alloc::{borrow::Cow, sync::Arc};
 use base64::{engine::general_purpose as b64, Engine as _};
 use rand_core::{CryptoRng, CryptoRngCore};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use zeroize::ZeroizeOnDrop;
 
 use crate::{
@@ -44,6 +45,7 @@ impl Key<SigningKey> {
     pub(crate) fn sign(&self, data: &[u8]) -> Signature {
         self.material().sign(data)
     }
+
     pub(crate) fn sign_jws(&self, payload: &impl Serialize) -> Result<String, serde_json::Error> {
         let header = serde_json::to_vec(&Header {
             algorithm: self.algorithm().jwt_algorithm(),
@@ -77,20 +79,28 @@ impl SigningKey {
         self.inner.sign(data)
     }
     #[cfg(test)]
-    pub fn new_with_rng<G>(rng: &G, algorithm: Algorithm, pub_id: String) -> Self
+    pub fn new_with_rng<G>(
+        rng: &G,
+        algorithm: Algorithm,
+        pub_id: String,
+        metadata: Option<Value>,
+    ) -> Self
     where
         G: Rng + CryptoRng + CryptoRngCore,
     {
-        Self::generate(rng, algorithm, pub_id)
+        let metadata = metadata.map(Arc::new);
+        Self::generate(rng, algorithm, pub_id, metadata)
     }
 
     fn from_material(
         algorithm: Algorithm,
         pub_id: String,
         key_pair: KeyPair,
+        metadata: Option<Arc<Value>>,
     ) -> Result<Self, KeyError> {
         let inner = Arc::new(Inner::from_key_pair(algorithm, &key_pair)?);
-        let verifying_key = VerifyingKey::from_material(algorithm, pub_id.clone(), &key_pair)?;
+        let verifying_key =
+            VerifyingKey::from_material(algorithm, pub_id.clone(), &key_pair, metadata)?;
         Ok(Self {
             key_pair,
             pub_id,
@@ -100,14 +110,19 @@ impl SigningKey {
         })
     }
 
-    pub(super) fn generate<G>(rng: &G, algorithm: Algorithm, pub_id: String) -> Self
+    pub(super) fn generate<G>(
+        rng: &G,
+        algorithm: Algorithm,
+        pub_id: String,
+        metadata: Option<Arc<Value>>,
+    ) -> Self
     where
         G: Rng,
     {
         let key_pair = Inner::generate_key_pair(rng, algorithm);
         let inner = Arc::new(Inner::from_key_pair(algorithm, &key_pair).unwrap());
         let verifying_key =
-            VerifyingKey::from_material(algorithm, pub_id.clone(), &key_pair).unwrap();
+            VerifyingKey::from_material(algorithm, pub_id.clone(), &key_pair, metadata).unwrap();
         Self {
             key_pair,
             inner,
@@ -128,14 +143,35 @@ impl<'de> Deserialize<'de> for SigningKey {
             key_pair: KeyPair,
             algorithm: Algorithm,
             pub_id: String,
+            #[serde(rename = "use", default)]
+            key_use: Option<KeyUse>,
+            #[serde(default)]
+            key_ops: Option<Vec<String>>,
         }
 
         let SerializedKey {
             key_pair,
             algorithm,
             pub_id,
+            key_use,
+            key_ops,
         } = Deserialize::deserialize(deserializer)?;
-        Self::from_material(algorithm, pub_id, key_pair).map_err(serde::de::Error::custom)
+        let mut metadata = serde_json::Map::new();
+        if let Some(key_use) = key_use {
+            metadata.insert("use".to_string(), serde_json::Value::String(key_use.into()));
+        }
+
+        if let Some(key_ops) = key_ops {
+            metadata.insert(
+                "key_ops".to_string(),
+                serde_json::Value::Array(
+                    key_ops.into_iter().map(serde_json::Value::String).collect(),
+                ),
+            );
+        }
+        let metadata = Arc::new(Value::from(metadata));
+        Self::from_material(algorithm, pub_id, key_pair, Some(metadata))
+            .map_err(serde::de::Error::custom)
     }
 }
 
@@ -384,10 +420,10 @@ mod tests {
     #[test]
     fn test_generate() {
         let rng = crate::rand::SystemRng;
-        let k = SigningKey::generate(&rng, Algorithm::Es384, "test".to_string());
+        let k = SigningKey::generate(&rng, Algorithm::Es384, "test".to_string(), None);
         let pk = k.key_pair.public.as_ref();
 
-        let k = SigningKey::generate(&rng, Algorithm::Es256, "test".to_string());
+        let k = SigningKey::generate(&rng, Algorithm::Es256, "test".to_string(), None);
         let pk = k.key_pair.public.as_ref();
 
         let key = Key::new(3423, Status::Primary, Origin::Navajo, k, None);
@@ -399,9 +435,9 @@ mod tests {
     }
     #[test]
     fn test_sign() {
-        let ed25519 = SigningKey::generate(&SystemRng, Algorithm::Ed25519, "222".to_string());
-        let p256 = SigningKey::generate(&SystemRng, Algorithm::Es256, "222".to_string());
-        let p384 = SigningKey::generate(&SystemRng, Algorithm::Es384, "222".to_string());
+        let ed25519 = SigningKey::generate(&SystemRng, Algorithm::Ed25519, "222".to_string(), None);
+        let p256 = SigningKey::generate(&SystemRng, Algorithm::Es256, "222".to_string(), None);
+        let p384 = SigningKey::generate(&SystemRng, Algorithm::Es384, "222".to_string(), None);
 
         let ed25519_sig = ed25519.sign("test".as_bytes());
 

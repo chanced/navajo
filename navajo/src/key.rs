@@ -41,14 +41,14 @@ where
         status: Status,
         origin: Origin,
         material: M,
-        metadata: Option<serde_json::Value>,
+        metadata: Option<Arc<Value>>,
     ) -> Self {
         Self {
             id,
             status,
             origin,
             material,
-            meta: metadata.map(Arc::new),
+            meta: metadata,
         }
     }
     pub(crate) fn id(&self) -> u32 {
@@ -235,7 +235,7 @@ pub(crate) mod test {
             Status::Primary,
             Origin::Navajo,
             Material::new(Algorithm::Pancakes),
-            Some("(╯°□°）╯︵ ┻━┻".into()),
+            Some(Arc::new("(╯°□°）╯︵ ┻━┻".into())),
         );
         assert_eq!(key.meta.as_deref(), Some("(╯°□°）╯︵ ┻━┻".into()).as_ref());
         key.update_meta(Some("┬─┬ノ( º _ ºノ)".into()));

@@ -21,6 +21,7 @@ use crate::{
     rand::Rng,
     Buffer, Envelope, Origin, Status, SystemRng,
 };
+use alloc::sync::Arc;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 use core::mem;
@@ -302,10 +303,11 @@ impl Aead {
         self.keyring.keys().iter().map(AeadKeyInfo::new).collect()
     }
 
-    pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<Value>) -> AeadKeyInfo {
+    pub fn add_key(&mut self, algorithm: Algorithm, metadata: Option<Value>) -> AeadKeyInfo {
         let id = self.keyring.next_id(&SystemRng);
+        let metadata = metadata.map(Arc::new);
         let material = Material::generate(&SystemRng, algorithm);
-        let key = Key::new(id, Status::Secondary, Origin::Navajo, material, meta);
+        let key = Key::new(id, Status::Secondary, Origin::Navajo, material, metadata);
         let info = AeadKeyInfo::new(&key);
         self.keyring.add(key);
         info
@@ -359,7 +361,8 @@ impl Aead {
     {
         let id = rng.u32().unwrap();
         let material = Material::generate(rng, algorithm);
-        let key = Key::new(id, Status::Primary, Origin::Navajo, material, meta);
+        let metadata = meta.map(Arc::new);
+        let key = Key::new(id, Status::Primary, Origin::Navajo, material, metadata);
         let keyring = Keyring::new(key);
         Self { keyring }
     }

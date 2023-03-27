@@ -13,6 +13,7 @@ mod try_stream;
 mod verifier;
 
 pub use algorithm::Algorithm;
+use alloc::sync::Arc;
 pub use computer::Computer;
 use futures::{Stream, TryStream};
 pub use key_info::MacKeyInfo;
@@ -194,19 +195,24 @@ impl Mac {
         Self::generate(rng, algorithm, meta)
     }
 
-    fn generate<G>(rng: &G, algorithm: Algorithm, meta: Option<serde_json::value::Value>) -> Self
+    fn generate<G>(
+        rng: &G,
+        algorithm: Algorithm,
+        metadata: Option<serde_json::value::Value>,
+    ) -> Self
     where
         G: Rng,
     {
         let bytes = algorithm.generate_key(rng);
         // safe, the key is generated
         let material = Material::new(&bytes, None, algorithm).unwrap();
+        let metadata = metadata.map(Arc::new);
         let key = Key::new(
             rng.u32().unwrap(),
             Status::Primary,
             Origin::Navajo,
             material,
-            meta,
+            metadata,
         );
         Self {
             keyring: Keyring::new(key),
@@ -258,19 +264,20 @@ impl Mac {
         key: K,
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
-        meta: Option<serde_json::Value>,
+        metadata: Option<serde_json::Value>,
     ) -> Result<Self, KeyError>
     where
         K: AsRef<[u8]>,
         G: Rng,
     {
         let material = Material::new(key.as_ref(), prefix, algorithm)?;
+        let metadata = metadata.map(Arc::new);
         let key = Key::new(
             rng.u32().unwrap(),
             Status::Primary,
             Origin::External,
             material,
-            meta,
+            metadata,
         );
         Ok(Self {
             keyring: Keyring::new(key),
@@ -604,15 +611,15 @@ impl Mac {
         value: &[u8],
         prefix: Option<&[u8]>,
         origin: Origin,
-        meta: Option<serde_json::Value>,
+        metadata: Option<serde_json::Value>,
     ) -> Result<MacKeyInfo, KeyError>
     where
         G: Rng,
     {
         let material = Material::new(value, prefix, algorithm)?;
         let id = self.keyring.next_id(rng);
-
-        let key = Key::new(id, Status::Secondary, origin, material, meta);
+        let metadata = metadata.map(Arc::new);
+        let key = Key::new(id, Status::Secondary, origin, material, metadata);
         let info = MacKeyInfo::new(&key);
         self.keyring.add(key);
         Ok(info)
