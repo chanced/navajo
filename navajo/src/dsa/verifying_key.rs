@@ -4,15 +4,16 @@ use crate::{
     jose::{Algorithm as JwkAlgorithm, Jwk, KeyOperation, KeyUse},
     sensitive,
 };
+use alloc::sync::Arc;
 use alloc::vec::Vec;
-use alloc::{borrow::Cow, sync::Arc};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{Algorithm, KeyPair};
+use super::{Algorithm, KeyPair, Signature};
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(try_from = "Jwk", into = "Jwk")]
 pub(crate) struct VerifyingKey {
     pub(super) pub_id: String,
     inner: Arc<Inner>,
@@ -26,50 +27,16 @@ impl core::fmt::Debug for VerifyingKey {
         f.debug_struct("VerifyingKey")
             .field("key_id", &self.pub_id)
             .field("algorithm", &self.algorithm())
+            .field("key_use", &self.key_use)
+            .field("key_operations", &self.key_operations)
             .field("value", &URL_SAFE_NO_PAD.encode(self.key.as_ref()))
             .finish()
     }
 }
 
-impl<'de> Deserialize<'de> for VerifyingKey {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        todo!()
-    }
-}
-impl Serialize for VerifyingKey {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let alg = self.algorithm();
-        let jwk = match self.inner.as_ref() {
-            Inner::Ed25519(_) => {
-                let x = URL_SAFE_NO_PAD.encode(self.key.as_ref());
-                Jwk {
-                    key_id: Some(self.pub_id.clone()),
-                    key_use: Some(KeyUse::Signature),
-                    key_type: alg.key_type().into(),
-                    algorithm: alg.jwt_algorithm().into(),
-                    curve: alg.curve().map(Into::into),
-                    x: Some(x.into()),
-                    ..Default::default()
-                }
-            }
-            Inner::Ecdsa(ecdsa) => match ecdsa {
-                Ecdsa::P256(_) => Default::default(),
-                Ecdsa::P384(_) => Default::default(),
-            },
-        };
-        todo!()
-    }
-}
-
 impl VerifyingKey {
-    pub fn verify(&self, sig: &[u8]) -> Result<(), SignatureError> {
-        self.inner.verify(sig)
+    pub fn verify(&self, msg: &[u8], signature: &Signature) -> Result<(), SignatureError> {
+        self.inner.verify(msg, signature)
     }
     pub fn pub_id(&self) -> &str {
         &self.pub_id
@@ -79,9 +46,6 @@ impl VerifyingKey {
     }
     pub fn key_operations(&self) -> &[crate::jose::KeyOperation] {
         &self.key_operations
-    }
-    pub fn key_type(&self) -> crate::jose::KeyType {
-        self.algorithm().key_type()
     }
 
     pub fn algorithm(&self) -> Algorithm {
@@ -102,10 +66,10 @@ impl VerifyingKey {
         let inner = Arc::new(Inner::from_key_pair(algorithm, key_pair)?);
         let key = key_pair.public.clone();
 
-        let (key_operations, key_use) = metadata
+        let key_operations: Vec<KeyOperation> = metadata
+            .as_ref()
             .map(|v| {
-                let key_operations = v
-                    .get("key_ops")
+                v.get("key_ops")
                     .and_then(|v| v.as_array())
                     .map(|v| {
                         v.iter()
@@ -113,11 +77,11 @@ impl VerifyingKey {
                             .map(KeyOperation::from)
                             .collect::<Vec<_>>()
                     })
-                    .unwrap_or_default();
-                let key_use = v.get("use").and_then(|v| v.as_str()).map(KeyUse::from);
-                (key_operations, key_use)
+                    .unwrap_or_default()
             })
-            .unwrap_or((vec![], None));
+            .unwrap_or_default();
+        let key_use =
+            metadata.and_then(|v| v.get("use").and_then(|v| v.as_str()).map(KeyUse::from));
 
         Ok(Self {
             pub_id,
@@ -150,10 +114,10 @@ impl Inner {
         Ok(key)
     }
 
-    fn verify(&self, data: &[u8]) -> Result<(), SignatureError> {
+    fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), SignatureError> {
         match self {
-            Self::Ed25519(inner) => inner.verify(data),
-            Self::Ecdsa(inner) => inner.verify(data),
+            Self::Ed25519(inner) => inner.verify(data, signature),
+            Self::Ecdsa(inner) => inner.verify(data, signature),
             // Self::Rsa(inner) => inner.verify(data),
         }
     }
@@ -172,6 +136,20 @@ enum Ecdsa {
 }
 
 impl Ecdsa {
+    fn from_x_y(
+        algorithm: Algorithm,
+        x: Option<&[u8]>,
+        y: Option<&[u8]>,
+    ) -> Result<Self, KeyError> {
+        let x = x.ok_or_else(|| "missing x")?;
+        let y = y.ok_or_else(|| "missing y")?;
+        match algorithm {
+            Algorithm::Es256 => todo!(),
+            Algorithm::Es384 => todo!(),
+            Algorithm::Ed25519 => todo!(),
+        }
+    }
+
     fn from_key_pair(alg: Algorithm, keys: &KeyPair) -> Result<Self, KeyError> {
         #[cfg(feature = "ring")]
         {
@@ -206,10 +184,31 @@ impl Ecdsa {
         }
     }
 
-    fn verify(&self, _data: &[u8]) -> Result<(), SignatureError> {
-        todo!()
+    fn verify(&self, msg: &[u8], sig: &Signature) -> Result<(), SignatureError> {
+        #[cfg(feature = "ring")]
+        {
+            match self {
+                Self::P256(key) => Ok(key.verify(msg, sig)?),
+                Self::P384(key) => Ok(key.verify(msg, sig)?),
+            }
+        }
+        #[cfg(not(feature = "ring"))]
+        {
+            match self {
+                Self::P256(key) => {
+                    let sig: p256::ecdsa::Signature = p256::ecdsa::Signature::from_bytes(sig)?;
+                }
+                Self::P384(key) => {
+                    let sig = p384::ecdsa::Signature::from_bytes(sig)?;
+                    key.verify(msg, &sig)
+                        .map_err(|_| SignatureError::InvalidSignature)
+                }
+            }
+            todo!()
+        }
     }
 }
+
 #[cfg(feature = "ring")]
 struct Ed25519(ring::signature::UnparsedPublicKey<sensitive::Bytes>);
 #[cfg(not(feature = "ring"))]
@@ -226,12 +225,12 @@ impl Ed25519 {
                 &key_pair.private,
                 &key_pair.public,
             )?;
-            let _signing_key = Arc::new(signing_key);
+            let signing_key = Arc::new(signing_key);
             let verifying_key = ring::signature::UnparsedPublicKey::new(
                 &ring::signature::ED25519,
                 key_pair.public.clone(),
             );
-            let _verifying_key = Arc::new(verifying_key);
+            let verifying_key = Arc::new(verifying_key);
             todo!()
         }
         #[cfg(not(feature = "ring"))]
@@ -242,15 +241,24 @@ impl Ed25519 {
             Ok(Self(key))
         }
     }
-    fn verify(&self, data: &[u8]) -> Result<(), SignatureError> {
-        use ed25519_dalek::Verifier;
-        let bytes: ed25519_dalek::Signature = data
-            .try_into()
-            .map_err(|_| SignatureError::InvalidLen(data.len()))?;
+    fn verify(&self, msg: &[u8], signature: &Signature) -> Result<(), SignatureError> {
+        #[cfg(feature = "ring")]
+        {
+            self.0
+                .verify(&msg, signature)
+                .map_err(|_| SignatureError::Failure("".into()))
+        }
+        #[cfg(not(feature = "ring"))]
+        {
+            use ed25519_dalek::Verifier;
+            let bytes: ed25519_dalek::Signature = msg
+                .try_into()
+                .map_err(|_| SignatureError::InvalidLen(msg.len()))?;
 
-        let signature = ed25519_dalek::Signature::from_slice(data);
-
-        todo!()
+            let signature = ed25519_dalek::Signature::from_slice(msg)?;
+            let result = self.0.verify(msg, &signature)?;
+            Ok(result)
+        }
     }
 }
 
@@ -261,34 +269,29 @@ impl TryFrom<Jwk> for VerifyingKey {
         Self::try_from(&jwk)
     }
 }
+
 impl TryFrom<&Jwk> for VerifyingKey {
     type Error = KeyError;
-
     fn try_from(jwk: &Jwk) -> Result<Self, Self::Error> {
-        if let Some(algorithm) = jwk.algorithm {
-            match algorithm {
-                JwkAlgorithm::Es256 => {
-                    if jwk.x.is_none() {
-                        return Err(KeyError("missing x".into()));
-                    }
-                    if jwk.y.is_none() {
-                        return Err(KeyError("missing y".into()));
-                    }
-                    todo!()
-                }
-                JwkAlgorithm::Es384 => {
-                    if jwk.x.is_none() {
-                        return Err(KeyError("missing x".into()));
-                    }
-                    if jwk.y.is_none() {
-                        return Err(KeyError("missing y".into()));
-                    }
-                }
+        // let alg = jwk
+        //     .algorithm()
+        //     .ok_or("missing or undetectable algorithm".into())?;
 
-                JwkAlgorithm::EdDsa => todo!(),
-                _ => return Err(KeyError(format!("unsupported algorithm: {:?}", algorithm))),
-            }
-        }
+        // match alg {
+        //     JwkAlgorithm::Es256 => {
+        //         let inner = Inner::Ecdsa(Ecdsa::P256(key.clone()));
+        //         Ok(VerifyingKey {
+        //             pub_id: jwk.key_id.unwrap_or_default(),
+        //             inner: Arc::new(inner),
+        //             key,
+        //             key_operations: jwk.key_operations,
+        //             key_use: jwk.key_use,
+        //         })
+        //     }
+        //     JwkAlgorithm::Es384 => todo!(),
+        //     JwkAlgorithm::EdDsa => todo!(),
+        //     alg => Err(D::Error::custom(format!("unsupported algorithm: {alg}"))),
+        // }
         todo!()
     }
 }

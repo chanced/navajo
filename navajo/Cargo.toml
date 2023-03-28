@@ -243,6 +243,13 @@ version = "0.7.1"
 version = "0.13"
 features = ["sec1"]
 
+# signature
+# https://docs.rs/signature/2.0.0/signature/
+[dependencies.signature]
+version = "2.0"
+optional = true
+
+
 # # rsa
 # [dependencies.rsa]
 # version = "0.8"
@@ -303,10 +310,10 @@ features = ["full"] # todo: reduce this.
 
 [features]
 default = [
-	#"ring",
-	"std",       # todo: remove
+	# "ring",
+	"std",  # todo: remove
 	"aead",
-	"signature",
+	"dsa",
 	"mac",
 	#"cmac",
 	#"aes",
@@ -316,7 +323,7 @@ default = [
 	"daead",
 ]
 ed25519 = ["ed25519-dalek"]
-signature = ["ed25519", "p256", "p384"]
+dsa = ["signature", "ed25519", "p256", "p384"]
 mac = ["sha2", "hmac"]
 hkdf = ["sha2", "hmac"]
 aead = ["hkdf"]
@@ -333,6 +340,7 @@ std = [
 	"hmac?/std",
 	"rand_core/std",
 	"cmac?/std",
+	"signature?/std",
 	"chacha20poly1305/std",
 	"pkcs8/std",
 	"cmac?/std",

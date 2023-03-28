@@ -304,14 +304,14 @@ impl TryFrom<Algorithm> for navajo::daead::Algorithm {
         }
     }
 }
-impl TryFrom<Algorithm> for navajo::sig::Algorithm {
+impl TryFrom<Algorithm> for navajo::dsa::Algorithm {
     type Error = String;
 
     fn try_from(value: Algorithm) -> Result<Self, Self::Error> {
         match value {
-            Algorithm::Es256 => Ok(navajo::sig::Algorithm::Es256),
-            Algorithm::Es384 => Ok(navajo::sig::Algorithm::Es384),
-            Algorithm::Ed25519 => Ok(navajo::sig::Algorithm::Ed25519),
+            Algorithm::Es256 => Ok(navajo::dsa::Algorithm::Es256),
+            Algorithm::Es384 => Ok(navajo::dsa::Algorithm::Es384),
+            Algorithm::Ed25519 => Ok(navajo::dsa::Algorithm::Ed25519),
             _ => Err(format!("Algorithm {value} is not Signature")),
         }
     }

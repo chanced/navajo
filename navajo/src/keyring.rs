@@ -64,9 +64,6 @@ impl<M> Keys<M>
 where
     M: KeyMaterial,
 {
-    // fn len(&self) -> usize {
-    //     self.0.len()
-    // }
     fn get(&self, id: u32) -> Option<(usize, &Key<M>)> {
         self.position(id).map(|idx| (idx, &self.0[idx]))
     }
@@ -99,6 +96,7 @@ where
         self.0 = Arc::from(keys);
         Ok(&self.0[idx])
     }
+
     fn demote(&mut self, id: u32) -> Result<&Key<M>, KeyNotFoundError> {
         let idx = self.position(id).ok_or(KeyNotFoundError(id))?;
         let mut keys = self.0.iter().cloned().collect::<Vec<_>>();
@@ -347,6 +345,7 @@ where
         let kind = serde_json::to_value(M::kind()).unwrap();
         let version = serde_json::to_value(self.version).unwrap();
         let result: Vec<u8>;
+
         #[cfg(feature = "std")]
         {
             let mut data = std::collections::HashMap::with_capacity(3);

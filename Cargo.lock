@@ -1576,6 +1576,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "sha3",
+ "signature",
  "strum",
  "strum_macros",
  "subtle",

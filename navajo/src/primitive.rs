@@ -120,7 +120,7 @@ pub enum Primitive {
     // Hpke(Hpke) // TODO: Enable this when HPKE is implemented
     #[cfg(feature = "mac")]
     Mac(crate::Mac),
-    #[cfg(feature = "signature")]
+    #[cfg(feature = "dsa")]
     Signature(crate::Signer),
 }
 impl Primitive {
@@ -225,14 +225,14 @@ impl Primitive {
                 }
             }
             Kind::Signature => {
-                #[cfg(feature = "signature")]
+                #[cfg(feature = "dsa")]
                 {
                     // let keyring: Keyring<crate::signature::Signer> =
                     // serde_json::from_value(value)?;
                     // Ok(Self::Signature(crate::Signer::from_keyring(keyring)))
                     todo!()
                 }
-                #[cfg(not(feature = "signature"))]
+                #[cfg(not(feature = "dsa"))]
                 {
                     Err("signature feature is not enabled".into())
                 }
@@ -247,7 +247,7 @@ impl Primitive {
             Primitive::Daead(_) => Kind::Daead,
             #[cfg(feature = "mac")]
             Primitive::Mac(_) => Kind::Mac,
-            #[cfg(feature = "signature")]
+            #[cfg(feature = "dsa")]
             Primitive::Signature(_) => Kind::Signature,
         }
     }
@@ -272,7 +272,7 @@ impl Primitive {
             _ => None,
         }
     }
-    #[cfg(feature = "signature")]
+    #[cfg(feature = "dsa")]
     pub fn signature(self) -> Option<crate::Signer> {
         match self {
             Primitive::Signature(sig) => Some(sig),
@@ -321,14 +321,14 @@ impl Primitive {
                 }
             }
             Kind::Signature => {
-                #[cfg(feature = "signature")]
+                #[cfg(feature = "dsa")]
                 {
                     todo!()
                     // let keyring: Keyring<crate::signature::Material> =
                     //     serde_json::from_value(data.keyring)?;
                     // Ok(Primitive::Signature(crate::Signer::from_keyring(keyring)))
                 }
-                #[cfg(not(feature = "signature"))]
+                #[cfg(not(feature = "dsa"))]
                 {
                     Err("signature feature is not enabled".into())
                 }
@@ -344,7 +344,7 @@ impl Primitive {
             Primitive::Daead(daead) => serde_json::to_value(daead.keyring())?,
             #[cfg(feature = "mac")]
             Primitive::Mac(mac) => serde_json::to_value(mac.keyring())?,
-            #[cfg(feature = "signature")]
+            #[cfg(feature = "dsa")]
             Primitive::Signature(sig) => serde_json::to_value(sig.keyring())?,
         };
         let data = PrimitiveData {
@@ -371,7 +371,7 @@ impl Primitive {
             Primitive::Daead(daead) => daead.keyring().seal(aad, envelope).await?,
             #[cfg(feature = "mac")]
             Primitive::Mac(mac) => mac.keyring().seal(aad, envelope).await?,
-            #[cfg(feature = "signature")]
+            #[cfg(feature = "dsa")]
             Primitive::Signature(sig) => sig.keyring().seal(aad, envelope).await?,
         });
         Ok(v)
@@ -393,7 +393,7 @@ impl Primitive {
             Primitive::Daead(daead) => daead.keyring().seal_sync(aad, envelope)?,
             #[cfg(feature = "mac")]
             Primitive::Mac(mac) => mac.keyring().seal_sync(aad, envelope)?,
-            #[cfg(feature = "signature")]
+            #[cfg(feature = "dsa")]
             Primitive::Signature(sig) => sig.keyring().seal_sync(aad, envelope)?,
         });
         Ok(v)

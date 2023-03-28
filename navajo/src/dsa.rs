@@ -1,3 +1,5 @@
+#![doc = include_str!("./dsa/README.md")]
+
 mod algorithm;
 mod key_info;
 mod key_pair;

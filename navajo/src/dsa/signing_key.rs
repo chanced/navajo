@@ -4,7 +4,6 @@ use core::fmt::Debug;
 use super::{verifying_key::VerifyingKey, KeyPair, Signature};
 use alloc::{borrow::Cow, sync::Arc};
 use base64::{engine::general_purpose as b64, Engine as _};
-use rand_core::{CryptoRng, CryptoRngCore};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use zeroize::ZeroizeOnDrop;
@@ -14,7 +13,7 @@ use crate::{
     key::{Key, KeyMaterial},
     primitive::Kind,
     rand::is_zero,
-    sensitive, Rng, SystemRng,
+    sensitive, Rng,
 };
 
 use super::Algorithm;
@@ -86,7 +85,7 @@ impl SigningKey {
         metadata: Option<Value>,
     ) -> Self
     where
-        G: Rng + CryptoRng + CryptoRngCore,
+        G: Rng,
     {
         let metadata = metadata.map(Arc::new);
         Self::generate(rng, algorithm, pub_id, metadata)
@@ -413,7 +412,7 @@ impl Ed25519 {
 #[cfg(test)]
 mod tests {
 
-    use crate::{Origin, Status};
+    use crate::{Origin, Status, SystemRng};
 
     use super::*;
 

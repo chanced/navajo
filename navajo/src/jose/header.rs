@@ -1,6 +1,9 @@
+use core::str::FromStr;
+
 use super::{Algorithm, Jwk, Zip};
-use crate::b64;
+use crate::{b64, error::DecodeError};
 use alloc::borrow::Cow;
+use base64::engine::{general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -100,4 +103,42 @@ pub struct Header<'a> {
 
     #[serde(flatten)]
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
+}
+
+impl TryFrom<&str> for Header<'_> {
+    type Error = DecodeError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_bytes())
+    }
+}
+impl FromStr for Header<'_> {
+    type Err = DecodeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::try_from(s)
+    }
+}
+impl TryFrom<&[u8]> for Header<'_> {
+    type Error = DecodeError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        let decoded = URL_SAFE_NO_PAD.decode(value)?;
+        Ok(serde_json::from_slice(&decoded)?)
+    }
+}
+impl TryFrom<String> for Header<'_> {
+    type Error = DecodeError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_bytes())
+    }
+}
+
+impl TryFrom<&String> for Header<'_> {
+    type Error = DecodeError;
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_bytes())
+    }
 }

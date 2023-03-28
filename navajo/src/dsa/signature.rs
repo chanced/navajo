@@ -1,9 +1,10 @@
 use core::{fmt::Display, ops::Deref};
 
+use crate::error::SignatureError;
+
 use super::Algorithm;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 
-#[cfg(not(feature = "ring"))]
 #[derive(Clone, Copy, Debug)]
 pub enum Signature {
     Ed25519([u8; 64]),
@@ -12,6 +13,35 @@ pub enum Signature {
 }
 
 impl Signature {
+    pub fn new(algorithm: Algorithm, sig: &[u8]) -> Result<Self, SignatureError> {
+        match algorithm {
+            Algorithm::Ed25519 => {
+                let mut bytes = [0u8; 64];
+                if sig.len() != 64 {
+                    return Err(SignatureError::InvalidLen(sig.len()));
+                }
+                bytes.copy_from_slice(sig);
+                Ok(Self::Ed25519(bytes))
+            }
+            Algorithm::Es256 => {
+                if sig.len() != 64 {
+                    return Err(SignatureError::InvalidLen(sig.len()));
+                }
+                let mut bytes = [0u8; 64];
+                bytes.copy_from_slice(sig);
+                Ok(Self::P256(bytes))
+            }
+            Algorithm::Es384 => {
+                if sig.len() != 96 {
+                    return Err(SignatureError::InvalidLen(sig.len()));
+                }
+                let mut bytes = [0u8; 96];
+                bytes.copy_from_slice(sig);
+                Ok(Self::P384(bytes))
+            }
+        }
+    }
+
     pub fn algorithm(&self) -> Algorithm {
         match self {
             Signature::Ed25519(_) => Algorithm::Ed25519,
@@ -29,6 +59,7 @@ impl Display for Signature {
         }
     }
 }
+
 #[cfg(not(feature = "ring"))]
 impl From<ed25519_dalek::Signature> for Signature {
     fn from(sig: ed25519_dalek::Signature) -> Self {

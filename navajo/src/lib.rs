@@ -30,52 +30,22 @@ pub mod error;
 pub mod hkdf;
 
 mod id;
-#[cfg(any(
-    feature = "aead",
-    feature = "daead",
-    feature = "mac",
-    feature = "signature",
-))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 mod key;
 
-#[cfg(any(
-    feature = "aead",
-    feature = "daead",
-    feature = "mac",
-    feature = "signature",
-))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 pub(crate) use key::{Key, KeyMaterial};
 
-#[cfg(any(
-    feature = "aead",
-    feature = "daead",
-    feature = "mac",
-    feature = "signature",
-))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 mod key_info;
 
-#[cfg(any(
-    feature = "aead",
-    feature = "daead",
-    feature = "mac",
-    feature = "signature",
-))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 pub use key_info::KeyInfo;
 
-#[cfg(any(
-    feature = "aead",
-    feature = "daead",
-    feature = "mac",
-    feature = "signature",
-))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 mod keyring;
 
-#[cfg(any(
-    feature = "aead",
-    feature = "daead",
-    feature = "mac",
-    feature = "signature",
-))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 pub(crate) use keyring::Keyring;
 
 #[cfg(feature = "mac")]
@@ -87,12 +57,7 @@ pub use mac::Mac;
 mod origin;
 pub use origin::Origin;
 
-#[cfg(any(
-    feature = "aead",
-    feature = "daead",
-    feature = "mac",
-    feature = "signature",
-))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 pub mod primitive;
 
 pub mod rand;
@@ -103,11 +68,11 @@ pub mod sensitive;
 mod status;
 pub use status::Status;
 
-#[cfg(feature = "signature")]
-pub mod sig;
+#[cfg(feature = "dsa")]
+pub mod dsa;
 
-#[cfg(feature = "signature")]
-pub use sig::{Signer, Verifier};
+#[cfg(feature = "dsa")]
+pub use dsa::{Signer, Verifier};
 
 pub(crate) mod b64;
 

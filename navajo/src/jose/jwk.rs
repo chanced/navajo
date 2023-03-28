@@ -1,7 +1,7 @@
 use super::{Algorithm, Curve, KeyOperation, KeyType, KeyUse};
 use crate::{
     b64,
-    sig::{self, VerifyingKey},
+    dsa::{self, VerifyingKey},
 };
 use serde::{Deserialize, Serialize};
 
@@ -306,7 +306,7 @@ impl From<VerifyingKey> for Jwk {
         let bytes = key.bytes();
 
         match key.algorithm() {
-            sig::Algorithm::Es256 => Self {
+            dsa::Algorithm::Es256 => Self {
                 key_id: Some(key.pub_id().to_string()),
                 algorithm: key.algorithm().jwt_algorithm().into(),
                 key_type: key.algorithm().key_type().into(),
@@ -316,7 +316,7 @@ impl From<VerifyingKey> for Jwk {
                 y: Some(bytes[33..65].to_vec()),
                 ..Default::default()
             },
-            sig::Algorithm::Es384 => Self {
+            dsa::Algorithm::Es384 => Self {
                 key_id: Some(key.pub_id().to_string()),
                 algorithm: key.algorithm().jwt_algorithm().into(),
                 key_type: key.algorithm().key_type().into(),
@@ -326,7 +326,7 @@ impl From<VerifyingKey> for Jwk {
                 y: Some(bytes[49..97].to_vec()),
                 ..Default::default()
             },
-            sig::Algorithm::Ed25519 => Self {
+            dsa::Algorithm::Ed25519 => Self {
                 key_id: Some(key.pub_id().to_string()),
                 algorithm: key.algorithm().jwt_algorithm().into(),
                 key_type: key.algorithm().key_type().into(),

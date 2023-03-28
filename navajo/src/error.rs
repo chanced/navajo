@@ -478,29 +478,14 @@ impl From<crypto_common::InvalidLength> for OpenError {
     }
 }
 
-#[cfg(any(
-    feature = "aead",
-    feature = "daead",
-    feature = "mac",
-    feature = "signature",
-))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 #[derive(Debug, Clone)]
 pub enum RemoveKeyError<A> {
     IsPrimaryKey(crate::KeyInfo<A>),
     KeyNotFound(KeyNotFoundError),
 }
-#[cfg(any(
-    feature = "aead",
-    feature = "daead",
-    feature = "mac",
-    feature = "signature",
-))]
-#[cfg(any(
-    feature = "aead",
-    feature = "daead",
-    feature = "mac",
-    feature = "signature",
-))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 impl<A> fmt::Display for RemoveKeyError<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -509,23 +494,13 @@ impl<A> fmt::Display for RemoveKeyError<A> {
         }
     }
 }
-#[cfg(any(
-    feature = "aead",
-    feature = "daead",
-    feature = "mac",
-    feature = "signature",
-))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 impl<A> From<crate::KeyInfo<A>> for RemoveKeyError<A> {
     fn from(info: crate::KeyInfo<A>) -> Self {
         Self::IsPrimaryKey(info)
     }
 }
-#[cfg(any(
-    feature = "aead",
-    feature = "daead",
-    feature = "mac",
-    feature = "signature",
-))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 impl<A> From<KeyNotFoundError> for RemoveKeyError<A> {
     fn from(e: KeyNotFoundError) -> Self {
         Self::KeyNotFound(e)
@@ -535,23 +510,13 @@ impl<A> From<KeyNotFoundError> for RemoveKeyError<A> {
 #[cfg(feature = "std")]
 impl<A> std::error::Error for RemoveKeyError<A> where A: Debug {}
 
-#[cfg(any(
-    feature = "aead",
-    feature = "daead",
-    feature = "mac",
-    feature = "signature",
-))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 #[derive(Debug, Clone)]
 pub enum DisableKeyError<A> {
     IsPrimaryKey(crate::KeyInfo<A>),
     KeyNotFound(KeyNotFoundError),
 }
-#[cfg(any(
-    feature = "aead",
-    feature = "daead",
-    feature = "mac",
-    feature = "signature",
-))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 impl<A> fmt::Display for DisableKeyError<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -560,23 +525,13 @@ impl<A> fmt::Display for DisableKeyError<A> {
         }
     }
 }
-#[cfg(any(
-    feature = "aead",
-    feature = "daead",
-    feature = "mac",
-    feature = "signature",
-))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 impl<A> From<crate::KeyInfo<A>> for DisableKeyError<A> {
     fn from(info: crate::KeyInfo<A>) -> Self {
         Self::IsPrimaryKey(info)
     }
 }
-#[cfg(any(
-    feature = "aead",
-    feature = "daead",
-    feature = "mac",
-    feature = "signature",
-))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 impl<A> From<KeyNotFoundError> for DisableKeyError<A> {
     fn from(e: KeyNotFoundError) -> Self {
         Self::KeyNotFound(e)
@@ -702,6 +657,12 @@ impl From<ed25519_dalek::SignatureError> for KeyError {
     }
 }
 
+impl From<signature::Error> for SignatureError {
+    fn from(e: signature::Error) -> Self {
+        Self::Failure(e.to_string())
+    }
+}
+
 impl From<elliptic_curve::Error> for KeyError {
     fn from(e: elliptic_curve::Error) -> Self {
         Self(e.to_string())
@@ -735,6 +696,13 @@ impl Display for SignatureError {
         }
     }
 }
+#[cfg(feature = "ring")]
+impl From<ring::error::Unspecified> for SignatureError {
+    fn from(_: ring::error::Unspecified) -> Self {
+        Self::Failure("signature verification failed".to_string())
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DuplicatePubIdError(pub String);
 
@@ -770,3 +738,13 @@ impl Display for DecodeError {
     }
 }
 impl Error for DecodeError {}
+impl From<serde_json::Error> for DecodeError {
+    fn from(e: serde_json::Error) -> Self {
+        Self::Serde(e)
+    }
+}
+impl From<base64::DecodeError> for DecodeError {
+    fn from(e: base64::DecodeError) -> Self {
+        Self::Base64(e)
+    }
+}

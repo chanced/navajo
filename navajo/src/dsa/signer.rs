@@ -53,7 +53,7 @@ impl Signer {
         &self.keyring
     }
 
-    pub fn keys(&self) -> Vec<KeyInfo<crate::sig::Algorithm>> {
+    pub fn keys(&self) -> Vec<KeyInfo<crate::dsa::Algorithm>> {
         todo!()
     }
 
@@ -90,15 +90,19 @@ impl Signer {
         Ok(SignatureKeyInfo::new(key))
     }
 
-    pub fn enable_key(&self, key_id: u32) -> Result<KeyInfo<Algorithm>, KeyNotFoundError> {
-        todo!()
+    pub fn enable_key(&mut self, key_id: u32) -> Result<SignatureKeyInfo, KeyNotFoundError> {
+        self.keyring.enable(key_id)?;
+        let key = self.keyring.get(key_id)?;
+        Ok(SignatureKeyInfo::new(key))
     }
 
     pub fn disable_key(
         &mut self,
         key_id: u32,
-    ) -> Result<KeyInfo<Algorithm>, DisableKeyError<Algorithm>> {
-        self.keyring.disable(key_id).map(|k| k.info())
+    ) -> Result<SignatureKeyInfo, DisableKeyError<Algorithm>> {
+        self.keyring.disable(key_id)?;
+        let key = self.keyring.get(key_id)?;
+        Ok(SignatureKeyInfo::new(key))
     }
 
     pub fn remove(
