@@ -1,5 +1,5 @@
 use super::Algorithm;
-use crate::{key::Key, sensitive, KeyInfo, Origin, Status};
+use crate::{key::Key, sensitive, Origin, Status};
 use alloc::sync::Arc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

@@ -9,19 +9,17 @@ mod signing_key;
 mod verifier;
 mod verifying_key;
 
-pub mod jwt;
-
 pub(crate) use verifying_key::VerifyingKey;
 pub(crate) type Material = SigningKey;
 
+pub use self::signature::Signature;
 pub use algorithm::Algorithm;
 pub use key_info::SignatureKeyInfo;
-pub use signature::Signature;
-pub use signer::Signer;
-pub use verifier::Verifier;
-
 use key_pair::KeyPair;
+
+pub use signer::Signer;
 use signing_key::SigningKey;
+pub use verifier::Verifier;
 
 // #[derive(Clone, Debug, ZeroizeOnDrop)]
 // pub struct Signature {

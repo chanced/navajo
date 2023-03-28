@@ -3,7 +3,7 @@ use core::str::FromStr;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoStaticStr};
 
-use crate::{error::InvalidAlgorithmError, sig, strings::to_upper_remove_seperators};
+use crate::{dsa, error::InvalidAlgorithmError, strings::to_upper_remove_seperators};
 
 use super::{Curve, KeyType};
 
@@ -173,7 +173,7 @@ impl FromStr for Algorithm {
             "PS256" => Ok(Algorithm::Ps256),
             "PS384" => Ok(Algorithm::Ps384),
             "PS512" => Ok(Algorithm::Ps512),
-            "EdDSA" => Ok(Algorithm::EdDsa),
+            "EDDSA" => Ok(Algorithm::EdDsa),
             "RSAOAEP" => Ok(Algorithm::RsaOaep),
             "RSAOAEP256" => Ok(Algorithm::RsaOaep256),
             "A128KW" => Ok(Algorithm::A128Kw),

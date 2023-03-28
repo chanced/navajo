@@ -95,19 +95,21 @@ pub struct Jwk {
     #[serde(rename = "key_ops", skip_serializing_if = "Vec::is_empty", default)]
     pub key_operations: Vec<KeyOperation>,
 
-    #[serde(rename = "crv", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "crv", skip_serializing_if = "Option::is_none", default)]
     pub curve: Option<Curve>,
 
     #[serde(
         with = "b64::optional_url_safe",
-        skip_serializing_if = "Option::is_none"
+        skip_serializing_if = "Option::is_none",
+        default
     )]
     pub x: Option<Vec<u8>>,
 
     /// X coordinate for an EC key.
     #[serde(
         with = "b64::optional_url_safe",
-        skip_serializing_if = "Option::is_none"
+        skip_serializing_if = "Option::is_none",
+        default
     )]
     pub y: Option<Vec<u8>>,
 
@@ -308,6 +310,7 @@ impl From<VerifyingKey> for Jwk {
         match key.algorithm() {
             dsa::Algorithm::Es256 => Self {
                 key_id: Some(key.pub_id().to_string()),
+                curve: key.algorithm().curve(),
                 algorithm: key.algorithm().jwt_algorithm().into(),
                 key_type: key.algorithm().key_type().into(),
                 key_use: key.key_use().cloned(),
@@ -324,6 +327,7 @@ impl From<VerifyingKey> for Jwk {
                 key_operations: key.key_operations().to_vec(),
                 x: Some(bytes[1..49].to_vec()),
                 y: Some(bytes[49..97].to_vec()),
+                curve: key.algorithm().curve(),
                 ..Default::default()
             },
             dsa::Algorithm::Ed25519 => Self {

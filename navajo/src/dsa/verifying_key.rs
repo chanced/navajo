@@ -1,5 +1,4 @@
 use crate::{
-    b64,
     error::{KeyError, SignatureError},
     jose::{Algorithm as JwkAlgorithm, Jwk, KeyOperation, KeyUse},
     sensitive,
@@ -7,10 +6,8 @@ use crate::{
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use typenum::{U32, U48};
 
 use super::{Algorithm, KeyPair, Signature};
 
@@ -23,7 +20,14 @@ pub(crate) struct VerifyingKey {
     key_operations: Vec<KeyOperation>,
     key_use: Option<KeyUse>,
 }
-
+impl PartialEq for VerifyingKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.pub_id == other.pub_id
+            && self.key == other.key
+            && self.key_operations == other.key_operations
+            && self.key_use == other.key_use
+    }
+}
 impl core::fmt::Debug for VerifyingKey {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("VerifyingKey")
@@ -138,52 +142,44 @@ enum Ecdsa {
 }
 
 impl Ecdsa {
-    fn from_x_y(
-        algorithm: Algorithm,
-        x: Option<&[u8]>,
-        y: Option<&[u8]>,
-    ) -> Result<Self, KeyError> {
-        let x = x.ok_or_else(|| "missing x")?;
-        let y = y.ok_or_else(|| "missing y")?;
+    fn from_bytes(algorithm: Algorithm, key: &[u8]) -> Result<Self, KeyError> {
+        #[cfg(not(feature = "ring"))]
         match algorithm {
-            Algorithm::Es256 => todo!(),
-            Algorithm::Es384 => todo!(),
-            Algorithm::Ed25519 => todo!(),
+            Algorithm::Es256 => {
+                if key.len() != 65 {
+                    return Err(KeyError("key data is malformed".into()));
+                }
+                #[cfg(feature = "ring")]
+                {
+                    let key = ring::signature::UnparsedPublicKey::new(
+                        algorithm.ring_ecdsa_verifying_algorithm(),
+                        key,
+                    );
+                    Ok(Self::P256(key))
+                }
+                #[cfg(not(feature = "ring"))]
+                {
+                    let encoded_point = p256::EncodedPoint::from_bytes(&key)
+                        .map_err(|e| format!("key data is malformed: {}", e))?;
+                    let key = p256::ecdsa::VerifyingKey::from_encoded_point(&encoded_point)?;
+                    Ok(Self::P256(key))
+                }
+            }
+            Algorithm::Es384 => {
+                if key.len() != 97 {
+                    return Err(KeyError("key data is malformed".into()));
+                }
+                let encoded_point = p384::EncodedPoint::from_bytes(&key)
+                    .map_err(|e| format!("key data is malformed: {}", e))?;
+                let key = p384::ecdsa::VerifyingKey::from_encoded_point(&encoded_point)?;
+                Ok(Self::P384(key))
+            }
+            _ => unreachable!(),
         }
     }
 
     fn from_key_pair(alg: Algorithm, keys: &KeyPair) -> Result<Self, KeyError> {
-        #[cfg(feature = "ring")]
-        {
-            // TODO: validate the input
-            let key = ring::signature::UnparsedPublicKey::new(
-                alg.ring_ecdsa_verifying_algorithm(),
-                keys.public.clone(),
-            );
-            match alg {
-                Algorithm::Es256 => Ok(Self::P256(key)),
-                Algorithm::Es384 => Ok(Self::P384(key)),
-                _ => unreachable!(),
-            }
-        }
-        #[cfg(not(feature = "ring"))]
-        {
-            match alg {
-                Algorithm::Es256 => {
-                    let encoded_point = p256::EncodedPoint::from_bytes(&keys.public)
-                        .map_err(|_| KeyError("key data is malformed".into()))?;
-                    let key = p256::ecdsa::VerifyingKey::from_encoded_point(&encoded_point)?;
-                    Ok(Self::P256(key))
-                }
-                Algorithm::Es384 => {
-                    let encoded_point = p384::EncodedPoint::from_bytes(&keys.public)
-                        .map_err(|_| KeyError("key data is malformed".into()))?;
-                    let key = p384::ecdsa::VerifyingKey::from_encoded_point(&encoded_point)?;
-                    Ok(Self::P384(key))
-                }
-                _ => unreachable!(),
-            }
-        }
+        Self::from_bytes(alg, keys.public.as_slice())
     }
 
     fn verify(&self, msg: &[u8], sig: &Signature) -> Result<(), SignatureError> {
@@ -205,7 +201,6 @@ impl Ecdsa {
                 }
                 Self::P384(key) => {
                     use p384::ecdsa::{signature::Verifier, Signature as EcdsaSignature};
-
                     let sig: EcdsaSignature = EcdsaSignature::try_from(sig.as_ref())?;
                     Ok(key.verify(msg, &sig)?)
                 }
@@ -220,47 +215,37 @@ struct Ed25519(ring::signature::UnparsedPublicKey<sensitive::Bytes>);
 struct Ed25519(ed25519_dalek::VerifyingKey);
 
 impl Ed25519 {
-    fn from_key_pair(alg: Algorithm, key_pair: &KeyPair) -> Result<Self, KeyError> {
-        if key_pair.public.len() != 32 {
+    fn from_bytes(_: Algorithm, bytes: &[u8]) -> Result<Self, KeyError> {
+        if bytes.len() != 32 {
             return Err(KeyError("key data is malformed".into()));
         }
         #[cfg(feature = "ring")]
         {
-            let signing_key = ring::signature::Ed25519KeyPair::from_seed_and_public_key(
-                &key_pair.private,
-                &key_pair.public,
-            )?;
-            let signing_key = Arc::new(signing_key);
             let verifying_key = ring::signature::UnparsedPublicKey::new(
                 &ring::signature::ED25519,
                 key_pair.public.clone(),
             );
             let verifying_key = Arc::new(verifying_key);
-            todo!()
+            Ok(Self(verifying_key))
         }
         #[cfg(not(feature = "ring"))]
         {
-            let key = ed25519_dalek::VerifyingKey::from_bytes(
-                key_pair.public.as_ref().try_into().unwrap(),
-            )?; // safety: len checked above
+            let key = ed25519_dalek::VerifyingKey::from_bytes(bytes.try_into().unwrap())?; // safety: len checked above
             Ok(Self(key))
         }
+    }
+    fn from_key_pair(alg: Algorithm, key_pair: &KeyPair) -> Result<Self, KeyError> {
+        Self::from_bytes(alg, &key_pair.public)
     }
     fn verify(&self, msg: &[u8], signature: &Signature) -> Result<(), SignatureError> {
         #[cfg(feature = "ring")]
         {
-            self.0
-                .verify(&msg, signature)
-                .map_err(|_| SignatureError::Failure("".into()))
+            self.0.verify(&msg, signature)?
         }
         #[cfg(not(feature = "ring"))]
         {
             use ed25519_dalek::Verifier;
-            let bytes: ed25519_dalek::Signature = msg
-                .try_into()
-                .map_err(|_| SignatureError::InvalidLen(msg.len()))?;
-
-            let signature = ed25519_dalek::Signature::from_slice(msg)?;
+            let signature = ed25519_dalek::Signature::from_slice(signature)?;
             let result = self.0.verify(msg, &signature)?;
             Ok(result)
         }
@@ -278,25 +263,73 @@ impl TryFrom<Jwk> for VerifyingKey {
 impl TryFrom<&Jwk> for VerifyingKey {
     type Error = KeyError;
     fn try_from(jwk: &Jwk) -> Result<Self, Self::Error> {
-        // let alg = jwk
-        //     .algorithm()
-        //     .ok_or("missing or undetectable algorithm".into())?;
+        let alg = jwk.algorithm().ok_or("missing or undetectable algorithm")?;
+        let (key, inner) = match alg {
+            JwkAlgorithm::Es256 => {
+                let x = jwk.x.as_ref().ok_or("missing x")?;
+                let y = jwk.y.as_ref().ok_or("missing y")?;
+                let mut key = [x.as_slice(), y.as_slice()].concat();
+                if key.len() == 64 {
+                    key.splice(0..0, [4].iter().cloned());
+                }
+                let key = sensitive::Bytes::from(key);
+                let ecdsa = Ecdsa::from_bytes(Algorithm::Es256, &key)?;
+                (key, Arc::new(Inner::Ecdsa(ecdsa)))
+            }
+            JwkAlgorithm::Es384 => {
+                let x = jwk.x.as_ref().ok_or("missing x")?;
+                let y = jwk.y.as_ref().ok_or("missing y")?;
+                let mut key = [x.as_slice(), y.as_slice()].concat();
+                if key.len() == 96 {
+                    key.splice(0..0, [4].iter().cloned());
+                }
+                let ecdsa = Ecdsa::from_bytes(Algorithm::Es384, &key)?;
+                let key = sensitive::Bytes::from(key);
+                (key, Arc::new(Inner::Ecdsa(ecdsa)))
+            }
+            JwkAlgorithm::EdDsa => {
+                let x = jwk.x.as_ref().ok_or("missing x")?;
+                let key = sensitive::Bytes::from(x.as_slice());
+                let ed25519 = Ed25519::from_bytes(Algorithm::Ed25519, x.as_slice())?;
+                (key, Arc::new(Inner::Ed25519(ed25519)))
+            }
+            alg => Err(KeyError(format!("unsupported algorithm: {alg}")))?,
+        };
+        let pub_id = jwk.key_id.clone().unwrap_or(Default::default());
+        let key_operations = jwk.key_operations.clone();
+        let key_use = jwk.key_use.clone();
 
-        // match alg {
-        //     JwkAlgorithm::Es256 => {
-        //         let inner = Inner::Ecdsa(Ecdsa::P256(key.clone()));
-        //         Ok(VerifyingKey {
-        //             pub_id: jwk.key_id.unwrap_or_default(),
-        //             inner: Arc::new(inner),
-        //             key,
-        //             key_operations: jwk.key_operations,
-        //             key_use: jwk.key_use,
-        //         })
-        //     }
-        //     JwkAlgorithm::Es384 => todo!(),
-        //     JwkAlgorithm::EdDsa => todo!(),
-        //     alg => Err(D::Error::custom(format!("unsupported algorithm: {alg}"))),
-        // }
-        todo!()
+        Ok(Self {
+            pub_id,
+            inner,
+            key,
+            key_operations,
+            key_use,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use strum::IntoEnumIterator;
+
+    use crate::{dsa::signing_key::SigningKey, SystemRng};
+
+    use super::*;
+
+    #[test]
+    fn test_serde() {
+        for alg in Algorithm::iter() {
+            let key = SigningKey::generate(
+                &SystemRng,
+                alg,
+                "test+".to_string() + &alg.to_string().to_lowercase(),
+                None,
+            );
+            println!("{alg}");
+            let json = serde_json::to_string_pretty(&key.verifying_key).unwrap();
+            let de_key = serde_json::from_str::<VerifyingKey>(&json).unwrap();
+            assert_eq!(key.verifying_key, de_key);
+        }
     }
 }
