@@ -7,8 +7,10 @@ use crate::{
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use typenum::{U32, U48};
 
 use super::{Algorithm, KeyPair, Signature};
 
@@ -196,19 +198,18 @@ impl Ecdsa {
         {
             match self {
                 Self::P256(key) => {
-                    use p256::ecdsa::{
-                        signature::Verifier, Signature as EcdsaSignature, VerifyingKey,
-                    };
-                    let sig: EcdsaSignature = EcdsaSignature::from_bytes(sig)?;
-                    Ok(key.verify(msg, &sig))?
+                    use p256::ecdsa::{signature::Verifier, Signature as EcdsaSignature};
+
+                    let sig: EcdsaSignature = EcdsaSignature::try_from(sig.as_ref())?;
+                    Ok(key.verify(msg, &sig)?)
                 }
                 Self::P384(key) => {
-                    use p384::ecdsa::{signature::Verifier, VerifyingKey};
-                    let sig = p384::ecdsa::Signature::from_bytes(sig)?;
+                    use p384::ecdsa::{signature::Verifier, Signature as EcdsaSignature};
+
+                    let sig: EcdsaSignature = EcdsaSignature::try_from(sig.as_ref())?;
                     Ok(key.verify(msg, &sig)?)
                 }
             }
-            todo!()
         }
     }
 }
