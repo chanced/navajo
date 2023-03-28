@@ -196,7 +196,8 @@ impl Ecdsa {
         {
             match self {
                 Self::P256(key) => {
-                    let sig: p256::ecdsa::Signature = p256::ecdsa::Signature::from_bytes(sig)?;
+                    use p256::ecdsa::Signature as EcdsaSignature;
+                    let sig: EcdsaSignature = EcdsaSignature::from_bytes(sig)?;
                 }
                 Self::P384(key) => {
                     let sig = p384::ecdsa::Signature::from_bytes(sig)?;
