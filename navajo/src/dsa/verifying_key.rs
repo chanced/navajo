@@ -196,13 +196,16 @@ impl Ecdsa {
         {
             match self {
                 Self::P256(key) => {
-                    use p256::ecdsa::Signature as EcdsaSignature;
+                    use p256::ecdsa::{
+                        signature::Verifier, Signature as EcdsaSignature, VerifyingKey,
+                    };
                     let sig: EcdsaSignature = EcdsaSignature::from_bytes(sig)?;
+                    Ok(key.verify(msg, &sig))?
                 }
                 Self::P384(key) => {
+                    use p384::ecdsa::{signature::Verifier, VerifyingKey};
                     let sig = p384::ecdsa::Signature::from_bytes(sig)?;
-                    key.verify(msg, &sig)
-                        .map_err(|_| SignatureError::InvalidSignature)
+                    Ok(key.verify(msg, &sig)?)
                 }
             }
             todo!()
