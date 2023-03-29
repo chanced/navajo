@@ -121,7 +121,7 @@ pub enum Primitive {
     #[cfg(feature = "mac")]
     Mac(crate::Mac),
     #[cfg(feature = "dsa")]
-    Signature(crate::Signer),
+    Dsa(crate::Signer),
 }
 impl Primitive {
     pub async fn seal<A, E>(&self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
@@ -227,10 +227,8 @@ impl Primitive {
             Kind::Signature => {
                 #[cfg(feature = "dsa")]
                 {
-                    // let keyring: Keyring<crate::signature::Signer> =
-                    // serde_json::from_value(value)?;
-                    // Ok(Self::Signature(crate::Signer::from_keyring(keyring)))
-                    todo!()
+                    let keyring: Keyring<crate::dsa::Material> = serde_json::from_value(value)?;
+                    Ok(Self::Dsa(crate::Signer::from_keyring(keyring)))
                 }
                 #[cfg(not(feature = "dsa"))]
                 {
@@ -248,7 +246,7 @@ impl Primitive {
             #[cfg(feature = "mac")]
             Primitive::Mac(_) => Kind::Mac,
             #[cfg(feature = "dsa")]
-            Primitive::Signature(_) => Kind::Signature,
+            Primitive::Dsa(_) => Kind::Signature,
         }
     }
     #[cfg(feature = "aead")]
@@ -275,7 +273,7 @@ impl Primitive {
     #[cfg(feature = "dsa")]
     pub fn signature(self) -> Option<crate::Signer> {
         match self {
-            Primitive::Signature(sig) => Some(sig),
+            Primitive::Dsa(sig) => Some(sig),
             _ => None,
         }
     }
@@ -345,7 +343,7 @@ impl Primitive {
             #[cfg(feature = "mac")]
             Primitive::Mac(mac) => serde_json::to_value(mac.keyring())?,
             #[cfg(feature = "dsa")]
-            Primitive::Signature(sig) => serde_json::to_value(sig.keyring())?,
+            Primitive::Dsa(sig) => serde_json::to_value(sig.keyring())?,
         };
         let data = PrimitiveData {
             kind: self.kind(),
@@ -372,7 +370,7 @@ impl Primitive {
             #[cfg(feature = "mac")]
             Primitive::Mac(mac) => mac.keyring().seal(aad, envelope).await?,
             #[cfg(feature = "dsa")]
-            Primitive::Signature(sig) => sig.keyring().seal(aad, envelope).await?,
+            Primitive::Dsa(sig) => sig.keyring().seal(aad, envelope).await?,
         });
         Ok(v)
     }
@@ -394,7 +392,7 @@ impl Primitive {
             #[cfg(feature = "mac")]
             Primitive::Mac(mac) => mac.keyring().seal_sync(aad, envelope)?,
             #[cfg(feature = "dsa")]
-            Primitive::Signature(sig) => sig.keyring().seal_sync(aad, envelope)?,
+            Primitive::Dsa(sig) => sig.keyring().seal_sync(aad, envelope)?,
         });
         Ok(v)
     }
@@ -457,7 +455,7 @@ impl From<crate::Mac> for Primitive {
 
 impl From<crate::Signer> for Primitive {
     fn from(value: crate::Signer) -> Self {
-        Primitive::Signature(value)
+        Primitive::Dsa(value)
     }
 }
 
@@ -481,7 +479,7 @@ impl From<&crate::Mac> for Primitive {
 
 impl From<&crate::Signer> for Primitive {
     fn from(value: &crate::Signer) -> Self {
-        Primitive::Signature(value.clone())
+        Primitive::Dsa(value.clone())
     }
 }
 

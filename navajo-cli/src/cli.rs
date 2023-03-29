@@ -147,9 +147,7 @@ impl New {
             Kind::Aead => Primitive::Aead(Aead::new(algorithm.try_into()?, metadata)),
             Kind::Daead => Primitive::Daead(Daead::new(algorithm.try_into()?, metadata)),
             Kind::Mac => Primitive::Mac(Mac::new(algorithm.try_into()?, metadata)),
-            Kind::Signature => {
-                Primitive::Signature(Signer::new(algorithm.try_into()?, pub_id, metadata))
-            }
+            Kind::Signature => Primitive::Dsa(Signer::new(algorithm.try_into()?, pub_id, metadata)),
         };
         envelope.seal_and_write(output, aad, primitive).await
     }
@@ -194,7 +192,7 @@ impl Inspect {
             Primitive::Aead(aead) => serde_json::to_vec_pretty(&aead.keys()),
             Primitive::Daead(daead) => serde_json::to_vec_pretty(&daead.keys()),
             Primitive::Mac(mac) => serde_json::to_vec_pretty(&mac.keys()),
-            Primitive::Signature(sig) => serde_json::to_vec_pretty(&sig.keys()),
+            Primitive::Dsa(sig) => serde_json::to_vec_pretty(&sig.keys()),
         }?;
 
         output.write_all(&json).await?;
@@ -253,7 +251,7 @@ impl AddKey {
             Primitive::Mac(ref mut mac) => {
                 mac.add_key(algorithm.try_into()?, metadata);
             }
-            Primitive::Signature(ref mut sig) => {
+            Primitive::Dsa(ref mut sig) => {
                 sig.add_key(algorithm.try_into()?, pub_id, metadata)?;
             }
         }
@@ -295,7 +293,7 @@ impl PromoteKey {
             Primitive::Mac(mac) => {
                 mac.promote_key(key_id)?;
             }
-            Primitive::Signature(sig) => {
+            Primitive::Dsa(sig) => {
                 sig.promote_key(key_id)?;
             }
         }
@@ -336,7 +334,7 @@ impl EnableKey {
             Primitive::Mac(mac) => {
                 mac.enable_key(key_id)?;
             }
-            Primitive::Signature(sig) => {
+            Primitive::Dsa(sig) => {
                 sig.enable_key(key_id)?;
             }
         }
@@ -377,7 +375,7 @@ impl DisableKey {
             Primitive::Mac(mac) => {
                 mac.disable_key(key_id)?;
             }
-            Primitive::Signature(sig) => {
+            Primitive::Dsa(sig) => {
                 sig.disable_key(key_id)?;
             }
         }
@@ -419,7 +417,7 @@ impl DeleteKey {
             Primitive::Mac(mac) => {
                 mac.remove_key(key_id)?;
             }
-            Primitive::Signature(sig) => {
+            Primitive::Dsa(sig) => {
                 sig.remove(key_id)?;
             }
         }
@@ -507,7 +505,7 @@ impl CreatePublic {
         let aad = envelope.get_aad().await?;
         let envelope = envelope.get_envelope()?;
         let primitive = envelope.open(aad.clone(), input).await?;
-        if let Primitive::Signature(sig) = primitive {
+        if let Primitive::Dsa(sig) = primitive {
             let public = sig.verifier();
             let jwks = serde_json::to_vec_pretty(&public)?;
             output.write_all(&jwks).await?;

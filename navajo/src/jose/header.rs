@@ -2,20 +2,19 @@ use core::str::FromStr;
 
 use super::{Algorithm, Jwk, Zip};
 use crate::{b64, error::DecodeError};
-use alloc::borrow::Cow;
 use base64::engine::{general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Header<'a> {
+pub struct Header {
     /// Specifies the cryptographic algorithm used to secure the JWT.
     #[serde(rename = "alg")]
     pub algorithm: Algorithm,
 
     /// The `"kid"` field is used to identify the key used to sign the JWT.
     #[serde(rename = "kid", skip_serializing_if = "Option::is_none")]
-    pub key_id: Option<Cow<'a, String>>,
+    pub key_id: Option<String>,
 
     /// The `"cty"` field is used to indicate the MIME type of the token's payload.
     /// This field is optional, but if present, its value should be a string that
@@ -105,21 +104,21 @@ pub struct Header<'a> {
     pub additional_fields: serde_json::Map<String, serde_json::Value>,
 }
 
-impl TryFrom<&str> for Header<'_> {
+impl TryFrom<&str> for Header {
     type Error = DecodeError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Self::try_from(value.as_bytes())
     }
 }
-impl FromStr for Header<'_> {
+impl FromStr for Header {
     type Err = DecodeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::try_from(s)
     }
 }
-impl TryFrom<&[u8]> for Header<'_> {
+impl TryFrom<&[u8]> for Header {
     type Error = DecodeError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
@@ -127,7 +126,7 @@ impl TryFrom<&[u8]> for Header<'_> {
         Ok(serde_json::from_slice(&decoded)?)
     }
 }
-impl TryFrom<String> for Header<'_> {
+impl TryFrom<String> for Header {
     type Error = DecodeError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
@@ -135,7 +134,7 @@ impl TryFrom<String> for Header<'_> {
     }
 }
 
-impl TryFrom<&String> for Header<'_> {
+impl TryFrom<&String> for Header {
     type Error = DecodeError;
 
     fn try_from(value: &String) -> Result<Self, Self::Error> {

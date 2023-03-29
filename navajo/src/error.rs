@@ -13,7 +13,7 @@ pub trait Error: core::fmt::Debug + core::fmt::Display {}
 #[cfg(feature = "std")]
 pub use std::error::Error;
 
-use crate::KeyInfo;
+use crate::jose::Claims;
 
 #[derive(Debug)]
 pub struct RandomError(pub rand_core::Error);
@@ -62,19 +62,29 @@ impl Display for KeyDisabledError {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct KeyNotFoundError(pub u32);
+#[derive(Debug, Clone)]
+pub enum KeyNotFoundError {
+    Key(u32),
+    PubId(String),
+}
 
 impl Error for KeyNotFoundError {}
 impl From<u32> for KeyNotFoundError {
     fn from(key: u32) -> Self {
-        Self(key)
+        Self::Key(key)
     }
 }
-
+impl KeyNotFoundError {
+    fn id_string(&self) -> String {
+        match self {
+            KeyNotFoundError::Key(id) => id.to_string(),
+            KeyNotFoundError::PubId(id) => id.to_string(),
+        }
+    }
+}
 impl fmt::Display for KeyNotFoundError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "navajo: missing key: {}", self.0)
+        write!(f, "navajo: missing key: {}", self.id_string())
     }
 }
 
@@ -290,6 +300,11 @@ where
 #[derive(Debug, Clone)]
 pub struct MalformedError(pub Cow<'static, str>);
 impl Error for MalformedError {}
+impl From<base64::DecodeError> for MalformedError {
+    fn from(_: base64::DecodeError) -> Self {
+        Self(Cow::Borrowed("invalid base64"))
+    }
+}
 
 impl From<&'static str> for MalformedError {
     fn from(s: &'static str) -> Self {
@@ -676,7 +691,7 @@ impl From<sec1::Error> for KeyError {
 }
 #[derive(Debug, Clone)]
 pub enum SignatureError {
-    MissingKey(String),
+    KeyNotFound(String),
     Failure(String),
     InvalidLen(usize),
 }
@@ -686,7 +701,7 @@ impl Error for SignatureError {}
 impl Display for SignatureError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SignatureError::MissingKey(id) => write!(f, "missing key: {id}"),
+            SignatureError::KeyNotFound(id) => write!(f, "missing key: {id}"),
             SignatureError::Failure(id) => {
                 write!(f, "verification failed: {id}")
             }
@@ -703,6 +718,73 @@ impl From<ring::error::Unspecified> for SignatureError {
     }
 }
 
+#[derive(Debug)]
+pub enum JwsError<C>
+where
+    C: Claims,
+{
+    Signature(SignatureError),
+    Validation(C::Error),
+    Json(serde_json::Error),
+    MalformedJws,
+}
+
+impl<C> Error for JwsError<C> where C: Claims {}
+impl<C> From<serde_json::Error> for JwsError<C>
+where
+    C: Claims,
+{
+    fn from(e: serde_json::Error) -> Self {
+        Self::Json(e)
+    }
+}
+
+impl<C> From<SignatureError> for JwsError<C>
+where
+    C: Claims,
+{
+    fn from(e: SignatureError) -> Self {
+        Self::Signature(e)
+    }
+}
+impl<C> From<MalformedError> for JwsError<C>
+where
+    C: Claims,
+{
+    fn from(_: MalformedError) -> Self {
+        Self::MalformedJws
+    }
+}
+
+impl<C> JwsError<C>
+where
+    C: Claims,
+{
+    pub fn from_validation_error(e: C::Error) -> Self {
+        Self::Validation(e)
+    }
+}
+impl<C> Display for JwsError<C>
+where
+    C: Claims,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JwsError::Signature(e) => write!(f, "signature error: {}", e),
+            JwsError::Validation(e) => write!(f, "validation error: {}", e),
+            JwsError::MalformedJws => write!(f, "malformed jws"),
+            JwsError::Json(e) => write!(f, "json error: {}", e),
+        }
+    }
+}
+impl<C> From<base64::DecodeError> for JwsError<C>
+where
+    C: Claims,
+{
+    fn from(_: base64::DecodeError) -> Self {
+        Self::MalformedJws
+    }
+}
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DuplicatePubIdError(pub String);
 

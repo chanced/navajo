@@ -80,7 +80,7 @@ where
         self.0.last().unwrap()
     }
     fn remove(&mut self, id: u32) -> Result<Key<M>, KeyNotFoundError> {
-        let idx = self.position(id).ok_or(KeyNotFoundError(id))?;
+        let idx = self.position(id).ok_or(id)?;
         let mut keys = self.0.iter().cloned().collect::<Vec<_>>();
         let key = keys.remove(idx);
         self.0 = Arc::from(keys);
@@ -90,7 +90,7 @@ where
         self.0.iter()
     }
     fn update(&mut self, key: Key<M>) -> Result<&Key<M>, KeyNotFoundError> {
-        let idx = self.position(key.id()).ok_or(KeyNotFoundError(key.id()))?;
+        let idx = self.position(key.id()).ok_or(key.id())?;
         let mut keys = self.0.iter().cloned().collect::<Vec<_>>();
         keys[idx] = key;
         self.0 = Arc::from(keys);
@@ -98,7 +98,7 @@ where
     }
 
     fn demote(&mut self, id: u32) -> Result<&Key<M>, KeyNotFoundError> {
-        let idx = self.position(id).ok_or(KeyNotFoundError(id))?;
+        let idx = self.position(id).ok_or(id)?;
         let mut keys = self.0.iter().cloned().collect::<Vec<_>>();
         let key = keys.get_mut(idx).unwrap();
         key.demote();
@@ -239,10 +239,7 @@ where
 
     pub(crate) fn get(&self, id: impl Into<u32>) -> Result<&Key<M>, KeyNotFoundError> {
         let id = id.into();
-        self.keys
-            .get(id)
-            .map(|(_, key)| key)
-            .ok_or(KeyNotFoundError(id))
+        self.keys.get(id).map(|(_, key)| key).ok_or(id.into())
     }
 
     pub(crate) fn add(&mut self, key: Key<M>) {
@@ -305,7 +302,7 @@ where
             .keys
             .get(id)
             .map(|(idx, key)| (idx, key.clone()))
-            .ok_or(KeyNotFoundError(id))?;
+            .ok_or(id)?;
         let prev_primary = self.primary_key_idx;
         if key.status() == Status::Primary {
             return Ok(self.keys.get_by_idx(prev_primary).unwrap());

@@ -1,10 +1,9 @@
-use crate::jose::{Header, KeyUse};
+use crate::jose::{Header, Jws, KeyUse};
 use core::fmt::Debug;
 
 use super::{verifying_key::VerifyingKey, KeyPair, Signature};
 use alloc::{borrow::Cow, sync::Arc};
-use base64::{engine::general_purpose as b64, Engine as _};
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use zeroize::ZeroizeOnDrop;
 
@@ -45,7 +44,10 @@ impl Key<SigningKey> {
         self.material().sign(data)
     }
 
-    pub(crate) fn sign_jws(&self, payload: &impl Serialize) -> Result<String, serde_json::Error> {
+    pub(crate) fn sign_jws<P>(&self, payload: P) -> Result<Jws<P>, serde_json::Error>
+    where
+        P: Serialize + DeserializeOwned + Clone + core::fmt::Debug,
+    {
         let header = serde_json::to_vec(&Header {
             algorithm: self.algorithm().jwt_algorithm(),
             key_id: Some(Cow::Borrowed(&self.material().pub_id)),
@@ -63,13 +65,14 @@ impl Key<SigningKey> {
             iv: None,
             additional_fields: Default::default(),
         })?;
-        let header = b64::URL_SAFE_NO_PAD.encode(header);
         let payload = serde_json::to_vec(&payload)?;
         let signature = self.sign(&payload);
-        let payload = b64::URL_SAFE_NO_PAD.encode(payload);
-        let signature = b64::URL_SAFE_NO_PAD.encode(signature);
 
-        Ok(format!("{header}.{payload}.{signature}"))
+        Ok(Jws {
+            header,
+            payload,
+            signature,
+        })
     }
 }
 

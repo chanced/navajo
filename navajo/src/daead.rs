@@ -11,7 +11,7 @@ use zeroize::ZeroizeOnDrop;
 use crate::{
     error::{DisableKeyError, KeyNotFoundError, RemoveKeyError},
     keyring::Keyring,
-    KeyInfo, SystemRng,
+    KeyInfo,
 };
 
 #[derive(Clone, Debug, ZeroizeOnDrop)]

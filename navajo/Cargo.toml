@@ -310,6 +310,7 @@ features = ["full"] # todo: reduce this.
 
 [features]
 default = [
+	"rayon",
 	# "ring",
 	"std",  # todo: remove
 	"aead",
