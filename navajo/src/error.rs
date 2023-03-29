@@ -1,7 +1,6 @@
 use core::array::TryFromSliceError;
 
 use alloc::{
-    borrow::Cow,
     fmt::{self, Debug, Display},
     format,
     string::{String, ToString},
@@ -13,7 +12,7 @@ pub trait Error: core::fmt::Debug + core::fmt::Display {}
 #[cfg(feature = "std")]
 pub use std::error::Error;
 
-use crate::jose::Claims;
+use crate::dsa::Validate;
 
 #[derive(Debug)]
 pub struct RandomError(pub rand_core::Error);
@@ -297,30 +296,35 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct MalformedError(pub Cow<'static, str>);
+#[derive(Debug)]
+pub struct MalformedError(Box<dyn Error>);
 impl Error for MalformedError {}
 impl From<base64::DecodeError> for MalformedError {
-    fn from(_: base64::DecodeError) -> Self {
-        Self(Cow::Borrowed("invalid base64"))
+    fn from(e: base64::DecodeError) -> Self {
+        Self(e.into())
+    }
+}
+impl From<serde_json::Error> for MalformedError {
+    fn from(e: serde_json::Error) -> Self {
+        Self(e.into())
     }
 }
 
 impl From<&'static str> for MalformedError {
     fn from(s: &'static str) -> Self {
-        Self(Cow::Borrowed(s))
+        Self(s.into())
     }
 }
 
 impl From<String> for MalformedError {
     fn from(s: String) -> Self {
-        Self(Cow::Owned(s))
+        Self(s.into())
     }
 }
 
 impl fmt::Display for MalformedError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "navajo: malformed ciphertext: {}", &self.0)
+        write!(f, "navajo: malformed data: {}", &self.0)
     }
 }
 
@@ -721,18 +725,30 @@ impl From<ring::error::Unspecified> for SignatureError {
 #[derive(Debug)]
 pub enum JwsError<C>
 where
-    C: Claims,
+    C: Validate + core::fmt::Debug,
 {
     Signature(SignatureError),
     Validation(C::Error),
     Json(serde_json::Error),
-    MalformedJws,
+    Malformed,
+}
+impl<C> From<DecodeError> for JwsError<C>
+where
+    C: core::fmt::Debug + Validate,
+{
+    fn from(e: DecodeError) -> Self {
+        match e {
+            DecodeError::Serde(e) => Self::Json(e),
+            DecodeError::Base64(_) => Self::Malformed,
+            DecodeError::Malformed(_) => Self::Malformed,
+        }
+    }
 }
 
-impl<C> Error for JwsError<C> where C: Claims {}
+impl<C> Error for JwsError<C> where C: core::fmt::Debug + Validate {}
 impl<C> From<serde_json::Error> for JwsError<C>
 where
-    C: Claims,
+    C: core::fmt::Debug + Validate,
 {
     fn from(e: serde_json::Error) -> Self {
         Self::Json(e)
@@ -741,7 +757,7 @@ where
 
 impl<C> From<SignatureError> for JwsError<C>
 where
-    C: Claims,
+    C: core::fmt::Debug + Validate,
 {
     fn from(e: SignatureError) -> Self {
         Self::Signature(e)
@@ -749,16 +765,16 @@ where
 }
 impl<C> From<MalformedError> for JwsError<C>
 where
-    C: Claims,
+    C: core::fmt::Debug + Validate,
 {
     fn from(_: MalformedError) -> Self {
-        Self::MalformedJws
+        Self::Malformed
     }
 }
 
 impl<C> JwsError<C>
 where
-    C: Claims,
+    C: core::fmt::Debug + Validate,
 {
     pub fn from_validation_error(e: C::Error) -> Self {
         Self::Validation(e)
@@ -766,23 +782,24 @@ where
 }
 impl<C> Display for JwsError<C>
 where
-    C: Claims,
+    C: core::fmt::Debug + Validate,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            JwsError::Signature(e) => write!(f, "signature error: {}", e),
-            JwsError::Validation(e) => write!(f, "validation error: {}", e),
-            JwsError::MalformedJws => write!(f, "malformed jws"),
-            JwsError::Json(e) => write!(f, "json error: {}", e),
+            JwsError::Signature(e) => write!(f, "signature error: {e}"),
+            JwsError::Validation(e) => write!(f, "validation error: {e}"),
+            JwsError::Malformed => write!(f, "malformed jws"),
+            JwsError::Json(e) => write!(f, "json error: {e}"),
         }
     }
 }
+
 impl<C> From<base64::DecodeError> for JwsError<C>
 where
-    C: Claims,
+    C: core::fmt::Debug + Validate,
 {
     fn from(_: base64::DecodeError) -> Self {
-        Self::MalformedJws
+        Self::Malformed
     }
 }
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -810,12 +827,20 @@ impl Error for InvalidCurveError {}
 pub enum DecodeError {
     Serde(serde_json::Error),
     Base64(base64::DecodeError),
+    Malformed(String),
+}
+
+impl From<&str> for DecodeError {
+    fn from(e: &str) -> Self {
+        Self::Malformed(e.to_string())
+    }
 }
 impl Display for DecodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DecodeError::Serde(e) => write!(f, "serde error: {}", e),
-            DecodeError::Base64(e) => write!(f, "base64 error: {}", e),
+            DecodeError::Serde(e) => write!(f, "serde: {e}"),
+            DecodeError::Base64(e) => write!(f, "base64: {e}"),
+            DecodeError::Malformed(e) => write!(f, "malformed: {e}"),
         }
     }
 }

@@ -564,21 +564,21 @@ impl Mac {
         self.keyring.keys().iter().map(MacKeyInfo::new).collect()
     }
 
-    pub fn promote_key(
+    pub fn promote(
         &mut self,
         key_id: impl Into<u32>,
     ) -> Result<MacKeyInfo, crate::error::KeyNotFoundError> {
         self.keyring.promote(key_id).map(MacKeyInfo::new)
     }
 
-    pub fn disable_key(
+    pub fn disable(
         &mut self,
         key_id: impl Into<u32>,
     ) -> Result<MacKeyInfo, crate::error::DisableKeyError<Algorithm>> {
         self.keyring.disable(key_id).map(MacKeyInfo::new)
     }
 
-    pub fn enable_key(&mut self, key_id: impl Into<u32>) -> Result<MacKeyInfo, KeyNotFoundError> {
+    pub fn enable(&mut self, key_id: impl Into<u32>) -> Result<MacKeyInfo, KeyNotFoundError> {
         self.keyring.enable(key_id).map(MacKeyInfo::new)
     }
 

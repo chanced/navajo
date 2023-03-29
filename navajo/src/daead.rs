@@ -43,24 +43,21 @@ impl Daead {
         todo!()
     }
 
-    pub fn promote_key(
+    pub fn promote(
         &mut self,
         key_id: impl Into<u32>,
     ) -> Result<KeyInfo<Algorithm>, KeyNotFoundError> {
         self.keyring.promote(key_id).map(|key| key.info())
     }
 
-    pub fn enable_key(
+    pub fn enable(
         &mut self,
         key_id: impl Into<u32>,
     ) -> Result<KeyInfo<Algorithm>, KeyNotFoundError> {
         self.keyring.enable(key_id).map(|key| key.info())
     }
 
-    pub fn disable_key(
-        &self,
-        key_id: u32,
-    ) -> Result<KeyInfo<Algorithm>, DisableKeyError<Algorithm>> {
+    pub fn disable(&self, key_id: u32) -> Result<KeyInfo<Algorithm>, DisableKeyError<Algorithm>> {
         todo!()
     }
 

@@ -2,8 +2,9 @@ use alloc::{string::String, sync::Arc};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
-    error::{DisableKeyError, DuplicatePubIdError, KeyNotFoundError, RemoveKeyError},
-    jose::Jws,
+    error::{
+        DisableKeyError, DuplicatePubIdError, KeyNotFoundError, MalformedError, RemoveKeyError,
+    },
     key::Key,
     keyring::Keyring,
     KeyInfo, Origin, Rng, Status, SystemRng, Verifier,
@@ -12,7 +13,7 @@ use crate::{
 #[cfg(not(feature = "std"))]
 type Set<V> = alloc::collections::BTreeSet<V>;
 
-use super::{Algorithm, DsaKeyInfo, Material, Signature, SigningKey};
+use super::{Algorithm, DsaKeyInfo, Material, Signature, SigningKey, Validate};
 
 #[derive(Clone, Debug)]
 pub struct Signer {
@@ -92,7 +93,7 @@ impl Signer {
         self.keyring.primary().sign(message)
     }
 
-    pub fn sign_jws<P>(&self, payload: &P) -> Result<Jws<P>, serde_json::Error>
+    pub fn sign_jws<P>(&self, payload: &P) -> Result<String, MalformedError>
     where
         P: Serialize + DeserializeOwned + Clone + core::fmt::Debug,
     {
@@ -103,18 +104,18 @@ impl Signer {
         self.verifier.clone()
     }
 
-    pub fn promote_key(&mut self, key_id: u32) -> Result<DsaKeyInfo, KeyNotFoundError> {
+    pub fn promote(&mut self, key_id: u32) -> Result<DsaKeyInfo, KeyNotFoundError> {
         let key = self.keyring.promote(key_id)?;
         Ok(DsaKeyInfo::new(key))
     }
 
-    pub fn enable_key(&mut self, key_id: u32) -> Result<DsaKeyInfo, KeyNotFoundError> {
+    pub fn enable(&mut self, key_id: u32) -> Result<DsaKeyInfo, KeyNotFoundError> {
         self.keyring.enable(key_id)?;
         let key = self.keyring.get(key_id)?;
         Ok(DsaKeyInfo::new(key))
     }
 
-    pub fn disable_key(&mut self, key_id: u32) -> Result<DsaKeyInfo, DisableKeyError<Algorithm>> {
+    pub fn disable(&mut self, key_id: u32) -> Result<DsaKeyInfo, DisableKeyError<Algorithm>> {
         self.keyring.disable(key_id)?;
         let key = self.keyring.get(key_id)?;
         Ok(DsaKeyInfo::new(key))

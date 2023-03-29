@@ -1,10 +1,11 @@
+use super::Validate;
+
 use crate::{
     error::{DuplicatePubIdError, JwsError, KeyNotFoundError, RemoveKeyError, SignatureError},
-    jose::{Claims, Header, Jwk, Jws},
+    jose::{decode_jws, Header, Jwk},
 };
 use alloc::sync::Arc;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use super::{verifying_key::VerifyingKey, Algorithm};
 
@@ -13,17 +14,14 @@ type Map<K, V> = std::collections::HashMap<K, V>;
 #[cfg(not(feature = "std"))]
 type Map<k, V> = alloc::collections::BTreeMap<K, V>;
 
+pub trait Context {}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Verifier {
     keys: Arc<Map<String, super::VerifyingKey>>,
 }
 impl Verifier {
-    pub fn verify(
-        &self,
-        id: Option<&str>,
-        msg: &[u8],
-        sig: &super::Signature,
-    ) -> Result<(), SignatureError> {
+    pub fn verify(&self, id: Option<&str>, msg: &[u8], sig: &[u8]) -> Result<(), SignatureError> {
         if let Some(id) = id {
             if let Some(key) = self.keys.get(id) {
                 return key.verify(msg, sig);
@@ -51,15 +49,15 @@ impl Verifier {
                 .ok_or(SignatureError::Failure("failed to verify signature".into()))?;
         }
     }
-    pub fn verify_jws<C, S>(&self, ctx: &C::Context, jws: &str) -> Result<C, JwsError<C>>
+    pub fn verify_jws<P>(&self, ctx: &P::Context, jws: &str) -> Result<(P, Header), JwsError<P>>
     where
-        C: Claims,
+        P: Validate + core::fmt::Debug + Clone + Serialize + DeserializeOwned,
     {
-        let jws = jws.as_ref();
-        let (header, payload, sig) = Jws::from_str(jws);
-        let header: Header = serde_json::from_str(header)?;
-        let payload: Value = serde_json::from_str(payload)?;
-        C::validate(ctx, &header, &payload).map_err(JwsError::Validation)?;
+        let (header, payload, sig) = decode_jws::<P>(jws)?;
+        self.verify(header.key_id.as_deref(), &payload, &sig)?;
+        let payload: P = serde_json::from_slice(&payload)?;
+        payload.validate(ctx).map_err(|e| JwsError::Validation(e))?;
+        Ok((payload, header))
     }
 
     pub(crate) fn from_keyring(
@@ -105,7 +103,25 @@ impl Verifier {
 
 #[cfg(test)]
 mod tests {
+    use serde::{Deserialize, Serialize};
     use strum::IntoEnumIterator;
+
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+    struct Payload {
+        exp: u64,
+        iss: String,
+    }
+    impl Validate for Payload {
+        type Context = String;
+        type Error = String;
+
+        fn validate(&self, ctx: &Self::Context) -> Result<(), Self::Error> {
+            if self.iss.as_str() != ctx.as_str() {
+                return Err("invalid issuer".into());
+            }
+            Ok(())
+        }
+    }
 
     use crate::dsa::*;
     #[test]
@@ -116,7 +132,7 @@ mod tests {
             let first_sig = signer.sign(msg);
             let first_key_id = signer.primary_key_id().to_string();
             let second = signer.add_key(Algorithm::Ed25519, None, None).unwrap();
-            signer.promote_key(second.id).unwrap();
+            signer.promote(second.id).unwrap();
             let other_signer = Signer::new(alg, None, None);
 
             let sig = signer.sign(msg);
@@ -129,6 +145,49 @@ mod tests {
                 .verify(Some(&first_key_id), msg, &first_sig)
                 .is_ok());
             assert!(verifier.verify(None, msg, &invalid_sig).is_err());
+        }
+    }
+    #[test]
+    fn test_verify_jws() {
+        let payload = Payload {
+            exp: 100_000,
+            iss: "test".into(),
+        };
+
+        for alg in Algorithm::iter() {
+            let mut signer = Signer::new(alg, None, None);
+            let jws = signer.sign_jws(&payload).unwrap();
+
+            let verifier = signer.verifier();
+            let (res, header) = verifier
+                .verify_jws::<Payload>(&"test".to_string(), &jws)
+                .unwrap();
+
+            assert_eq!(header.key_id, Some(signer.primary_key_id().to_string()));
+            assert_eq!(res, payload.clone());
+
+            assert!(verifier
+                .verify_jws::<Payload>(&"expect failure".to_string(), &jws)
+                .is_err());
+
+            let second = signer.add_key(Algorithm::Ed25519, None, None).unwrap();
+
+            signer.promote(second.id).unwrap();
+            let other_signer = Signer::new(alg, None, None);
+
+            let jws = signer.sign_jws(&payload).unwrap();
+            let invalid_jws = other_signer.sign_jws(&payload).unwrap();
+
+            let verifier = signer.verifier();
+            let (res, header) = verifier
+                .verify_jws::<Payload>(&"test".to_string(), &jws)
+                .unwrap();
+            assert_eq!(res, payload.clone());
+            assert_eq!(header.key_id, Some(signer.primary_key_id().to_string()));
+
+            assert!(verifier
+                .verify_jws::<Payload>(&"test".to_string(), &invalid_jws)
+                .is_err());
         }
     }
 }

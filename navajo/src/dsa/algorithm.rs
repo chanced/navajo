@@ -59,7 +59,18 @@ impl FromStr for Algorithm {
         }
     }
 }
+impl TryFrom<crate::jose::Algorithm> for Algorithm {
+    type Error = &'static str;
 
+    fn try_from(value: crate::jose::Algorithm) -> Result<Self, Self::Error> {
+        match value {
+            crate::jose::Algorithm::Es256 => Ok(Algorithm::Es256),
+            crate::jose::Algorithm::Es384 => Ok(Algorithm::Es384),
+            crate::jose::Algorithm::EdDsa => Ok(Algorithm::Ed25519),
+            _ => Err("unsupported algorithm"),
+        }
+    }
+}
 impl Algorithm {
     pub fn jwt_algorithm(&self) -> JwkAlgorithm {
         match self {
@@ -68,14 +79,7 @@ impl Algorithm {
             Algorithm::Ed25519 => JwkAlgorithm::EdDsa,
         }
     }
-    pub fn from_jwt_alg(alg: &str) -> Result<Self, &str> {
-        match alg.to_uppercase().as_str() {
-            "ES256" => Ok(Algorithm::Es256),
-            "ES384" => Ok(Algorithm::Es384),
-            "EDDSA" => Ok(Algorithm::Ed25519),
-            _ => Err("unsupported algorithm: \"{alg}\""),
-        }
-    }
+
     pub fn curve(&self) -> Option<Curve> {
         match self {
             Algorithm::Es256 => Some(Curve::P256),

@@ -102,6 +102,6 @@ let key = mac.add_external_key(
     None, // Option<&[u8]>
     None // Option<serde_json::value::Value>
 ).unwrap();
-let key = mac.promote_key(key).unwrap();
+let key = mac.promote(key).unwrap();
 println!("{key:?}");
 ```

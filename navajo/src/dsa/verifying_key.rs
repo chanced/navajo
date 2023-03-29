@@ -9,7 +9,7 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{Algorithm, KeyPair, Signature};
+use super::{Algorithm, KeyPair};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(try_from = "Jwk", into = "Jwk")]
@@ -41,7 +41,7 @@ impl core::fmt::Debug for VerifyingKey {
 }
 
 impl VerifyingKey {
-    pub fn verify(&self, msg: &[u8], signature: &Signature) -> Result<(), SignatureError> {
+    pub fn verify(&self, msg: &[u8], signature: &[u8]) -> Result<(), SignatureError> {
         self.inner.verify(msg, signature)
     }
     pub fn pub_id(&self) -> &str {
@@ -120,7 +120,7 @@ impl Inner {
         Ok(key)
     }
 
-    fn verify(&self, data: &[u8], signature: &Signature) -> Result<(), SignatureError> {
+    fn verify(&self, data: &[u8], signature: &[u8]) -> Result<(), SignatureError> {
         match self {
             Self::Ed25519(inner) => inner.verify(data, signature),
             Self::Ecdsa(inner) => inner.verify(data, signature),
@@ -182,7 +182,7 @@ impl Ecdsa {
         Self::from_bytes(alg, keys.public.as_slice())
     }
 
-    fn verify(&self, msg: &[u8], sig: &Signature) -> Result<(), SignatureError> {
+    fn verify(&self, msg: &[u8], sig: &[u8]) -> Result<(), SignatureError> {
         #[cfg(feature = "ring")]
         {
             match self {
@@ -237,7 +237,7 @@ impl Ed25519 {
     fn from_key_pair(alg: Algorithm, key_pair: &KeyPair) -> Result<Self, KeyError> {
         Self::from_bytes(alg, &key_pair.public)
     }
-    fn verify(&self, msg: &[u8], signature: &Signature) -> Result<(), SignatureError> {
+    fn verify(&self, msg: &[u8], signature: &[u8]) -> Result<(), SignatureError> {
         #[cfg(feature = "ring")]
         {
             self.0.verify(&msg, signature)?

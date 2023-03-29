@@ -318,21 +318,21 @@ impl Aead {
         self.keyring.primary().into()
     }
 
-    pub fn promote_key(
+    pub fn promote(
         &mut self,
         key_id: impl Into<u32>,
     ) -> Result<AeadKeyInfo, crate::error::KeyNotFoundError> {
         self.keyring.promote(key_id).map(AeadKeyInfo::new)
     }
 
-    pub fn disable_key(
+    pub fn disable(
         &mut self,
         key_id: impl Into<u32>,
     ) -> Result<AeadKeyInfo, crate::error::DisableKeyError<Algorithm>> {
         self.keyring.disable(key_id).map(AeadKeyInfo::new)
     }
 
-    pub fn enable_key(&mut self, key_id: impl Into<u32>) -> Result<AeadKeyInfo, KeyNotFoundError> {
+    pub fn enable(&mut self, key_id: impl Into<u32>) -> Result<AeadKeyInfo, KeyNotFoundError> {
         self.keyring.enable(key_id).map(AeadKeyInfo::new)
     }
 

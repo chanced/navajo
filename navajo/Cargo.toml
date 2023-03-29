@@ -348,5 +348,8 @@ std = [
 	"sha2/std",
 	"sha3/std",
 	"ed25519-dalek?/std",
+	"base64/std",
+	# "anyhow/default",
+	# "anyhow/std",
 	# "rsa?/std",
 ]

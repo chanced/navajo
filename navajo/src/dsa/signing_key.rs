@@ -1,8 +1,11 @@
-use crate::jose::{Header, Jws, KeyUse};
+use crate::{
+    error::MalformedError,
+    jose::{encode_jws, Header, KeyUse},
+};
 use core::fmt::Debug;
 
-use super::{verifying_key::VerifyingKey, KeyPair, Signature};
-use alloc::{borrow::Cow, sync::Arc};
+use super::{verifying_key::VerifyingKey, KeyPair, Signature, Validate};
+use alloc::sync::Arc;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use zeroize::ZeroizeOnDrop;
@@ -44,13 +47,13 @@ impl Key<SigningKey> {
         self.material().sign(data)
     }
 
-    pub(crate) fn sign_jws<P>(&self, payload: P) -> Result<Jws<P>, serde_json::Error>
+    pub(crate) fn sign_jws<P>(&self, payload: &P) -> Result<String, MalformedError>
     where
-        P: Serialize + DeserializeOwned + Clone + core::fmt::Debug,
+        P: Serialize,
     {
-        let header = serde_json::to_vec(&Header {
+        let header = Header {
             algorithm: self.algorithm().jwt_algorithm(),
-            key_id: Some(Cow::Borrowed(&self.material().pub_id)),
+            key_id: Some(self.material().pub_id.clone()),
             content_type: None,
             token_type: None,
             jwk: None,
@@ -64,15 +67,11 @@ impl Key<SigningKey> {
             zip: None,
             iv: None,
             additional_fields: Default::default(),
-        })?;
-        let payload = serde_json::to_vec(&payload)?;
-        let signature = self.sign(&payload);
-
-        Ok(Jws {
-            header,
-            payload,
-            signature,
-        })
+        };
+        let data = serde_json::to_vec(&payload)?;
+        let signature = self.sign(&data);
+        let sig = encode_jws(&header, &data, &signature)?;
+        Ok(sig)
     }
 }
 
@@ -418,7 +417,20 @@ mod tests {
     use crate::{Origin, Status, SystemRng};
 
     use super::*;
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct Payload {
+        sub: String,
+        aud: String,
+    }
 
+    impl Validate for Payload {
+        type Context = ();
+        type Error = MalformedError;
+
+        fn validate(&self, ctx: &Self::Context) -> Result<(), Self::Error> {
+            Ok(())
+        }
+    }
     #[test]
     fn test_generate() {
         let rng = crate::rand::SystemRng;
@@ -429,9 +441,11 @@ mod tests {
         let pk = k.key_pair.public.as_ref();
 
         let key = Key::new(3423, Status::Primary, Origin::Navajo, k, None);
-        let mut payload = serde_json::Map::new();
-        payload.insert("sub".to_string(), "test".into());
-        payload.insert("name".to_string(), "chance".into());
+        let payload = Payload {
+            sub: "test".to_string(),
+            aud: "test".to_string(),
+        };
+
         let jwt = key.sign_jws(&payload).unwrap();
         println!("{jwt}");
     }

@@ -285,16 +285,16 @@ impl PromoteKey {
         let mut primitive = envelope.open(aad.clone(), input).await?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
-                aead.promote_key(key_id)?;
+                aead.promote(key_id)?;
             }
             Primitive::Daead(daead) => {
-                daead.promote_key(key_id)?;
+                daead.promote(key_id)?;
             }
             Primitive::Mac(mac) => {
-                mac.promote_key(key_id)?;
+                mac.promote(key_id)?;
             }
             Primitive::Dsa(sig) => {
-                sig.promote_key(key_id)?;
+                sig.promote(key_id)?;
             }
         }
         envelope.seal_and_write(output, aad, primitive).await
@@ -326,16 +326,16 @@ impl EnableKey {
         let mut primitive = envelope.open(aad.clone(), input).await?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
-                aead.enable_key(key_id)?;
+                aead.enable(key_id)?;
             }
             Primitive::Daead(daead) => {
-                daead.enable_key(key_id)?;
+                daead.enable(key_id)?;
             }
             Primitive::Mac(mac) => {
-                mac.enable_key(key_id)?;
+                mac.enable(key_id)?;
             }
             Primitive::Dsa(sig) => {
-                sig.enable_key(key_id)?;
+                sig.enable(key_id)?;
             }
         }
         envelope.seal_and_write(output, aad, primitive).await
@@ -367,16 +367,16 @@ impl DisableKey {
         let mut primitive = envelope.open(aad.clone(), input).await?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
-                aead.disable_key(key_id)?;
+                aead.disable(key_id)?;
             }
             Primitive::Daead(daead) => {
-                daead.disable_key(key_id)?;
+                daead.disable(key_id)?;
             }
             Primitive::Mac(mac) => {
-                mac.disable_key(key_id)?;
+                mac.disable(key_id)?;
             }
             Primitive::Dsa(sig) => {
-                sig.disable_key(key_id)?;
+                sig.disable(key_id)?;
             }
         }
         envelope.seal_and_write(output, aad, primitive).await
