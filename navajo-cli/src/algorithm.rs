@@ -299,8 +299,8 @@ impl TryFrom<Algorithm> for navajo::daead::Algorithm {
 
     fn try_from(value: Algorithm) -> Result<Self, Self::Error> {
         match value {
-            Algorithm::AesSiv => Ok(navajo::daead::Algorithm::AesSiv),
-            _ => Err(format!("Algorithm {value} is not DAED")),
+            Algorithm::AesSiv => Ok(navajo::daead::Algorithm::Aes256Siv),
+            _ => Err(format!("Algorithm {value} is not DAEAD")),
         }
     }
 }

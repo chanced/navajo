@@ -16,6 +16,7 @@ use crate::{
 pub(crate) struct Material {
     value: Bytes,
     #[zeroize(skip)]
+    #[serde(rename = "alg")]
     algorithm: Algorithm,
 }
 impl PartialEq for Material {

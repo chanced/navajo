@@ -1,7 +1,7 @@
 use crate::{
     error::{KeyError, SignatureError},
     jose::{Algorithm as JwkAlgorithm, Jwk, KeyOperation, KeyUse},
-    sensitive,
+    sensitive, Metadata,
 };
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -11,21 +11,30 @@ use serde_json::Value;
 
 use super::{Algorithm, KeyPair};
 
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(try_from = "Jwk", into = "Jwk")]
+#[derive(Clone, Deserialize)]
+#[serde(try_from = "Jwk")]
 pub(crate) struct VerifyingKey {
     pub(super) pub_id: String,
     inner: Arc<Inner>,
     key: sensitive::Bytes,
-    key_operations: Vec<KeyOperation>,
-    key_use: Option<KeyUse>,
+    jwk: Arc<Jwk>,
 }
+
+impl Serialize for VerifyingKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.jwk.serialize(serializer)
+    }
+}
+
 impl PartialEq for VerifyingKey {
     fn eq(&self, other: &Self) -> bool {
         self.pub_id == other.pub_id
             && self.key == other.key
-            && self.key_operations == other.key_operations
-            && self.key_use == other.key_use
+            && self.jwk.key_operations == other.jwk.key_operations
+            && self.jwk.key_use == other.jwk.key_use
     }
 }
 impl core::fmt::Debug for VerifyingKey {
@@ -33,8 +42,8 @@ impl core::fmt::Debug for VerifyingKey {
         f.debug_struct("VerifyingKey")
             .field("key_id", &self.pub_id)
             .field("algorithm", &self.algorithm())
-            .field("key_use", &self.key_use)
-            .field("key_operations", &self.key_operations)
+            .field("key_use", &self.jwk.key_use)
+            .field("key_operations", &self.jwk.key_operations)
             .field("value", &URL_SAFE_NO_PAD.encode(self.key.as_ref()))
             .finish()
     }
@@ -48,10 +57,10 @@ impl VerifyingKey {
         &self.pub_id
     }
     pub fn key_use(&self) -> Option<&crate::jose::KeyUse> {
-        self.key_use.as_ref()
+        self.jwk.key_use.as_ref()
     }
     pub fn key_operations(&self) -> &[crate::jose::KeyOperation] {
-        &self.key_operations
+        self.jwk.key_operations.as_ref()
     }
 
     pub fn algorithm(&self) -> Algorithm {
@@ -63,38 +72,67 @@ impl VerifyingKey {
             },
         }
     }
+
+    pub fn jwk(&self) -> Arc<Jwk> {
+        self.jwk.clone()
+    }
+
     pub(super) fn from_material(
         algorithm: Algorithm,
         pub_id: String,
         key_pair: &KeyPair,
-        metadata: Option<Arc<Value>>,
+        metadata: Arc<Metadata>,
     ) -> Result<Self, KeyError> {
         let inner = Arc::new(Inner::from_key_pair(algorithm, key_pair)?);
         let key = key_pair.public.clone();
+        let key_operations = metadata.key_operations().cloned().unwrap_or_default();
+        let key_id = Some(pub_id.clone());
+        let jwt_algorithm = algorithm.jwt_algorithm().into();
+        let key_use = metadata.key_use().cloned();
+        let curve = algorithm.curve();
+        let key_type = algorithm.key_type().into();
 
-        let key_operations: Vec<KeyOperation> = metadata
-            .as_ref()
-            .map(|v| {
-                v.get("key_ops")
-                    .and_then(|v| v.as_array())
-                    .map(|v| {
-                        v.iter()
-                            .filter_map(|v| v.as_str())
-                            .map(KeyOperation::from)
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default()
-            })
-            .unwrap_or_default();
-        let key_use =
-            metadata.and_then(|v| v.get("use").and_then(|v| v.as_str()).map(KeyUse::from));
+        let jwk = match algorithm {
+            Algorithm::Es256 => Jwk {
+                key_id,
+                curve: algorithm.curve(),
+                algorithm: jwt_algorithm,
+                key_type,
+                key_use,
+                key_operations,
+                x: Some(key[1..33].to_vec()),
+                y: Some(key[33..65].to_vec()),
+                ..Default::default()
+            },
 
+            Algorithm::Es384 => Jwk {
+                key_id,
+                curve: algorithm.curve(),
+                algorithm: jwt_algorithm,
+                key_type,
+                key_use,
+                key_operations,
+                x: Some(key[1..49].to_vec()),
+                y: Some(key[49..97].to_vec()),
+                ..Default::default()
+            },
+            Algorithm::Ed25519 => Jwk {
+                key_id,
+                curve: algorithm.curve(),
+                algorithm: jwt_algorithm,
+                key_type,
+                key_use,
+                key_operations,
+                x: Some(key.to_vec()),
+                ..Default::default()
+            },
+        };
+        let jwk = Arc::new(jwk);
         Ok(Self {
             pub_id,
             inner,
             key,
-            key_operations,
-            key_use,
+            jwk,
         })
     }
 
@@ -264,6 +302,7 @@ impl TryFrom<&Jwk> for VerifyingKey {
     type Error = KeyError;
     fn try_from(jwk: &Jwk) -> Result<Self, Self::Error> {
         let alg = jwk.algorithm().ok_or("missing or undetectable algorithm")?;
+        let jwk = jwk.clone();
         let (key, inner) = match alg {
             JwkAlgorithm::Es256 => {
                 let x = jwk.x.as_ref().ok_or("missing x")?;
@@ -296,15 +335,12 @@ impl TryFrom<&Jwk> for VerifyingKey {
             alg => Err(KeyError(format!("unsupported algorithm: {alg}")))?,
         };
         let pub_id = jwk.key_id.clone().unwrap_or(Default::default());
-        let key_operations = jwk.key_operations.clone();
-        let key_use = jwk.key_use.clone();
-
+        let jwk = Arc::new(jwk);
         Ok(Self {
             pub_id,
             inner,
             key,
-            key_operations,
-            key_use,
+            jwk,
         })
     }
 }
@@ -326,7 +362,6 @@ mod tests {
                 "test+".to_string() + &alg.to_string().to_lowercase(),
                 None,
             );
-            println!("{alg}");
             let json = serde_json::to_string_pretty(&key.verifying_key).unwrap();
             let de_key = serde_json::from_str::<VerifyingKey>(&json).unwrap();
             assert_eq!(key.verifying_key, de_key);

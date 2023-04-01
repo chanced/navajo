@@ -7,7 +7,7 @@ use crate::{
     },
     key::Key,
     keyring::Keyring,
-    KeyInfo, Origin, Rng, Status, SystemRng, Verifier,
+    KeyInfo, Metadata, Origin, Rng, Status, SystemRng, Verifier,
 };
 
 #[cfg(not(feature = "std"))]
@@ -22,11 +22,7 @@ pub struct Signer {
 }
 
 impl Signer {
-    pub fn new(
-        algorithm: Algorithm,
-        pub_id: Option<String>,
-        meta: Option<serde_json::Value>,
-    ) -> Self {
+    pub fn new(algorithm: Algorithm, pub_id: Option<String>, meta: Option<Metadata>) -> Self {
         Self::generate(&SystemRng, algorithm, pub_id, meta)
     }
 
@@ -39,7 +35,7 @@ impl Signer {
         rng: &G,
         algorithm: Algorithm,
         pub_id: Option<String>,
-        metadata: Option<serde_json::Value>,
+        metadata: Option<Metadata>,
     ) -> Self
     where
         G: Rng,
@@ -69,7 +65,7 @@ impl Signer {
         &mut self,
         algorithm: Algorithm,
         pub_id: Option<String>,
-        metadata: Option<serde_json::Value>,
+        metadata: Option<Metadata>,
     ) -> Result<DsaKeyInfo, DuplicatePubIdError> {
         let id = self.keyring.next_id(&SystemRng);
         let pub_id = pub_id.unwrap_or(id.to_string());

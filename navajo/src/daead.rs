@@ -4,14 +4,15 @@ mod algorithm;
 mod material;
 
 pub use algorithm::Algorithm;
+use alloc::sync::Arc;
 pub(crate) use material::Material;
 
 use zeroize::ZeroizeOnDrop;
 
 use crate::{
     error::{DisableKeyError, KeyNotFoundError, RemoveKeyError},
-    keyring::Keyring,
-    KeyInfo,
+    keyring::{gen_id, Keyring},
+    KeyInfo, Metadata, Rng, SystemRng,
 };
 
 #[derive(Clone, Debug, ZeroizeOnDrop)]
@@ -20,8 +21,21 @@ pub struct Daead {
 }
 
 impl Daead {
-    pub fn new(_algorithm: Algorithm, _metadata: Option<serde_json::Value>) -> Self {
+    pub fn new(algorithm: Algorithm, metadata: Option<Metadata>) -> Self {
+        Self::generate(&SystemRng, algorithm, metadata)
+    }
+
+    fn generate<G>(rng: &G, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
+    where
+        G: Rng,
+    {
+        // let id = gen_id(rng);
+        // let metadata = metadata.map(Arc::new);
+        // let key = Material::generate(rng, algorithm, metadata.clone());
+        // let key = Key::new(0, Status::Primary, crate::Origin::Navajo, key, metadata);
+        // let keyring = Keyring::new(key);
         todo!()
+        // Self { keyring }
     }
     pub(crate) fn keyring(&self) -> &Keyring<Material> {
         &self.keyring
@@ -37,7 +51,7 @@ impl Daead {
     pub fn add_key(
         &mut self,
         algorithm: Algorithm,
-        metadata: Option<serde_json::Value>,
+        metadata: Option<Metadata>,
     ) -> KeyInfo<Algorithm> {
         // self.keyring.add(&SystemRng, material, origin, meta)
         todo!()

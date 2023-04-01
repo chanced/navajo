@@ -1,4 +1,5 @@
 mod algorithm;
+mod claims;
 mod curve;
 mod encryption;
 mod header;
@@ -7,9 +8,13 @@ mod jws;
 mod key_operation;
 mod key_type;
 mod key_use;
+mod numeric_date;
+mod string_or_strings;
+mod validation;
 mod zip;
 
 pub use algorithm::Algorithm;
+pub use claims::Claims;
 pub use curve::Curve;
 pub use header::Header;
 pub use jwk::{Jwk, Jwks};
@@ -17,4 +22,7 @@ pub use jws::{decode_jws, encode_jws};
 pub use key_operation::KeyOperation;
 pub use key_type::KeyType;
 pub use key_use::KeyUse;
+pub use numeric_date::NumericDate;
+pub use string_or_strings::StringOrStrings;
+pub use validation::Validation;
 pub use zip::Zip;

@@ -8,6 +8,7 @@ use super::Algorithm;
 #[derive(Clone, Debug, ZeroizeOnDrop, Eq, Serialize, Deserialize)]
 pub(crate) struct Material {
     #[zeroize(skip)]
+    #[serde(rename = "alg")]
     algorithm: Algorithm,
     bytes: sensitive::Bytes,
 }

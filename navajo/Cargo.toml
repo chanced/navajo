@@ -23,6 +23,22 @@ version = "0.3"
 [dependencies.pin-project]
 version = "1.0"
 
+# chrono
+# https://docs.rs/chrono/0.4.24/chrono/
+[dependencies.chrono]
+version = "0.4"
+default-features = false
+optional = true
+features = ["alloc"]
+
+# time
+# https://docs.rs/time/0.3.20/time/
+[dependencies.time]
+version = "0.3"
+optional = true
+default-features = false
+features = ["alloc"]
+
 # miniz_oxide
 # https://docs.rs/miniz_oxide/0.7.1/miniz_oxide/
 [dependencies.miniz_oxide]
@@ -62,6 +78,11 @@ features = ["alloc"]
 [dependencies.url]
 version = "2.3"
 features = ["serde"]
+
+# derive_builder
+# https://docs.rs/derive_builder/0.12.0/derive_builder/
+[dependencies.derive_builder]
+version = "0.12.0"
 
 # inherent
 # https://docs.rs/inherent/1.0.6/inherent/
@@ -310,7 +331,8 @@ features = ["full"] # todo: reduce this.
 
 [features]
 default = [
-	"rayon",
+	"chrono",
+	"time",
 	# "ring",
 	"std",  # todo: remove
 	"aead",

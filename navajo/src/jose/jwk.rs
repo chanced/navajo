@@ -13,11 +13,11 @@ pub struct Jwk {
     #[serde(rename = "alg", skip_serializing_if = "Option::is_none", default)]
     pub algorithm: Option<Algorithm>,
 
-    ///  he "kty" (key type) parameter identifies the cryptographic algorithm
-    /// family used with the key, such as "RSA" or "EC".  "kty" values should
+    /// The `"kty"` (key type) parameter identifies the cryptographic algorithm
+    /// family used with the key, such as "RSA" or "EC". `"kty"` values should
     /// either be registered in the IANA "JSON Web Key Types" registry
     /// established by [JWA] or be a value that contains a Collision-
-    /// Resistant Name.  The "kty" value is a case-sensitive string.  This
+    /// Resistant Name.  The `"kty"` value is a case-sensitive string.  This
     /// member MUST be present in a JWK.
     ///
     /// required
@@ -26,7 +26,7 @@ pub struct Jwk {
     #[serde(rename = "kty", skip_serializing_if = "Option::is_none", default)]
     pub key_type: Option<KeyType>,
 
-    /// The "use" (public key use) parameter identifies the intended use of
+    /// The `"use"` (public key use) parameter identifies the intended use of
     /// the public key.  The "use" parameter is employed to indicate whether
     /// a public key is used for encrypting data or verifying the signature
     /// on data.
@@ -42,7 +42,7 @@ pub struct Jwk {
     ///
     /// When a key is used to wrap another key and a public key use
     /// designation for the first key is desired, the "enc" (encryption) key
-    /// use value is used, since key wrapping is a kind of encryption.  The
+    /// use value is used, since key wrapping is a kind of encryption. The
     /// "enc" value is also to be used for public keys used for key agreement
     /// operations.
     #[serde(rename = "use", skip_serializing_if = "Option::is_none")]
@@ -205,7 +205,7 @@ pub struct Jwk {
     #[serde(rename = "x5u", skip_serializing_if = "Option::is_none")]
     pub x509_url: Option<url::Url>,
 
-    /// The "x5c" (X.509 certificate chain) parameter contains a chain of one or
+    /// The `"x5c"` (X.509 certificate chain) parameter contains a chain of one or
     /// more PKIX certificates
     /// [RFC5280](https://www.rfc-editor.org/rfc/rfc5280).  The certificate
     /// chain is represented as a JSON array of certificate value strings.  Each
@@ -303,47 +303,6 @@ impl Jwk {
     }
 }
 
-impl From<VerifyingKey> for Jwk {
-    fn from(key: VerifyingKey) -> Self {
-        let bytes = key.bytes();
-
-        match key.algorithm() {
-            dsa::Algorithm::Es256 => Self {
-                key_id: Some(key.pub_id().to_string()),
-                curve: key.algorithm().curve(),
-                algorithm: key.algorithm().jwt_algorithm().into(),
-                key_type: key.algorithm().key_type().into(),
-                key_use: key.key_use().cloned(),
-                key_operations: key.key_operations().to_vec(),
-                x: Some(bytes[1..33].to_vec()),
-                y: Some(bytes[33..65].to_vec()),
-                ..Default::default()
-            },
-            dsa::Algorithm::Es384 => Self {
-                key_id: Some(key.pub_id().to_string()),
-                algorithm: key.algorithm().jwt_algorithm().into(),
-                key_type: key.algorithm().key_type().into(),
-                key_use: key.key_use().cloned(),
-                key_operations: key.key_operations().to_vec(),
-                x: Some(bytes[1..49].to_vec()),
-                y: Some(bytes[49..97].to_vec()),
-                curve: key.algorithm().curve(),
-                ..Default::default()
-            },
-            dsa::Algorithm::Ed25519 => Self {
-                key_id: Some(key.pub_id().to_string()),
-                algorithm: key.algorithm().jwt_algorithm().into(),
-                key_type: key.algorithm().key_type().into(),
-                key_use: key.key_use().cloned(),
-                key_operations: key.key_operations().to_vec(),
-                curve: key.algorithm().curve(),
-                x: Some(bytes.to_vec()),
-                ..Default::default()
-            },
-        }
-    }
-}
-
 pub type Jwks = Vec<Jwk>;
 
 #[cfg(test)]
@@ -376,7 +335,6 @@ mod tests {
         };
 
         let str = serde_json::to_string_pretty(&jwk).unwrap();
-        println!("{str}");
         let jwk2: Jwk = serde_json::from_str(&str).unwrap();
 
         assert_eq!(jwk, jwk2)

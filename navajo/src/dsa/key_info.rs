@@ -1,5 +1,5 @@
 use super::Algorithm;
-use crate::{key::Key, sensitive, Origin, Status};
+use crate::{key::Key, sensitive, Metadata, Origin, Status};
 use alloc::sync::Arc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -12,7 +12,7 @@ pub struct DsaKeyInfo {
     pub verifying_key: sensitive::Bytes,
     pub origin: Origin,
     pub algorithm: Algorithm,
-    pub metadata: Option<Arc<Value>>,
+    pub metadata: Option<Arc<Metadata>>,
 }
 impl DsaKeyInfo {
     pub(crate) fn new(key: &Key<super::signing_key::SigningKey>) -> Self {

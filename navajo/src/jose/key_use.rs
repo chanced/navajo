@@ -23,6 +23,7 @@ impl FromStr for KeyUse {
         Ok(KeyUse::from(s))
     }
 }
+
 impl From<String> for KeyUse {
     fn from(s: String) -> Self {
         KeyUse::from(s.as_str())
@@ -49,12 +50,15 @@ impl From<&str> for KeyUse {
 }
 
 impl KeyUse {
-    fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         match self {
             KeyUse::Signature => "sig",
             KeyUse::Encryption => "enc",
             KeyUse::Other(s) => s,
         }
+    }
+    pub fn as_value(&self) -> Value {
+        Value::String(self.as_str().to_string())
     }
 }
 

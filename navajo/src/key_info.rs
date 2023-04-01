@@ -5,7 +5,7 @@ use serde_json::Value;
 #[cfg(feature = "std")]
 use std::sync::Arc;
 
-use crate::{Origin, Status};
+use crate::{Metadata, Origin, Status};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Metadata for a particular key.
@@ -14,7 +14,7 @@ pub struct KeyInfo<A> {
     pub status: Status,
     pub origin: Origin,
     pub algorithm: A,
-    pub metadata: Option<Arc<Value>>,
+    pub metadata: Option<Arc<Metadata>>,
 }
 impl<A> PartialEq for KeyInfo<A>
 where
@@ -56,7 +56,7 @@ impl From<crate::mac::MacKeyInfo> for KeyInfo<crate::mac::Algorithm> {
             algorithm: info.algorithm,
             origin: info.origin,
             status: info.status,
-            metadata: info.meta,
+            metadata: info.metadata,
         }
     }
 }

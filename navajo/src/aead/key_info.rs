@@ -1,7 +1,7 @@
 use alloc::sync::Arc;
 use serde::Serialize;
 
-use crate::{key::Key, Status};
+use crate::{key::Key, Metadata, Status};
 
 use super::Algorithm;
 
@@ -11,7 +11,7 @@ pub struct AeadKeyInfo {
     pub algorithm: Algorithm,
     pub status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Arc<serde_json::Value>>,
+    pub metadata: Option<Arc<Metadata>>,
 }
 
 impl AeadKeyInfo {

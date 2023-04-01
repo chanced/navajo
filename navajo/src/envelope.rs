@@ -10,8 +10,8 @@ use futures::Future;
 use crate::{envelope, error::Error, Aad};
 #[allow(clippy::type_complexity)]
 pub trait Envelope {
-    type EncryptError: Error + Send + Sync;
-    type DecryptError: Error + Send + Sync;
+    type EncryptError: core::fmt::Display + core::fmt::Debug + Send + Sync;
+    type DecryptError: core::fmt::Display + core::fmt::Debug + Send + Sync;
     fn encrypt_dek<A, P>(
         &self,
         aad: Aad<A>,
@@ -223,16 +223,13 @@ mod tests {
 
         let mut m = Mac::new(Algorithm::Sha256, None);
 
-        m.add_key(
-            Algorithm::Sha512,
-            Some(serde_json::Value::String("test".to_string())),
-        );
+        m.add_key(Algorithm::Sha512, None);
 
         let m_keys = m.keys();
 
         let envelope = PlaintextJson;
         let result = Mac::seal(&m, Aad::empty(), &envelope).await.unwrap();
-        println!("{}", String::from_utf8(result.clone()).unwrap());
+        println!("result: {:?}", String::from_utf8(result.clone()).unwrap());
         let value = serde_json::from_slice::<serde_json::Value>(&result);
         assert!(value.is_ok());
         let value = value.unwrap();
@@ -241,17 +238,12 @@ mod tests {
 
         let value = value.as_object().unwrap();
         assert_eq!(value.get("kind").unwrap(), "MAC");
-        let keyring = value.get("keyring");
+        let keyring = value.get("keys");
         assert!(keyring.is_some());
-        let keyring = keyring.unwrap();
-        assert!(keyring.is_object());
-        let keyring = keyring.as_object().unwrap();
-
-        let keys = keyring.get("keys");
-        assert!(keys.is_some());
-        let keys = keys.unwrap();
+        let keys = keyring.unwrap();
         assert!(keys.is_array());
         let keys = keys.as_array().unwrap();
+
         assert_eq!(keys.len(), m_keys.len());
 
         for (i, k) in keys.iter().enumerate() {
@@ -263,13 +255,8 @@ mod tests {
             assert!(id.is_number());
             let id = id.as_u64().unwrap() as u32;
             assert_eq!(id, m_keys[i].id);
-            let material = k.get("material");
-            assert!(material.is_some());
-            let material = material.unwrap();
-            assert!(material.is_object());
-            let material = material.as_object().unwrap();
 
-            let algorithm = material.get("algorithm");
+            let algorithm = k.get("alg");
             assert!(algorithm.is_some());
             let algorithm = algorithm.unwrap();
             assert!(algorithm.is_string());

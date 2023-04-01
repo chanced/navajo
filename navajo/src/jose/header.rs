@@ -6,7 +6,7 @@ use base64::engine::{general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Header {
     /// Specifies the cryptographic algorithm used to secure the JWT.
     #[serde(rename = "alg")]

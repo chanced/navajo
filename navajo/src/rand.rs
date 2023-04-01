@@ -149,7 +149,6 @@ mockall::mock! {
         fn u128(&self) -> Result<u128, RandomError>;
         fn usize(&self) -> Result<usize, RandomError>;
     }
-
 }
 #[cfg(all(test, feature = "std"))]
 impl Sealed for MockRngInner {}
@@ -158,6 +157,36 @@ impl Sealed for MockRngInner {}
 impl Clone for MockRngInner {
     fn clone(&self) -> Self {
         panic!("MockRandomInner cannot be cloned; clone must be called on MockRandom")
+    }
+}
+#[cfg(all(test, feature = "std"))]
+impl Rng for MockRng {
+    fn fill(&self, dst: &mut [u8]) -> Result<(), RandomError> {
+        self.inner.lock().unwrap().fill(dst)
+    }
+
+    fn u8(&self) -> Result<u8, RandomError> {
+        self.inner.lock().unwrap().u8()
+    }
+
+    fn u16(&self) -> Result<u16, RandomError> {
+        self.inner.lock().unwrap().u16()
+    }
+
+    fn u32(&self) -> Result<u32, RandomError> {
+        self.inner.lock().unwrap().u32()
+    }
+
+    fn u64(&self) -> Result<u64, RandomError> {
+        self.inner.lock().unwrap().u64()
+    }
+
+    fn u128(&self) -> Result<u128, RandomError> {
+        self.inner.lock().unwrap().u128()
+    }
+
+    fn usize(&self) -> Result<usize, RandomError> {
+        self.inner.lock().unwrap().usize()
     }
 }
 

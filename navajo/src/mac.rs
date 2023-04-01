@@ -30,7 +30,7 @@ use crate::error::{
 use crate::key::Key;
 use crate::primitive::Primitive;
 use crate::rand::{Rng, SystemRng};
-use crate::{Aad, Envelope, Keyring, Origin, Status};
+use crate::{Aad, Envelope, Keyring, Metadata, Origin, Status};
 use alloc::vec::Vec;
 use context::*;
 pub(crate) use material::Material;
@@ -38,7 +38,7 @@ pub(crate) use material::Material;
 /// Message Authentication Code Keyring (HMAC & CMAC)
 #[derive(Clone, Debug, ZeroizeOnDrop)]
 pub struct Mac {
-    keyring: Keyring<Material>,
+    pub(crate) keyring: Keyring<Material>,
 }
 
 impl Mac {
@@ -179,27 +179,19 @@ impl Mac {
 
     /// Create a new MAC keyring by generating a key for the given [`Algorithm`]
     /// as the primary.
-    pub fn new(algorithm: Algorithm, meta: Option<serde_json::value::Value>) -> Self {
+    pub fn new(algorithm: Algorithm, meta: Option<Metadata>) -> Self {
         Self::generate(&SystemRng, algorithm, meta)
     }
 
     #[cfg(test)]
-    pub fn new_with_rng<R>(
-        rng: &R,
-        algorithm: Algorithm,
-        meta: Option<serde_json::value::Value>,
-    ) -> Self
+    pub fn new_with_rng<R>(rng: &R, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
     where
         R: Rng,
     {
-        Self::generate(rng, algorithm, meta)
+        Self::generate(rng, algorithm, metadata)
     }
 
-    fn generate<G>(
-        rng: &G,
-        algorithm: Algorithm,
-        metadata: Option<serde_json::value::Value>,
-    ) -> Self
+    fn generate<G>(rng: &G, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
     where
         G: Rng,
     {
@@ -237,12 +229,12 @@ impl Mac {
         key: K,
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
-        meta: Option<serde_json::Value>,
+        metadata: Option<Metadata>,
     ) -> Result<Self, KeyError>
     where
         K: AsRef<[u8]>,
     {
-        Self::import_key(&SystemRng, key, algorithm, prefix, meta)
+        Self::import_key(&SystemRng, key, algorithm, prefix, metadata)
     }
     #[cfg(test)]
     pub fn new_external_key_with_rng<G, K>(
@@ -250,13 +242,13 @@ impl Mac {
         key: K,
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
-        meta: Option<serde_json::Value>,
+        metadata: Option<Metadata>,
     ) -> Result<Self, KeyError>
     where
         K: AsRef<[u8]>,
         G: Rng,
     {
-        Self::import_key(rng, key, algorithm, prefix, meta)
+        Self::import_key(rng, key, algorithm, prefix, metadata)
     }
 
     fn import_key<K, G>(
@@ -264,7 +256,7 @@ impl Mac {
         key: K,
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
-        metadata: Option<serde_json::Value>,
+        metadata: Option<Metadata>,
     ) -> Result<Self, KeyError>
     where
         K: AsRef<[u8]>,
@@ -315,7 +307,6 @@ impl Mac {
     ///     let data = vec![b"hello", b"world"];
     ///     let stream = stream::iter(data);
     ///     let tag = mac.compute_stream(stream).await;
-    ///     println!("tag: {}", hex::encode(&tag))
     /// }
     /// ```
     pub fn compute_stream<S>(&self, stream: S) -> ComputeStream<S>
@@ -489,8 +480,8 @@ impl Mac {
         VerifyTryStream::new(stream, verify)
     }
 
-    pub fn add_key(&mut self, algorithm: Algorithm, meta: Option<serde_json::Value>) -> MacKeyInfo {
-        self.generate_key(&SystemRng, algorithm, Origin::Navajo, meta)
+    pub fn add_key(&mut self, algorithm: Algorithm, metadata: Option<Metadata>) -> MacKeyInfo {
+        self.generate_key(&SystemRng, algorithm, Origin::Navajo, metadata)
     }
 
     #[cfg(test)]
@@ -498,25 +489,25 @@ impl Mac {
         &mut self,
         rng: &G,
         algorithm: Algorithm,
-        meta: Option<serde_json::Value>,
+        metadata: Option<Metadata>,
     ) -> MacKeyInfo
     where
         G: Rng,
     {
-        self.generate_key(rng, algorithm, Origin::Navajo, meta)
+        self.generate_key(rng, algorithm, Origin::Navajo, metadata)
     }
     fn generate_key<R>(
         &mut self,
         rng: &R,
         algorithm: Algorithm,
         origin: Origin,
-        meta: Option<serde_json::Value>,
+        metadata: Option<Metadata>,
     ) -> MacKeyInfo
     where
         R: Rng,
     {
         let bytes = algorithm.generate_key(rng);
-        self.create_key(rng, algorithm, &bytes, None, origin, meta)
+        self.create_key(rng, algorithm, &bytes, None, origin, metadata)
             .unwrap() // safe, the key is generated
     }
 
@@ -525,7 +516,7 @@ impl Mac {
         key: K,
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
-        meta: Option<serde_json::Value>,
+        metadata: Option<Metadata>,
     ) -> Result<MacKeyInfo, KeyError>
     where
         K: AsRef<[u8]>,
@@ -536,7 +527,7 @@ impl Mac {
             key.as_ref(),
             prefix,
             Origin::External,
-            meta,
+            metadata,
         )
     }
 
@@ -546,13 +537,20 @@ impl Mac {
         key: K,
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
-        meta: Option<serde_json::Value>,
+        metadata: Option<Metadata>,
     ) -> Result<MacKeyInfo, KeyError>
     where
         K: AsRef<[u8]>,
         R: Rng,
     {
-        self.create_key(rng, algorithm, key.as_ref(), prefix, Origin::External, meta)
+        self.create_key(
+            rng,
+            algorithm,
+            key.as_ref(),
+            prefix,
+            Origin::External,
+            metadata,
+        )
     }
 
     /// Returns [`MacKeyInfo`] for the primary key.
@@ -592,9 +590,11 @@ impl Mac {
     pub fn update_key_meta(
         &mut self,
         key_id: impl Into<u32>,
-        meta: Option<serde_json::Value>,
+        metadata: Option<Metadata>,
     ) -> Result<MacKeyInfo, KeyNotFoundError> {
-        self.keyring.update_meta(key_id, meta).map(MacKeyInfo::new)
+        self.keyring
+            .update_meta(key_id, metadata)
+            .map(MacKeyInfo::new)
     }
 
     pub(crate) fn keyring(&self) -> &Keyring<Material> {
@@ -611,7 +611,7 @@ impl Mac {
         value: &[u8],
         prefix: Option<&[u8]>,
         origin: Origin,
-        metadata: Option<serde_json::Value>,
+        metadata: Option<Metadata>,
     ) -> Result<MacKeyInfo, KeyError>
     where
         G: Rng,

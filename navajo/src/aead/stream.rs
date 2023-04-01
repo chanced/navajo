@@ -269,7 +269,7 @@ mod tests {
         let result = decrypt_stream.try_concat().await.unwrap();
         assert_eq!(result, b"hello world");
     }
-    
+
     #[cfg(feature = "std")]
     #[tokio::test]
     async fn test_stream_with_aad_roundtrip() {

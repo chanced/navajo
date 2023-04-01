@@ -1,6 +1,7 @@
 use crate::{
     error::MalformedError,
-    jose::{encode_jws, Header, KeyUse},
+    jose::{encode_jws, Header, KeyOperation, KeyUse},
+    Metadata,
 };
 use core::fmt::Debug;
 
@@ -24,6 +25,7 @@ use super::Algorithm;
 pub(crate) struct SigningKey {
     key_pair: KeyPair,
     #[zeroize(skip)]
+    #[serde(rename = "alg")]
     algorithm: Algorithm,
     #[zeroize(skip)]
     #[serde(skip_serializing)]
@@ -84,7 +86,7 @@ impl SigningKey {
         rng: &G,
         algorithm: Algorithm,
         pub_id: String,
-        metadata: Option<Value>,
+        metadata: Option<Metadata>,
     ) -> Self
     where
         G: Rng,
@@ -97,7 +99,7 @@ impl SigningKey {
         algorithm: Algorithm,
         pub_id: String,
         key_pair: KeyPair,
-        metadata: Option<Arc<Value>>,
+        metadata: Arc<Metadata>,
     ) -> Result<Self, KeyError> {
         let inner = Arc::new(Inner::from_key_pair(algorithm, &key_pair)?);
         let verifying_key =
@@ -115,15 +117,20 @@ impl SigningKey {
         rng: &G,
         algorithm: Algorithm,
         pub_id: String,
-        metadata: Option<Arc<Value>>,
+        metadata: Option<Arc<Metadata>>,
     ) -> Self
     where
         G: Rng,
     {
         let key_pair = Inner::generate_key_pair(rng, algorithm);
         let inner = Arc::new(Inner::from_key_pair(algorithm, &key_pair).unwrap());
-        let verifying_key =
-            VerifyingKey::from_material(algorithm, pub_id.clone(), &key_pair, metadata).unwrap();
+        let verifying_key = VerifyingKey::from_material(
+            algorithm,
+            pub_id.clone(),
+            &key_pair,
+            metadata.unwrap_or_default(),
+        )
+        .unwrap();
         Self {
             key_pair,
             inner,
@@ -144,35 +151,17 @@ impl<'de> Deserialize<'de> for SigningKey {
             key_pair: KeyPair,
             algorithm: Algorithm,
             pub_id: String,
-            #[serde(rename = "use", default)]
-            key_use: Option<KeyUse>,
             #[serde(default)]
-            key_ops: Option<Vec<String>>,
+            metadata: Arc<Metadata>,
         }
-
         let SerializedKey {
             key_pair,
             algorithm,
             pub_id,
-            key_use,
-            key_ops,
+            metadata,
         } = Deserialize::deserialize(deserializer)?;
-        let mut metadata = serde_json::Map::new();
-        if let Some(key_use) = key_use {
-            metadata.insert("use".to_string(), serde_json::Value::String(key_use.into()));
-        }
 
-        if let Some(key_ops) = key_ops {
-            metadata.insert(
-                "key_ops".to_string(),
-                serde_json::Value::Array(
-                    key_ops.into_iter().map(serde_json::Value::String).collect(),
-                ),
-            );
-        }
-        let metadata = Arc::new(Value::from(metadata));
-        Self::from_material(algorithm, pub_id, key_pair, Some(metadata))
-            .map_err(serde::de::Error::custom)
+        Self::from_material(algorithm, pub_id, key_pair, metadata).map_err(serde::de::Error::custom)
     }
 }
 
@@ -423,14 +412,6 @@ mod tests {
         aud: String,
     }
 
-    impl Validate for Payload {
-        type Context = ();
-        type Error = MalformedError;
-
-        fn validate(&self, ctx: &Self::Context) -> Result<(), Self::Error> {
-            Ok(())
-        }
-    }
     #[test]
     fn test_generate() {
         let rng = crate::rand::SystemRng;

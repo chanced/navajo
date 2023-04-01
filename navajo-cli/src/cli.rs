@@ -142,7 +142,8 @@ impl New {
         let output = output.get(stdout).await?;
         let envelope = env_args.get_envelope()?;
         let aad = env_args.get_aad().await?;
-        let metadata: Option<serde_json::Value> = metadata.into();
+        let metadata = metadata.try_into()?;
+
         let primitive = match algorithm.kind() {
             Kind::Aead => Primitive::Aead(Aead::new(algorithm.try_into()?, metadata)),
             Kind::Daead => Primitive::Daead(Daead::new(algorithm.try_into()?, metadata)),
@@ -155,17 +156,13 @@ impl New {
 
 #[derive(Debug, Parser)]
 pub struct Metadata {
-    /// Metadata in the form of JSON to associate with the first key, if any.
-    ///
-    /// If Metadata is not a JSON object or array, it will be treated as a
-    /// string.
+    /// Metadata for a given key in the form of JSON object.
     pub metadata: Option<String>,
 }
-impl From<Metadata> for Option<serde_json::Value> {
-    fn from(metadata: Metadata) -> Self {
-        metadata
-            .metadata
-            .map(|val| serde_json::from_str(&val).unwrap_or(serde_json::Value::String(val)))
+impl TryFrom<Metadata> for Option<navajo::Metadata> {
+    type Error = serde_json::Error;
+    fn try_from(data: Metadata) -> Result<Self, Self::Error> {
+        data.metadata.map(|d| serde_json::from_str(&d)).transpose()
     }
 }
 
@@ -239,7 +236,7 @@ impl AddKey {
         let (input, output) = io.get(stdin, stdout).await?;
         let aad = envelope.get_aad().await?;
         let envelope = envelope.get_envelope()?;
-        let metadata = metadata.into();
+        let metadata = metadata.try_into()?;
         let mut primitive = envelope.open(aad.clone(), input).await?;
         match primitive {
             Primitive::Aead(ref mut aead) => {

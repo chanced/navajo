@@ -1,116 +1,25 @@
-use core::{fmt::Display, str::FromStr};
-
-use alloc::{
-    format,
-    string::{String, ToString},
-    vec,
-    vec::Vec,
-};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+mod kind;
+pub use kind::Kind;
 
 use crate::{
     envelope::{self, is_plaintext},
     error::{OpenError, SealError},
-    keyring::{open_keyring_value, open_keyring_value_sync, Keyring},
+    keyring::Keyring,
     Aad,
     Envelope,
     // mac, signature, Aad, Daead, Envelope, Mac, Signer,
 };
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+use aes_gcm::aead::AeadInPlace;
+use aes_gcm::Aes256Gcm;
+use alloc::{string::ToString, vec::Vec};
+use rust_crypto_aead::AeadCore;
+use rust_crypto_aead::KeyInit;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
-pub enum Kind {
-    #[serde(rename = "AEAD")]
-    Aead,
-    #[serde(rename = "DAEAD")]
-    Daead,
-    // #[serde(rename="HPKE")] // TODO: Enable this once HPKE is implemented
-    // Hpke,
-    #[serde(rename = "MAC")]
-    Mac,
-    #[serde(rename = "Signature")]
-    Signature,
-}
-
-pub async fn seal<A, E>(
-    primitive: impl Into<Primitive>,
-    aad: Aad<A>,
-    envelope: &E,
-) -> Result<Vec<u8>, SealError>
-where
-    A: 'static + AsRef<[u8]> + Send + Sync,
-    E: 'static + Envelope,
-{
-    let primitive = primitive.into();
-    Primitive::seal(&primitive, aad, envelope).await
-}
-
-pub async fn open<A, C, E>(aad: Aad<A>, ciphertext: C, envelope: &E) -> Result<Primitive, OpenError>
-where
-    A: 'static + AsRef<[u8]> + Send + Sync,
-    C: 'static + AsRef<[u8]> + Send + Sync,
-    E: 'static + Envelope,
-{
-    Primitive::open(aad, ciphertext, envelope).await
-}
-
-impl Kind {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Kind::Aead => "AEAD",
-            Kind::Daead => "DAEAD",
-            // PrimitiveType::Hpke => "HPKE",
-            Kind::Mac => "MAC",
-            Kind::Signature => "Signature",
-        }
-    }
-    pub fn as_u8(&self) -> u8 {
-        match self {
-            Kind::Aead => 0,
-            Kind::Daead => 1,
-            // PrimitiveType::Hpke => 2,
-            Kind::Mac => 3,
-            Kind::Signature => 4,
-        }
-    }
-}
-
-impl FromStr for Kind {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_uppercase().as_str() {
-            "AEAD" => Ok(Kind::Aead),
-            "DAEAD" => Ok(Kind::Daead),
-            // "HPKE" => Ok(PrimitiveType::Hpke),
-            "MAC" => Ok(Kind::Mac),
-            "SIGNATURE" => Ok(Kind::Signature),
-            _ => Err(format!("invalid primitive type: \"{s}\"")),
-        }
-    }
-}
-impl Display for Kind {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.as_str())
-    }
-}
-impl From<Kind> for u8 {
-    fn from(pt: Kind) -> Self {
-        pt.as_u8()
-    }
-}
-impl TryFrom<u8> for Kind {
-    type Error = String;
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Kind::Aead),
-            1 => Ok(Kind::Daead),
-            // 2 => Ok(PrimitiveType::Hpke),
-            3 => Ok(Kind::Mac),
-            4 => Ok(Kind::Signature),
-            _ => Err(format!("invalid primitive type: \"{value}\"")),
-        }
-    }
-}
+const AES_256_GCM_KEY_SIZE: usize = 32;
+const AES_256_GCM_NONCE_SIZE: usize = 12;
+const AES_256_GCM_TAG_SIZE: usize = 16;
 
 pub enum Primitive {
     #[cfg(feature = "aead")]
@@ -130,10 +39,11 @@ impl Primitive {
         E: 'static + Envelope,
     {
         if is_plaintext(envelope) {
-            return self.serialize_plaintext();
+            return self.serialize_keyring();
         }
-        let sealed = self.seal_keyring(aad, envelope, vec![0u8; 8]).await?;
-        finalize_seal(sealed)
+        let serialized_keyring = self.serialize_keyring()?;
+        let encrypted_keyring = encrypt_keyring_data(aad, serialized_keyring)?;
+        seal_keyring_data(envelope, encrypted_keyring).await
     }
 
     pub fn seal_sync<'a, A, E>(&'a self, aad: Aad<A>, envelope: &'a E) -> Result<Vec<u8>, SealError>
@@ -142,10 +52,11 @@ impl Primitive {
         E: 'static + envelope::sync::Envelope,
     {
         if is_plaintext(envelope) {
-            return self.serialize_plaintext();
+            return self.serialize_keyring();
         }
-        let sealed = self.seal_keyring_sync(aad, envelope, vec![0u8; 8])?;
-        finalize_seal(sealed)
+        let serialized_keyring = self.serialize_keyring()?;
+        let encrypted_keyring = encrypt_keyring_data(aad, serialized_keyring)?;
+        seal_keyring_data_sync(envelope, encrypted_keyring)
     }
 
     pub async fn open<A, C, E>(aad: Aad<A>, ciphertext: C, envelope: &E) -> Result<Self, OpenError>
@@ -159,15 +70,20 @@ impl Primitive {
             return Err("keyring data is empty".into());
         }
         if is_plaintext(envelope) {
-            return Self::deserialize_cleartext(ciphertext);
+            return Self::deserialize_keyring(ciphertext);
         }
-        let len = read_len(ciphertext)?;
+        let ciphertext = read_encrypted(ciphertext)?;
+        let sealed_cipher_and_nonce = read_sealed_cipher_and_nonce(&ciphertext)?;
 
-        // todo: revisit this
-        // there is probably a way to avoid copying this into a vec
-        let ciphertext = ciphertext[8..len + 8].to_vec();
-        let (kind, value) = open_keyring_value(aad, ciphertext, envelope).await?;
-        Self::open_value(kind, value)
+        let key = envelope
+            .decrypt_dek(Aad(aad.as_ref().to_vec()), sealed_cipher_and_nonce.clone())
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let data = open_keyring_data(key, aad, &ciphertext, &sealed_cipher_and_nonce)?;
+        let PrimitiveData { kind, keys } = serde_json::from_slice(&data)?;
+
+        Self::open_value(kind, keys)
     }
 
     pub fn open_sync<A, C, E>(aad: Aad<A>, ciphertext: C, envelope: &E) -> Result<Self, OpenError>
@@ -181,11 +97,19 @@ impl Primitive {
             return Err("sealed data is empty".into());
         }
         if is_plaintext(envelope) {
-            Self::deserialize_cleartext(ciphertext)
+            Self::deserialize_keyring(ciphertext)
         } else {
-            let len = read_len(ciphertext)?;
-            let (kind, value) = open_keyring_value_sync(aad, &ciphertext[8..len + 8], envelope)?;
-            Self::open_value(kind, value)
+            let ciphertext = read_encrypted(ciphertext)?;
+
+            let sealed_cipher_and_nonce = read_sealed_cipher_and_nonce(&ciphertext)?;
+            let key = envelope
+                .decrypt_dek(Aad(aad.as_ref()), sealed_cipher_and_nonce.clone())
+                .map_err(|e| e.to_string())?;
+            let data = open_keyring_data(key, aad, &ciphertext, &sealed_cipher_and_nonce)?;
+
+            let PrimitiveData { kind, keys } = serde_json::from_slice(&data)?;
+
+            Self::open_value(kind, keys)
         }
     }
 
@@ -277,16 +201,14 @@ impl Primitive {
             _ => None,
         }
     }
-    fn deserialize_cleartext(value: &[u8]) -> Result<Self, OpenError> {
-        let value: Value = serde_json::from_slice(value)?;
-        let data: PrimitiveData = serde_json::from_value(value)?;
-
+    fn deserialize_keyring(value: &[u8]) -> Result<Self, OpenError> {
+        let data: PrimitiveData = serde_json::from_slice(value)?;
         match data.kind {
             Kind::Aead => {
                 #[cfg(feature = "aead")]
                 {
                     let keyring: Keyring<crate::aead::Material> =
-                        serde_json::from_value(data.keyring)?;
+                        serde_json::from_value(data.keys)?;
                     Ok(Primitive::Aead(crate::Aead::from_keyring(keyring)))
                 }
                 #[cfg(not(feature = "aead"))]
@@ -298,7 +220,7 @@ impl Primitive {
                 #[cfg(feature = "daead")]
                 {
                     let keyring: Keyring<crate::daead::Material> =
-                        serde_json::from_value(data.keyring)?;
+                        serde_json::from_value(data.keys)?;
                     Ok(Primitive::Daead(crate::Daead::from_keyring(keyring)))
                 }
                 #[cfg(not(feature = "daead"))]
@@ -309,8 +231,7 @@ impl Primitive {
             Kind::Mac => {
                 #[cfg(feature = "mac")]
                 {
-                    let keyring: Keyring<crate::mac::Material> =
-                        serde_json::from_value(data.keyring)?;
+                    let keyring: Keyring<crate::mac::Material> = serde_json::from_value(data.keys)?;
                     Ok(Primitive::Mac(crate::Mac::from_keyring(keyring)))
                 }
                 #[cfg(not(feature = "mac"))]
@@ -321,10 +242,8 @@ impl Primitive {
             Kind::Signature => {
                 #[cfg(feature = "dsa")]
                 {
-                    todo!()
-                    // let keyring: Keyring<crate::signature::Material> =
-                    //     serde_json::from_value(data.keyring)?;
-                    // Ok(Primitive::Signature(crate::Signer::from_keyring(keyring)))
+                    let keyring: Keyring<crate::dsa::Material> = serde_json::from_value(data.keys)?;
+                    Ok(Primitive::Dsa(crate::Signer::from_keyring(keyring)))
                 }
                 #[cfg(not(feature = "dsa"))]
                 {
@@ -334,7 +253,7 @@ impl Primitive {
         }
     }
 
-    fn serialize_plaintext(&self) -> Result<Vec<u8>, SealError> {
+    fn serialize_keyring(&self) -> Result<Vec<u8>, SealError> {
         let keyring = match self {
             #[cfg(feature = "aead")]
             Primitive::Aead(aead) => serde_json::to_value(aead.keyring())?,
@@ -347,93 +266,18 @@ impl Primitive {
         };
         let data = PrimitiveData {
             kind: self.kind(),
-            keyring,
+            keys: keyring,
         };
-        let mut v = serde_json::to_vec(&data).map_err(|e| SealError(e.to_string()))?;
-        Ok(v)
+        serde_json::to_vec(&data).map_err(|e| SealError(e.to_string()))
     }
-    async fn seal_keyring<A, E>(
-        &self,
-        aad: Aad<A>,
-        envelope: &E,
-        mut v: Vec<u8>,
-    ) -> Result<Vec<u8>, SealError>
-    where
-        A: 'static + AsRef<[u8]> + Send + Sync,
-        E: 'static + Envelope,
-    {
-        v.append(&mut match self {
-            #[cfg(feature = "aead")]
-            Primitive::Aead(aead) => aead.keyring().seal(aad, envelope).await?,
-            #[cfg(feature = "daead")]
-            Primitive::Daead(daead) => daead.keyring().seal(aad, envelope).await?,
-            #[cfg(feature = "mac")]
-            Primitive::Mac(mac) => mac.keyring().seal(aad, envelope).await?,
-            #[cfg(feature = "dsa")]
-            Primitive::Dsa(sig) => sig.keyring().seal(aad, envelope).await?,
-        });
-        Ok(v)
-    }
-    fn seal_keyring_sync<A, E>(
-        &self,
-        aad: Aad<A>,
-        envelope: &E,
-        mut v: Vec<u8>,
-    ) -> Result<Vec<u8>, SealError>
-    where
-        A: AsRef<[u8]>,
-        E: envelope::sync::Envelope,
-    {
-        v.append(&mut match self {
-            #[cfg(feature = "aead")]
-            Primitive::Aead(aead) => aead.keyring().seal_sync(aad, envelope)?,
-            #[cfg(feature = "daead")]
-            Primitive::Daead(daead) => daead.keyring().seal_sync(aad, envelope)?,
-            #[cfg(feature = "mac")]
-            Primitive::Mac(mac) => mac.keyring().seal_sync(aad, envelope)?,
-            #[cfg(feature = "dsa")]
-            Primitive::Dsa(sig) => sig.keyring().seal_sync(aad, envelope)?,
-        });
-        Ok(v)
-    }
-}
-fn read_len(ciphertext: &[u8]) -> Result<usize, OpenError> {
-    if ciphertext.len() <= 8 {
-        Err(OpenError("keyring data too short".to_string()))?
-    }
-
-    let len = u64::from_be_bytes(
-        ciphertext[0..8]
-            .try_into()
-            .map_err(|_| OpenError("keyring data too short".to_string()))?,
-    );
-    if ciphertext.len() < len as usize + 8 {
-        Err(OpenError("invalid keyring data".to_string()))?
-    }
-    if len > usize::MAX as u64 {
-        Err(OpenError(
-            "keyring data exceeds system len limits".to_string(),
-        ))?
-    }
-    let len = len as usize;
-    if ciphertext.len() < len + 8 {
-        return Err("invalid keydata".into());
-    }
-
-    Ok(len)
-}
-fn finalize_seal(mut sealed: Vec<u8>) -> Result<Vec<u8>, SealError> {
-    let len = sealed.len() - 8;
-    let len_bytes = len.to_be_bytes();
-    sealed.splice(0..8, len_bytes.into_iter());
-    Ok(sealed)
 }
 
 #[derive(Serialize, Deserialize)]
 struct PrimitiveData {
     #[serde(rename = "kind")]
     kind: Kind,
-    keyring: Value,
+    #[serde(flatten)]
+    keys: Value,
 }
 
 impl From<crate::Aead> for Primitive {
@@ -446,7 +290,6 @@ impl From<crate::Daead> for Primitive {
         Primitive::Daead(value)
     }
 }
-
 impl From<crate::Mac> for Primitive {
     fn from(value: crate::Mac) -> Self {
         Primitive::Mac(value)
@@ -483,23 +326,268 @@ impl From<&crate::Signer> for Primitive {
     }
 }
 
+struct EncryptedKeyring<A>
+where
+    A: AsRef<[u8]>,
+{
+    key_and_nonce: Vec<u8>,
+    ciphertext: Vec<u8>,
+    aad: Aad<A>,
+}
+impl<A> core::fmt::Debug for EncryptedKeyring<A>
+where
+    A: AsRef<[u8]>,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("EncryptedKeyring")
+            .field("key_and_nonce", &self.key_and_nonce)
+            .field("ciphertext", &self.ciphertext)
+            .field("aad", &self.aad.as_ref())
+            .finish()
+    }
+}
+async fn seal_keyring_data<E, A>(
+    envelope: &E,
+    EncryptedKeyring {
+        aad,
+        key_and_nonce,
+        ciphertext,
+    }: EncryptedKeyring<A>,
+) -> Result<Vec<u8>, SealError>
+where
+    E: 'static + Envelope,
+    A: 'static + AsRef<[u8]> + Send + Sync,
+{
+    let dek = envelope
+        .encrypt_dek(aad, key_and_nonce.clone())
+        .await
+        .map_err(|e| SealError(e.to_string()))?;
+    check_seal(&key_and_nonce, &dek)?;
+    Ok(encode_sealed_keyring(dek, ciphertext))
+}
+
+fn seal_keyring_data_sync<E, A>(
+    envelope: &E,
+    EncryptedKeyring {
+        aad,
+        key_and_nonce,
+        ciphertext,
+    }: EncryptedKeyring<A>,
+) -> Result<Vec<u8>, SealError>
+where
+    E: crate::envelope::sync::Envelope,
+    A: AsRef<[u8]>,
+{
+    let dek = envelope
+        .encrypt_dek(aad, key_and_nonce.clone())
+        .map_err(|e| SealError(e.to_string()))?;
+    check_seal(&key_and_nonce, &dek)?;
+    Ok(encode_sealed_keyring(dek, ciphertext))
+}
+
+fn encode_sealed_keyring(dek: Vec<u8>, sealed_keyring: Vec<u8>) -> Vec<u8> {
+    let header = dek.len() as u32;
+    let header = header.to_be_bytes();
+    let result = [&header[..], &dek[..], &sealed_keyring[..]].concat();
+    let len = result.len() as u64;
+    let mut final_result = len.to_be_bytes().to_vec();
+    final_result.extend(result);
+    final_result
+}
+
+/// does a very rough check to ensure that if the data returned from the
+/// [`Envelope`] is not the same as the data that was passed in. If so, the
+/// [`Envelope`] failed to encrypt the key and nonce.
+fn check_seal(key_and_nonce: &[u8], sealed_key_and_nonce: &[u8]) -> Result<(), SealError> {
+    if sealed_key_and_nonce.len() >= key_and_nonce.len()
+        && sealed_key_and_nonce[0..key_and_nonce.len()] == key_and_nonce[..]
+    {
+        Err(SealError("kms failed to seal".into()))
+    } else {
+        Ok(())
+    }
+}
+
+fn encrypt_keyring_data<A>(aad: Aad<A>, mut data: Vec<u8>) -> Result<EncryptedKeyring<A>, SealError>
+where
+    A: AsRef<[u8]>,
+{
+    let key = Aes256Gcm::generate_key(&mut crate::SystemRng);
+    let cipher = Aes256Gcm::new(&key);
+    let nonce = Aes256Gcm::generate_nonce(&mut crate::SystemRng);
+    data.reserve(AES_256_GCM_TAG_SIZE);
+    cipher.encrypt_in_place(&nonce, aad.as_ref(), &mut data)?;
+    let key_and_nonce = [key.as_slice(), nonce.as_slice()].concat().to_vec();
+
+    // compresses the ciphertext using DEFALTE
+    // let data = miniz_oxide::deflate::compress_to_vec(&data, 1);
+
+    Ok(EncryptedKeyring {
+        aad,
+        key_and_nonce,
+        ciphertext: data,
+    })
+}
+
+fn read_encrypted(ciphertext: &[u8]) -> Result<Vec<u8>, OpenError> {
+    if ciphertext.len() <= 8 {
+        Err(OpenError("keyring data too short".to_string()))?
+    }
+
+    let len = u64::from_be_bytes(
+        ciphertext[0..8]
+            .try_into()
+            .map_err(|_| OpenError("keyring data too short".to_string()))?,
+    );
+
+    if ciphertext.len() < len as usize + 8 {
+        Err(OpenError("invalid keyring data".to_string()))?
+    }
+    if len > usize::MAX as u64 {
+        Err(OpenError(
+            "keyring data exceeds system len limits".to_string(),
+        ))?
+    }
+    let len = len as usize;
+    if ciphertext.len() < len + 8 {
+        return Err("invalid keydata".into());
+    }
+
+    Ok(ciphertext[8..len + 8].to_vec())
+}
+
+fn open_keyring_data<A>(
+    key: Vec<u8>,
+    aad: Aad<A>,
+    sealed: &[u8],
+    sealed_cipher_and_nonce: &[u8],
+) -> Result<Vec<u8>, OpenError>
+where
+    A: AsRef<[u8]>,
+{
+    let mut buffer = sealed[4 + sealed_cipher_and_nonce.len()..].to_vec();
+    // let mut buffer = miniz_oxide::inflate::decompress_to_vec(&buffer)
+    //     .map_err(|_| OpenError("keyring is incomplete or corrupt".to_string()))?;
+    decrypt(key, aad.as_ref(), &mut buffer)?;
+    Ok(buffer)
+}
+
+fn read_sealed_cipher_and_nonce(sealed: &[u8]) -> Result<Vec<u8>, OpenError> {
+    let sealed_cipher_and_nonce_len = read_sealed_cipher_nonce_len(sealed)?;
+    let sealed_cipher_and_nonce = &sealed[4..4 + sealed_cipher_and_nonce_len];
+    Ok(sealed_cipher_and_nonce.to_vec())
+}
+
+fn decrypt(mut key_and_nonce: Vec<u8>, aad: &[u8], buffer: &mut Vec<u8>) -> Result<(), OpenError> {
+    if key_and_nonce.len() != AES_256_GCM_KEY_SIZE + AES_256_GCM_NONCE_SIZE {
+        return Err("invalid data returned from envelope".into());
+    }
+    let nonce = key_and_nonce.split_off(AES_256_GCM_KEY_SIZE);
+    let key = key_and_nonce;
+    let nonce = aes_gcm::Nonce::from_slice(&nonce);
+    let cipher = Aes256Gcm::new_from_slice(&key)?;
+    cipher.decrypt_in_place(nonce, aad, buffer)?;
+    Ok(())
+}
+
+fn read_sealed_cipher_nonce_len(sealed: &[u8]) -> Result<usize, OpenError> {
+    if sealed.len() < 4 {
+        return Err("sealed data too short".into());
+    }
+    let sealed_cipher_and_nonce_len = u32::from_be_bytes(sealed[0..4].try_into().unwrap()); // safe: len checked above.
+    if sealed_cipher_and_nonce_len < 4 {
+        return Err("sealed data too short".into());
+    }
+    let sealed_cipher_and_nonce_len: usize = sealed_cipher_and_nonce_len
+        .try_into()
+        .map_err(|_| OpenError("sealed data too long".into()))?;
+
+    if sealed.len() < 4 + sealed_cipher_and_nonce_len {
+        return Err("sealed data too short".into());
+    }
+
+    Ok(sealed_cipher_and_nonce_len)
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::envelope::InMemory;
+    use alloc::sync::Arc;
+    use futures::lock::Mutex;
+
+    use crate::{envelope::InMemory, sensitive};
+
+    #[derive(Default)]
+    struct MockEnvelope {
+        expected_value: Arc<Mutex<Option<Vec<u8>>>>,
+    }
+
+    impl Envelope for MockEnvelope {
+        type EncryptError = String;
+
+        type DecryptError = String;
+
+        fn encrypt_dek<A, P>(
+            &self,
+            aad: Aad<A>,
+            plaintext: P,
+        ) -> core::pin::Pin<
+            Box<dyn futures::Future<Output = Result<Vec<u8>, Self::EncryptError>> + Send + '_>,
+        >
+        where
+            A: 'static + AsRef<[u8]> + Send + Sync,
+            P: 'static + AsRef<[u8]> + Send + Sync,
+        {
+            Box::pin(async move {
+                dbg!(aad.as_ref());
+                dbg!(plaintext.as_ref());
+                self.expected_value
+                    .lock()
+                    .await
+                    .replace(plaintext.as_ref().to_vec());
+
+                let v = vec![7u8; plaintext.as_ref().len() + 4];
+                Ok(v)
+            })
+        }
+
+        fn decrypt_dek<A, C>(
+            &self,
+            _aad: Aad<A>,
+            ciphertext: C,
+        ) -> core::pin::Pin<
+            Box<dyn futures::Future<Output = Result<Vec<u8>, Self::DecryptError>> + Send + '_>,
+        >
+        where
+            A: 'static + AsRef<[u8]> + Send + Sync,
+            C: 'static + AsRef<[u8]> + Send + Sync,
+        {
+            Box::pin(async move {
+                dbg!(ciphertext.as_ref().len());
+                if !ciphertext.as_ref().iter().all(|&x| x == 7) {
+                    return Err("invalid ciphertext".into());
+                }
+                Ok(self.expected_value.lock().await.take().unwrap())
+            })
+        }
+    }
 
     use super::*;
 
     #[cfg(feature = "mac")]
     #[cfg(feature = "std")]
     #[tokio::test]
-    async fn test_in_mem_seal_open_mac() {
+    async fn test_in_mock_seal_open_mac() {
+        use crate::rand::MockRng;
+
+        let m = MockRng::new();
+
         let mac = crate::mac::Mac::new(crate::mac::Algorithm::Sha256, None);
-        let primary_key = mac.primary_key();
+        let primary_key = mac.keyring.primary();
+
+        let mock = MockEnvelope::default();
         // in a real application, you would use a real key management service.
         // InMemory is only suitable for testing.
-        let in_mem = InMemory::default();
-        let data = crate::Mac::seal(&mac, Aad::empty(), &in_mem).await.unwrap();
-        let mac = crate::Mac::open(Aad::empty(), data, &in_mem).await.unwrap();
-        assert_eq!(mac.primary_key(), primary_key);
+        let data = crate::Mac::seal(&mac, Aad::empty(), &mock).await.unwrap();
+        let mac = crate::Mac::open(Aad::empty(), data, &mock).await.unwrap();
     }
 }

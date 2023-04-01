@@ -855,3 +855,45 @@ impl From<base64::DecodeError> for DecodeError {
         Self::Base64(e)
     }
 }
+
+#[derive(Debug, Clone)]
+pub enum InvalidNumericDateError {
+    InvalidTimestamp(i64),
+    OutOfRange(u64),
+    #[cfg(feature = "std")]
+    SystemTime(std::time::SystemTimeError),
+}
+
+impl Display for InvalidNumericDateError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            InvalidNumericDateError::InvalidTimestamp(i) => {
+                write!(f, "invalid timestamp: {}", i)
+            }
+            InvalidNumericDateError::OutOfRange(u) => {
+                write!(f, "timestamp out of range: {}", u)
+            }
+            #[cfg(feature = "std")]
+            InvalidNumericDateError::SystemTime(e) => {
+                write!(f, "system time error: {}", e)
+            }
+        }
+    }
+}
+#[cfg(feature = "std")]
+impl From<std::time::SystemTimeError> for InvalidNumericDateError {
+    fn from(e: std::time::SystemTimeError) -> Self {
+        Self::SystemTime(e)
+    }
+}
+impl From<u64> for InvalidNumericDateError {
+    fn from(u: u64) -> Self {
+        Self::OutOfRange(u)
+    }
+}
+impl From<i64> for InvalidNumericDateError {
+    fn from(e: i64) -> Self {
+        Self::InvalidTimestamp(e)
+    }
+}
+impl Error for InvalidNumericDateError {}

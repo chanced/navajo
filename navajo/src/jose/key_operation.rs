@@ -31,6 +31,9 @@ impl KeyOperation {
             KeyOperation::Other(s) => s,
         }
     }
+    pub fn as_value(&self) -> Value {
+        Value::String(self.as_str().to_string())
+    }
 }
 impl Display for KeyOperation {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {

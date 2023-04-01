@@ -1,8 +1,10 @@
-use crate::error::DecodeError;
-use base64::engine::{general_purpose::URL_SAFE_NO_PAD, Engine};
-use serde::{de::DeserializeOwned, Serialize};
+use core::ops::Deref;
 
-use super::Header;
+use crate::{dsa::Signature, error::DecodeError};
+use base64::engine::{general_purpose::URL_SAFE_NO_PAD, Engine};
+use serde::Serialize;
+
+use super::{Claims, Header};
 
 pub fn decode_jws<P>(jws: &str) -> Result<(Header, Vec<u8>, Vec<u8>), DecodeError> {
     let split: Vec<&str> = jws.split('.').collect();
@@ -30,156 +32,53 @@ pub fn encode_jws(
     Ok(format!("{}.{}.{}", header, payload, signature))
 }
 
-// use crate::error::MalformedError;
-// use alloc::borrow::Cow;
-// use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-// use serde::{de::DeserializeOwned, Deserialize, Serialize};
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Jws {
+    pub header: Header,
+    pub claims: Vec<u8>,
+    pub signature: Vec<u8>,
+}
 
-// use super::{Header, Verify};
+impl Serialize for Jws {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let jws = encode_jws(&self.header, &self.claims, &self.signature).unwrap();
+        serializer.serialize_str(&jws)
+    }
+}
 
-// #[derive(Debug, Clone, Serialize)]
-// #[serde(into = "String")]
-// pub struct Jws<'a, P>
-// where
-//     P: Verify + Serialize + DeserializeOwned + Clone + core::fmt::Debug,
-// {
-//     header: Header,
-//     payload: P,
-//     signature: Cow<'a, [u8]>,
-//     #[serde(skip)]
-//     encoded: String,
-// }
-// impl<P> Jws<'static, P>
-// where
-//     P: Verify + Serialize + DeserializeOwned + Clone + core::fmt::Debug,
-// {
-//     pub fn from_str(jws: &str) -> Result<Self, MalformedError> {
-//         Self::try_from(jws)
-//     }
-// }
-// impl<'a, P> Jws<'a, P>
-// where
-//     P: Verify + Serialize + DeserializeOwned + Clone + core::fmt::Debug,
-// {
-//     pub fn new(header: Header, payload: P, signature: &'a [u8]) -> Result<Self, MalformedError> {
-//         let cached = Self::gen_cache(&header, &payload, &signature)?;
-//         let signature = Cow::Borrowed(signature);
-//         Ok(Self {
-//             header,
-//             payload,
-//             signature,
-//             encoded: cached,
-//         })
-//     }
+pub struct VerifiedJws {
+    pub(crate) header: Header,
+    pub(crate) claims: Claims,
+    pub(crate) signature: Signature,
+    pub(crate) token: String,
+}
 
-//     // pub fn from_bytes(jws: &[u8]) -> Result<Self, JwsError<P>> {
-//     //     Self::try_from(jws)
-//     // }
+impl VerifiedJws {
+    pub fn claims(&self) -> &Claims {
+        &self.claims
+    }
+    pub fn header(&self) -> &Header {
+        &self.header
+    }
+    pub fn signature(&self) -> &Signature {
+        &self.signature
+    }
+    pub fn token(&self) -> &str {
+        &self.token
+    }
+}
 
-//     pub fn header(&self) -> &Header {
-//         &self.header
-//     }
-//     pub fn payload(&self) -> &P {
-//         &self.payload
-//     }
+impl AsRef<str> for VerifiedJws {
+    fn as_ref(&self) -> &str {
+        &self.token
+    }
+}
 
-//     pub fn signature(&self) -> &[u8] {
-//         &self.signature
-//     }
-
-//     pub fn as_str(&self) -> &str {
-//         self.encoded.as_str()
-//     }
-
-//     fn gen_cache(header: &Header, payload: &P, signature: &[u8]) -> Result<String, MalformedError> {
-//         let header = URL_SAFE_NO_PAD.encode(serde_json::to_vec(header)?);
-//         let payload = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload)?);
-//         let signature = URL_SAFE_NO_PAD.encode(signature);
-//         Ok(format!("{}.{}.{}", header, payload, signature))
-//     }
-// }
-
-// impl<P> AsRef<str> for Jws<'_, P>
-// where
-//     P: Verify + Serialize + DeserializeOwned + Clone + core::fmt::Debug,
-// {
-//     fn as_ref(&self) -> &str {
-//         self.encoded.as_str()
-//     }
-// }
-
-// impl<'de, P> Deserialize<'de> for Jws<'static, P>
-// where
-//     P: Verify + Serialize + DeserializeOwned + Clone + core::fmt::Debug,
-// {
-//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-//     where
-//         D: serde::Deserializer<'de>,
-//     {
-//         let jws = String::deserialize(deserializer)?;
-//         Self::try_from(jws.as_str()).map_err(serde::de::Error::custom)
-//     }
-// }
-// impl<P> core::fmt::Display for Jws<'_, P>
-// where
-//     P: Verify + Serialize + DeserializeOwned + Clone + core::fmt::Debug,
-// {
-//     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-//         write!(f, "{}", self.encoded)
-//     }
-// }
-
-// impl<P> From<Jws<'_, P>> for (P, Header)
-// where
-//     P: Verify + Serialize + DeserializeOwned + Clone + core::fmt::Debug,
-// {
-//     fn from(jws: Jws<P>) -> Self {
-//         (jws.payload, jws.header)
-//     }
-// }
-
-// impl<P> From<Jws<'_, P>> for String
-// where
-//     P: Verify + Serialize + DeserializeOwned + Clone + core::fmt::Debug,
-// {
-//     fn from(jws: Jws<P>) -> Self {
-//         jws.to_string()
-//     }
-// }
-
-// impl<P> From<&Jws<'_, P>> for String
-// where
-//     P: Verify + Serialize + DeserializeOwned + Clone + core::fmt::Debug,
-// {
-//     fn from(jws: &Jws<P>) -> Self {
-//         jws.to_string()
-//     }
-// }
-
-// impl<P> TryFrom<String> for Jws<'_, P>
-// where
-//     P: Verify + Serialize + DeserializeOwned + Clone + core::fmt::Debug,
-// {
-//     type Error = MalformedError;
-//     fn try_from(jws: String) -> Result<Self, Self::Error> {
-//         Self::try_from(jws.as_str())
-//     }
-// }
-// impl<P> TryFrom<&String> for Jws<'static, P>
-// where
-//     P: Verify + Serialize + DeserializeOwned + Clone + core::fmt::Debug,
-// {
-//     type Error = MalformedError;
-//     fn try_from(jws: &String) -> Result<Self, Self::Error> {
-//         Self::try_from(jws.as_str())
-//     }
-// }
-// impl<P> TryFrom<&str> for Jws<'static, P>
-// where
-//     P: Verify + Serialize + DeserializeOwned + Clone + core::fmt::Debug,
-// {
-//     type Error = MalformedError;
-//     fn try_from(jws: &str) -> Result<Self, Self::Error> {
-
-//     }
-// }
+impl Into<String> for VerifiedJws {
+    fn into(self) -> String {
+        self.token
+    }
+}

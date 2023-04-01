@@ -10,15 +10,16 @@ use super::Algorithm;
 #[derive(Clone, ZeroizeOnDrop, Debug, Deserialize, Serialize)]
 pub(crate) struct Material {
     #[zeroize(skip)]
-    algorithm: Algorithm,
-    value: Bytes,
+    #[serde(rename = "alg")]
+    pub(crate) algorithm: Algorithm,
+    pub(crate) bytes: Bytes,
     #[serde(skip_serializing_if = "Option::is_none")]
-    prefix: Option<Bytes>,
+    pub(crate) prefix: Option<Bytes>,
 }
 
 impl PartialEq for Material {
     fn eq(&self, other: &Self) -> bool {
-        self.algorithm == other.algorithm && self.value == other.value
+        self.algorithm == other.algorithm && self.bytes == other.bytes
     }
 }
 impl Eq for Material {}
@@ -37,7 +38,7 @@ impl Material {
         let bytes = Bytes::from(value);
         Ok(Self {
             algorithm,
-            value: bytes,
+            bytes,
             prefix: prefix.map(Into::into),
         })
     }
@@ -45,7 +46,7 @@ impl Material {
 impl Key<Material> {
     pub(super) fn new_backend_key(&self) -> BackendKey {
         // safety: key length is validated on Material creation
-        BackendKey::new(self.algorithm(), self.material().value.as_ref()).unwrap()
+        BackendKey::new(self.algorithm(), self.material().bytes.as_ref()).unwrap()
     }
 
     pub(super) fn new_context(&self) -> super::Context {

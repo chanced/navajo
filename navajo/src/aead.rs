@@ -19,7 +19,7 @@ use crate::{
     key::Key,
     keyring::Keyring,
     rand::Rng,
-    Buffer, Envelope, Origin, Status, SystemRng,
+    Buffer, Envelope, Metadata, Origin, Status, SystemRng,
 };
 use alloc::sync::Arc;
 #[cfg(not(feature = "std"))]
@@ -60,16 +60,16 @@ pub struct Aead {
 impl Aead {
     /// Creates a new AEAD keyring with a single key of the given algorithm with
     /// the provided metadata.
-    pub fn new(algorithm: Algorithm, metadata: Option<Value>) -> Self {
+    pub fn new(algorithm: Algorithm, metadata: Option<Metadata>) -> Self {
         Self::create(&SystemRng, algorithm, metadata)
     }
 
     #[cfg(test)]
-    pub fn new_with_rng<G>(rng: &G, algorithm: Algorithm, meta: Option<Value>) -> Self
+    pub fn new_with_rng<G>(rng: &G, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
     where
         G: Rng,
     {
-        Self::create(rng, algorithm, meta)
+        Self::create(rng, algorithm, metadata)
     }
     /// Encrypts the given plaintext with `aad` as additional authenticated
     /// data. The resulting ciphertext replaces the contents of `plaintext`.
@@ -303,7 +303,7 @@ impl Aead {
         self.keyring.keys().iter().map(AeadKeyInfo::new).collect()
     }
 
-    pub fn add_key(&mut self, algorithm: Algorithm, metadata: Option<Value>) -> AeadKeyInfo {
+    pub fn add_key(&mut self, algorithm: Algorithm, metadata: Option<Metadata>) -> AeadKeyInfo {
         let id = self.keyring.next_id(&SystemRng);
         let metadata = metadata.map(Arc::new);
         let material = Material::generate(&SystemRng, algorithm);
@@ -346,7 +346,7 @@ impl Aead {
     pub fn update_key_meta(
         &mut self,
         key_id: impl Into<u32>,
-        meta: Option<Value>,
+        meta: Option<Metadata>,
     ) -> Result<AeadKeyInfo, KeyNotFoundError> {
         self.keyring.update_meta(key_id, meta).map(AeadKeyInfo::new)
     }
@@ -355,7 +355,7 @@ impl Aead {
         &self.keyring
     }
 
-    fn create<G>(rng: &G, algorithm: Algorithm, meta: Option<Value>) -> Self
+    fn create<G>(rng: &G, algorithm: Algorithm, meta: Option<Metadata>) -> Self
     where
         G: Rng,
     {
