@@ -9,9 +9,11 @@ use alloc::{
     vec::Vec,
 };
 use base64::engine::{general_purpose::URL_SAFE_NO_PAD, Engine};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
+#[cfg(feature = "dsa")]
 use super::{Claims, Header, Jwk};
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Jws<T> {
     pub header: Vec<u8>,
@@ -101,6 +103,10 @@ where
         format!("{header}.{payload}.{signature}")
     }
 }
+
+#[cfg(feature = "dsa")]
+use serde::Serialize;
+
 #[cfg(feature = "dsa")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VerifiedJws<'t> {
