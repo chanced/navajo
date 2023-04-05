@@ -5,9 +5,9 @@ use serde_json::Value;
 
 use super::{NumericDate, StringOrStrings};
 
-#[derive(Debug, PartialEq, Eq, Serialize, Clone, Deserialize, Builder, Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Default, Serialize, Deserialize, Builder)]
 pub struct Claims {
-    /// The "iss" (issuer) claim identifies the principal that issued the
+    /// The `"iss"` (issuer) claim identifies the principal that issued the
     /// JWT.  The processing of this claim is generally application specific.
     /// The `"iss"` value is a case-sensitive string containing a StringOrURI
     /// value.
@@ -59,7 +59,7 @@ pub struct Claims {
     ///
     /// Use of this claim is OPTIONAL.
     ///
-    /// https://www.rfc-editor.org/rfc/rfc7519#section-4.1.4
+    /// <https://www.rfc-editor.org/rfc/rfc7519#section-4.1.4>
     #[serde(rename = "exp", skip_serializing_if = "Option::is_none")]
     #[builder(default, setter(into, strip_option))]
     pub expiration_time: Option<NumericDate>,

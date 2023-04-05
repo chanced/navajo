@@ -2,7 +2,7 @@ use core::{any::Any, pin::Pin};
 
 use aes_gcm::{aead::Aead as RustCryptoAead, AeadCore};
 #[cfg(not(feature = "std"))]
-use alloc::{borrow::ToOwned, boxed::Box, string::String, vec, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, vec, vec::Vec};
 use chacha20poly1305::{aead::Payload, ChaCha20Poly1305, KeyInit};
 
 use futures::Future;
@@ -216,11 +216,11 @@ pub(crate) fn is_plaintext<'a, T: Any + 'a>(envelope: &'a T) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[cfg(all(feature = "std", feature = "mac", feature = "hmac", feature = "sha2"))]
     #[tokio::test]
     async fn test_mac_to_json() {
+        use super::*;
         use crate::mac::{Algorithm, Mac};
 
         let mut m = Mac::new(Algorithm::Sha256, None);
