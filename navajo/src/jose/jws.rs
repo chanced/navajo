@@ -1,7 +1,7 @@
 use core::{fmt::Display, str::FromStr};
 
 use crate::{dsa::Signature, error::DecodeError};
-use alloc::{borrow::Cow, sync::Arc};
+use alloc::{borrow::Cow, format, string::String, sync::Arc, vec::Vec};
 use base64::engine::{general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde::{Deserialize, Serialize};
 

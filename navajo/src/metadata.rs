@@ -1,6 +1,7 @@
+use alloc::{format, string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
 
-use crate::jose::{KeyOperation, KeyType, KeyUse};
+use crate::jose::{KeyOperation, KeyUse};
 /// ```plaintext
 /// "kid", "kty", "alg", "crv", "x", "y", "n", "e", "d", "p", "q", "dp", "dq", "qi", "x5u", "x5c", "x5t",
 /// "x5t#S256"
@@ -221,6 +222,8 @@ impl<'a> Iterator for Keys<'a> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+
     use super::*;
     #[test]
     fn test_keys_iter() {

@@ -2,7 +2,6 @@ use core::{
     num::TryFromIntError,
     ops::{Add, Sub},
 };
-use std::time::UNIX_EPOCH;
 
 use serde::{Deserialize, Serialize};
 
@@ -29,7 +28,7 @@ impl NumericDate {
 #[cfg(feature = "std")]
 impl NumericDate {
     pub fn now() -> Self {
-        Self(UNIX_EPOCH.elapsed().unwrap().as_secs() as i64)
+        Self(std::time::UNIX_EPOCH.elapsed().unwrap().as_secs() as i64)
     }
 }
 

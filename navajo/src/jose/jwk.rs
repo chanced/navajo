@@ -3,6 +3,7 @@ use crate::{
     b64,
     dsa::{self},
 };
+use alloc::{string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -330,6 +331,8 @@ pub type Jwks = Vec<Jwk>;
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+
     use crate::rand;
 
     use super::*;

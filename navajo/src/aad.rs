@@ -1,5 +1,7 @@
 use core::ops::Deref;
 
+use alloc::vec::Vec;
+
 /// Additional Authenticated Data (AAD)
 ///
 /// **There are no secrecy or validity guarantees for associated data.**

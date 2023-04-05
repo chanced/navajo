@@ -203,6 +203,8 @@ impl<'a> Validator<'a> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+
     use super::*;
     const NOW: NumericDate = NumericDate(1680495923);
 

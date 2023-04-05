@@ -83,6 +83,7 @@ features = ["serde"]
 # https://docs.rs/derive_builder/0.12.0/derive_builder/
 [dependencies.derive_builder]
 version = "0.12.0"
+default-features = false
 
 # inherent
 # https://docs.rs/inherent/1.0.6/inherent/
@@ -334,7 +335,7 @@ default = [
 	"chrono",
 	"time",
 	# "ring",
-	"std",  # todo: remove
+	# "std", 
 	"aead",
 	"dsa",
 	"mac",
@@ -370,6 +371,7 @@ std = [
 	"sha3/std",
 	"ed25519-dalek?/std",
 	"base64/std",
+	"derive_builder/std",
 	# "anyhow/default",
 	# "anyhow/std",
 	# "rsa?/std",

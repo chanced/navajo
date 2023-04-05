@@ -5,7 +5,7 @@ use crate::{
     error::{DuplicatePubIdError, KeyNotFoundError, RemoveKeyError, SignatureError, TokenError},
     jose::{Header, Jwk, Jws, Validator, VerifiedJws},
 };
-use alloc::{borrow::Cow, sync::Arc};
+use alloc::{borrow::Cow, string::String, sync::Arc};
 use serde::{Deserialize, Serialize};
 
 use super::{verifying_key::VerifyingKey, Algorithm};
@@ -13,7 +13,7 @@ use super::{verifying_key::VerifyingKey, Algorithm};
 #[cfg(feature = "std")]
 type Map<K, V> = std::collections::HashMap<K, V>;
 #[cfg(not(feature = "std"))]
-type Map<k, V> = alloc::collections::BTreeMap<K, V>;
+type Map<K, V> = alloc::collections::BTreeMap<K, V>;
 
 pub trait Context {}
 
@@ -188,7 +188,7 @@ mod tests {
             let verifier = signer.verifier();
             let verified_jws = verifier.verify_jws(jws.token(), &validator).unwrap();
 
-            println!("{verified_jws}");
+            // println!("{verified_jws}");
             assert_eq!(&jws, &verified_jws);
 
             assert_eq!(

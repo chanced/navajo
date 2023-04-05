@@ -1,4 +1,4 @@
-use alloc::borrow::Cow;
+use alloc::{borrow::Cow, string::String};
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -208,6 +208,8 @@ impl ClaimsBuilder {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
+
     use super::*;
 
     #[test]

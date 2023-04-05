@@ -331,7 +331,7 @@ impl Mac {
     ///     let data = vec![b"hello", b"world"];
     ///     let try_stream = stream::iter(data).map(to_try_stream);
     ///     let tag = mac.compute_try_stream(try_stream).await.unwrap();
-    ///     println!("tag: {}", hex::encode(&tag));
+    ///     // println!("tag: {}", hex::encode(&tag));
     /// }
     /// ```
     pub fn compute_try_stream<S>(&self, try_stream: S) -> ComputeTryStream<S>
@@ -353,7 +353,7 @@ impl Mac {
     /// let mac = Mac::new(Algorithm::Sha256, None);
     /// let data = b"hello world";
     /// let tag = mac.compute_reader(&mut Cursor::new(data)).unwrap();
-    /// println!("tag: {}", hex::encode(&tag));
+    /// // println!("tag: {}", hex::encode(&tag));
     /// ```
     #[cfg(feature = "std")]
     pub fn compute_reader<R: ?Sized>(&self, reader: &mut R) -> Result<Tag, std::io::Error>
@@ -435,7 +435,7 @@ impl Mac {
     ///     let data = vec![&b"hello"[..], &b" "[..], &b"world"[..]];
     ///     let stream = stream::iter(data);
     ///     let tag = mac.verify_stream(tag, stream).await.unwrap();
-    ///     println!("tag: {}", hex::encode(&tag))
+    ///     // println!("tag: {}", hex::encode(&tag))
     /// }
     /// ```
     pub fn verify_stream<T, S>(&self, tag: T, stream: S) -> VerifyStream<S, T>

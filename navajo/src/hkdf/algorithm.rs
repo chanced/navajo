@@ -1,5 +1,6 @@
 use core::str::FromStr;
 
+use alloc::string::String;
 use serde::{Deserialize, Serialize};
 
 use crate::{error::InvalidAlgorithmError, strings::to_upper_remove_seperators};

@@ -1,3 +1,4 @@
+use alloc::{vec, vec::Vec};
 use serde::{Deserialize, Serialize};
 use zeroize::ZeroizeOnDrop;
 
@@ -65,20 +66,20 @@ impl KeyMaterial for Material {
 #[cfg(test)]
 mod tests {
 
-    use aes_siv::siv::Aes256Siv;
-    use rust_crypto_aead::KeyInit;
+    // use aes_siv::siv::Aes256Siv;
+    // use rust_crypto_aead::KeyInit;
 
-    use crate::SystemRng;
+    // use crate::SystemRng;
 
-    use super::*;
+    // use super::*;
 
-    #[test]
-    fn spike() {
-        let mut bytes = vec![0u8; 64];
-        SystemRng.fill(&mut bytes).unwrap();
-        let _: sensitive::Bytes = bytes.into();
+    // #[test]
+    // fn spike() {
+    //     let mut bytes = vec![0u8; 64];
+    //     SystemRng.fill(&mut bytes).unwrap();
+    //     let _: sensitive::Bytes = bytes.into();
 
-        let k = Aes256Siv::generate_key(rand_core::OsRng::default());
-        dbg!(k.len());
-    }
+    //     let k = Aes256Siv::generate_key(rand_core::OsRng::default());
+    //     dbg!(k.len());
+    // }
 }

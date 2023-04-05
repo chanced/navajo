@@ -511,7 +511,7 @@ fn read_sealed_cipher_nonce_len(sealed: &[u8]) -> Result<usize, OpenError> {
 
 #[cfg(test)]
 mod tests {
-    use alloc::sync::Arc;
+    use alloc::{boxed::Box, string::String, sync::Arc, vec};
     use futures::lock::Mutex;
 
     #[derive(Default)]
@@ -536,8 +536,6 @@ mod tests {
             P: 'static + AsRef<[u8]> + Send + Sync,
         {
             Box::pin(async move {
-                dbg!(aad.as_ref());
-                dbg!(plaintext.as_ref());
                 self.expected_value
                     .lock()
                     .await
@@ -560,7 +558,6 @@ mod tests {
             C: 'static + AsRef<[u8]> + Send + Sync,
         {
             Box::pin(async move {
-                dbg!(ciphertext.as_ref().len());
                 if !ciphertext.as_ref().iter().all(|&x| x == 7) {
                     return Err("invalid ciphertext".into());
                 }

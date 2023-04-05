@@ -2,6 +2,7 @@ use core::str::FromStr;
 
 use super::{Algorithm, Jwk, TokenType, Zip};
 use crate::{b64, error::DecodeError};
+use alloc::{string::String, vec::Vec};
 use base64::engine::{general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde::{Deserialize, Serialize};
 use url::Url;

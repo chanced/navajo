@@ -21,9 +21,9 @@ use crate::{
     rand::Rng,
     Buffer, Envelope, Metadata, Origin, Status, SystemRng,
 };
-use alloc::sync::Arc;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
+use alloc::{boxed::Box, sync::Arc};
 use core::mem;
 use futures::{Stream, TryStream};
 pub(crate) use material::Material;
@@ -464,7 +464,6 @@ mod tests {
                 }
             }
             if let Err(e) = aead.decrypt_in_place(Aad(&aad), &mut plaintext) {
-                println!("{e:?}");
                 return false;
             }
             if src != plaintext {

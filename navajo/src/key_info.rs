@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "std")]
 use std::sync::Arc;
 
-use crate::{key::Key, Metadata, Origin, Status};
+use crate::{ Metadata, Origin, Status};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Metadata for a particular key.

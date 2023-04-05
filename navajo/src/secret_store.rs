@@ -1,5 +1,6 @@
 use core::pin::Pin;
 
+use alloc::{boxed::Box, string::ToString};
 use futures::Future;
 
 use crate::{error::Error, sensitive};
@@ -13,6 +14,8 @@ pub trait SecretStore {
 }
 
 pub mod sync {
+    use alloc::string::ToString;
+
     use crate::{error::Error, sensitive};
     pub trait SecretStore {
         type Error: Error + Send + Sync;

@@ -3,7 +3,7 @@ use crate::{
     jose::{Algorithm as JwkAlgorithm, Jwk},
     sensitive, Metadata,
 };
-use alloc::sync::Arc;
+use alloc::{format, string::String, sync::Arc};
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{Deserialize, Serialize};

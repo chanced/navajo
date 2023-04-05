@@ -84,7 +84,7 @@ where
         self.0 = Arc::from(keys);
         Ok(&self.0[idx])
     }
-
+    #[allow(dead_code)]
     fn demote(&mut self, id: u32) -> Result<&Key<M>, KeyNotFoundError> {
         let idx = self.position(id).ok_or(id)?;
         let mut keys = self.0.iter().cloned().collect::<Vec<_>>();

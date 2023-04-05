@@ -1,6 +1,6 @@
 use core::str::FromStr;
 
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoStaticStr};
 

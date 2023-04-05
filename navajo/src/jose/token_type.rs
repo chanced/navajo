@@ -1,5 +1,6 @@
 use core::fmt::Display;
 
+use alloc::string::String;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -9,6 +10,9 @@ pub enum TokenType {
     Other(String),
 }
 impl TokenType {
+    pub fn new(s: &str) -> Self {
+        Self::from(s)
+    }
     pub fn is_jwt(&self) -> bool {
         matches!(self, TokenType::Jwt)
     }
@@ -20,9 +24,6 @@ impl TokenType {
             TokenType::Jwt => "JWT",
             TokenType::Other(s) => s.as_str(),
         }
-    }
-    pub fn from_str(s: &str) -> Self {
-        Self::from(s)
     }
 }
 impl Display for TokenType {

@@ -32,6 +32,8 @@ pub trait Envelope {
 }
 
 pub mod sync {
+    use alloc::vec::Vec;
+
     pub trait Envelope {
         type EncryptError: super::Error + Send + Sync;
         type DecryptError: super::Error + Send + Sync;
@@ -229,7 +231,6 @@ mod tests {
 
         let envelope = PlaintextJson;
         let result = Mac::seal(&m, Aad::empty(), &envelope).await.unwrap();
-        println!("result: {:?}", String::from_utf8(result.clone()).unwrap());
         let value = serde_json::from_slice::<serde_json::Value>(&result);
         assert!(value.is_ok());
         let value = value.unwrap();

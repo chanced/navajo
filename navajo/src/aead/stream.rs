@@ -248,8 +248,11 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[allow(dead_code)]
     use super::*;
+    #[allow(dead_code)]
     use crate::aead::Algorithm;
+    #[allow(dead_code)]
     use futures::{stream, TryStreamExt};
     #[cfg(feature = "std")]
     #[tokio::test]

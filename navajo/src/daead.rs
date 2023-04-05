@@ -4,7 +4,7 @@ mod algorithm;
 mod material;
 
 pub use algorithm::Algorithm;
-use alloc::sync::Arc;
+use alloc::{sync::Arc, vec::Vec};
 pub(crate) use material::Material;
 
 use zeroize::ZeroizeOnDrop;

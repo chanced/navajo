@@ -1,9 +1,8 @@
 use core::{fmt::Display, str::FromStr};
 
+use alloc::string::String;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-use super::KeyOperation;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(from = "String", into = "String")]

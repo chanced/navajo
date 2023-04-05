@@ -1,5 +1,6 @@
 use core::fmt::Display;
 
+use alloc::{string::String, vec, vec::Vec};
 use serde::{de::Visitor, Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

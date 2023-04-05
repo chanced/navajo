@@ -1,3 +1,5 @@
+use alloc::string::String;
+
 pub(crate) fn to_upper_remove_seperators(val: &str) -> String {
     val.chars()
         .filter(|c| !c.is_whitespace() && *c != '-' && *c != '_')

@@ -1,4 +1,4 @@
-use alloc::{string::String, sync::Arc};
+use alloc::{string::String, sync::Arc, vec::Vec};
 
 use crate::{
     error::{

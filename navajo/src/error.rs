@@ -3,7 +3,7 @@ use core::{array::TryFromSliceError, time::Duration};
 use alloc::{
     fmt::{self, Debug, Display},
     format,
-    string::{String, ToString},
+    string::{String, ToString}, boxed::Box,
 };
 
 #[cfg(not(feature = "std"))]

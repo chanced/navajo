@@ -6,7 +6,7 @@ use crate::{
 use core::fmt::Debug;
 
 use super::{verifying_key::VerifyingKey, KeyPair, Signature};
-use alloc::{borrow::Cow, sync::Arc};
+use alloc::{borrow::Cow, string::String, sync::Arc};
 use serde::{Deserialize, Serialize};
 use zeroize::ZeroizeOnDrop;
 
@@ -417,6 +417,8 @@ impl Ed25519 {
 #[cfg(test)]
 mod tests {
 
+    use alloc::string::String;
+
     use crate::SystemRng;
 
     use super::*;
@@ -442,7 +444,7 @@ mod tests {
     //         .unwrap();
 
     //     let jwt = key.sign_jws(claims).unwrap();
-    //     println!("{jwt}");
+    //     // println!("{jwt}");
     // }
     #[test]
     fn test_sign() {
@@ -453,11 +455,8 @@ mod tests {
         // let ed25519_sig = ed25519.sign("test".as_bytes());
 
         let p256_sig = p256.sign("test".as_bytes());
-
+        _ = p256_sig;
         let p384_sig = p384.sign("test".as_bytes());
-
-        println!("{p256_sig}");
-
-        println!("{p384_sig}");
+        _ = p384_sig;
     }
 }
