@@ -1,6 +1,6 @@
 use core::{fmt::Display, str::FromStr};
 
-use crate::{dsa::Signature, error::DecodeError};
+use crate::error::DecodeError;
 use alloc::{borrow::Cow, format, string::String, sync::Arc, vec::Vec};
 use base64::engine::{general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde::{Deserialize, Serialize};
@@ -95,15 +95,16 @@ where
         format!("{header}.{payload}.{signature}")
     }
 }
-
+#[cfg(feature = "dsa")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VerifiedJws<'t> {
     header: Header,
     claims: Claims,
-    signature: Signature,
+    signature: crate::dsa::Signature,
     token: Cow<'t, str>,
     jwk: Arc<Jwk>,
 }
+#[cfg(feature = "dsa")]
 impl Serialize for VerifiedJws<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -112,12 +113,12 @@ impl Serialize for VerifiedJws<'_> {
         serializer.serialize_str(&self.token)
     }
 }
-
+#[cfg(feature = "dsa")]
 impl<'t> VerifiedJws<'t> {
     pub(crate) fn new(
         header: Header,
         claims: Claims,
-        signature: Signature,
+        signature: crate::dsa::Signature,
         token: Cow<'t, str>,
         jwk: Arc<Jwk>,
     ) -> VerifiedJws<'t> {
@@ -130,7 +131,15 @@ impl<'t> VerifiedJws<'t> {
         }
     }
 
-    pub fn take_parts(self) -> (Header, Claims, Signature, Cow<'t, str>, Arc<Jwk>) {
+    pub fn take_parts(
+        self,
+    ) -> (
+        Header,
+        Claims,
+        crate::dsa::Signature,
+        Cow<'t, str>,
+        Arc<Jwk>,
+    ) {
         (
             self.header,
             self.claims,
@@ -155,17 +164,19 @@ impl<'t> VerifiedJws<'t> {
         &self.jwk
     }
 }
+#[cfg(feature = "dsa")]
 impl core::fmt::Display for VerifiedJws<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.token)
     }
 }
-
+#[cfg(feature = "dsa")]
 impl AsRef<str> for VerifiedJws<'_> {
     fn as_ref(&self) -> &str {
         &self.token
     }
 }
+#[cfg(feature = "dsa")]
 impl From<VerifiedJws<'_>> for String {
     fn from(jws: VerifiedJws) -> Self {
         jws.token.to_string()

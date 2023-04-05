@@ -1,8 +1,5 @@
 use super::{Algorithm, Curve, KeyOperation, KeyType, KeyUse};
-use crate::{
-    b64,
-    dsa::{self},
-};
+use crate::b64;
 use alloc::{string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
 
@@ -302,16 +299,16 @@ impl Jwk {
             _ => None,
         }
     }
-
-    pub fn dsa_algorithm(&self) -> Option<dsa::Algorithm> {
+    #[cfg(feature = "dsa")]
+    pub fn dsa_algorithm(&self) -> Option<crate::dsa::Algorithm> {
         let alg = self.algorithm()?;
         match alg {
-            Algorithm::Es256 => Some(dsa::Algorithm::Es256),
-            Algorithm::Es384 => Some(dsa::Algorithm::Es384),
+            Algorithm::Es256 => Some(crate::dsa::Algorithm::Es256),
+            Algorithm::Es384 => Some(crate::dsa::Algorithm::Es384),
             Algorithm::EdDsa => {
                 let curve = self.curve?;
                 match curve {
-                    Curve::Ed25519 => Some(dsa::Algorithm::Ed25519),
+                    Curve::Ed25519 => Some(crate::dsa::Algorithm::Ed25519),
                     _ => None,
                 }
             }
@@ -319,10 +316,11 @@ impl Jwk {
         }
     }
 }
-impl TryInto<dsa::Algorithm> for &Jwk {
+#[cfg(feature = "dsa")]
+impl TryInto<crate::dsa::Algorithm> for &Jwk {
     type Error = &'static str;
 
-    fn try_into(self) -> Result<dsa::Algorithm, Self::Error> {
+    fn try_into(self) -> Result<crate::dsa::Algorithm, Self::Error> {
         self.dsa_algorithm()
             .ok_or("unable to determine signature algorithm")
     }

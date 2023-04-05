@@ -4,7 +4,7 @@ use alloc::string::String;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoStaticStr};
 
-use crate::{dsa, error::InvalidAlgorithmError, strings::to_upper_remove_seperators};
+use crate::{error::InvalidAlgorithmError, strings::to_upper_remove_seperators};
 
 use super::{Curve, KeyType};
 
@@ -146,13 +146,14 @@ impl TryFrom<(KeyType, Curve)> for Algorithm {
         }
     }
 }
-
+#[cfg(feature = "dsa")]
 impl From<crate::dsa::Algorithm> for Algorithm {
     fn from(alg: crate::dsa::Algorithm) -> Self {
+        
         match alg {
-            dsa::Algorithm::Ed25519 => Algorithm::EdDsa,
-            dsa::Algorithm::Es256 => Algorithm::Es256,
-            dsa::Algorithm::Es384 => Algorithm::Es384,
+           crate::dsa::Algorithm::Ed25519 => Algorithm::EdDsa,
+           crate::dsa::Algorithm::Es256 => Algorithm::Es256,
+           crate::dsa::Algorithm::Es384 => Algorithm::Es384,
         }
     }
 }
