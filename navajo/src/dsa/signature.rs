@@ -5,7 +5,7 @@ use crate::error::SignatureError;
 use super::Algorithm;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Signature {
     Ed25519([u8; 64]),
     P256([u8; 64]),

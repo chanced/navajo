@@ -234,6 +234,9 @@ where
     pub(crate) fn add(&mut self, key: Key<M>) {
         self.keys.push(key);
     }
+    pub(crate) fn last(&self) -> &Key<M> {
+        self.keys.last().unwrap()
+    }
 
     pub(crate) fn update_meta(
         &mut self,

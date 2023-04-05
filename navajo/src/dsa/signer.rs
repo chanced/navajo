@@ -1,10 +1,10 @@
 use alloc::{string::String, sync::Arc};
-use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
     error::{
         DisableKeyError, DuplicatePubIdError, KeyNotFoundError, MalformedError, RemoveKeyError,
     },
+    jose::{Claims, VerifiedJws},
     key::Key,
     keyring::Keyring,
     KeyInfo, Metadata, Origin, Rng, Status, SystemRng, Verifier,
@@ -13,7 +13,7 @@ use crate::{
 #[cfg(not(feature = "std"))]
 type Set<V> = alloc::collections::BTreeSet<V>;
 
-use super::{Algorithm, DsaKeyInfo, Material, Signature, SigningKey, Validate};
+use super::{Algorithm, DsaKeyInfo, Material, Signature, SigningKey};
 
 #[derive(Clone, Debug)]
 pub struct Signer {
@@ -89,11 +89,8 @@ impl Signer {
         self.keyring.primary().sign(message)
     }
 
-    pub fn sign_jws<P>(&self, payload: &P) -> Result<String, MalformedError>
-    where
-        P: Serialize + DeserializeOwned + Clone + core::fmt::Debug,
-    {
-        self.keyring.primary().sign_jws(payload)
+    pub fn sign_jws<'t>(&self, claims: Claims) -> Result<VerifiedJws<'t>, MalformedError> {
+        self.keyring.primary().sign_jws(claims)
     }
 
     pub fn verifier(&self) -> Verifier {

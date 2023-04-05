@@ -301,8 +301,31 @@ impl Jwk {
             _ => None,
         }
     }
-}
 
+    pub fn dsa_algorithm(&self) -> Option<dsa::Algorithm> {
+        let alg = self.algorithm()?;
+        match alg {
+            Algorithm::Es256 => Some(dsa::Algorithm::Es256),
+            Algorithm::Es384 => Some(dsa::Algorithm::Es384),
+            Algorithm::EdDsa => {
+                let curve = self.curve?;
+                match curve {
+                    Curve::Ed25519 => Some(dsa::Algorithm::Ed25519),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+}
+impl TryInto<dsa::Algorithm> for &Jwk {
+    type Error = &'static str;
+
+    fn try_into(self) -> Result<dsa::Algorithm, Self::Error> {
+        self.dsa_algorithm()
+            .ok_or_else(|| "unable to determine signature algorithm")
+    }
+}
 pub type Jwks = Vec<Jwk>;
 
 #[cfg(test)]

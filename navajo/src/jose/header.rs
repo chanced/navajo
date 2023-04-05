@@ -1,6 +1,6 @@
 use core::str::FromStr;
 
-use super::{Algorithm, Jwk, Zip};
+use super::{Algorithm, Jwk, TokenType, Zip};
 use crate::{b64, error::DecodeError};
 use base64::engine::{general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde::{Deserialize, Serialize};
@@ -31,7 +31,7 @@ pub struct Header {
     /// The value of the "typ" field is typically set to "JWT" to indicate that
     /// the token is a JSON Web Token.
     #[serde(rename = "typ", skip_serializing_if = "Option::is_none")]
-    pub token_type: Option<String>,
+    pub token_type: Option<TokenType>,
 
     /// the `"jku"`field is used to specify the URL where the JWK set can be
     /// found.

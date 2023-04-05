@@ -1,10 +1,13 @@
-use super::{DsaKeyInfo, Validate};
+use core::str::FromStr;
+
+use super::DsaKeyInfo;
 
 use crate::{
-    error::{DuplicatePubIdError, JwsError, KeyNotFoundError, RemoveKeyError, SignatureError},
-    jose::{decode_jws, Header, Jwk},
+    dsa::Signature,
+    error::{DuplicatePubIdError, KeyNotFoundError, RemoveKeyError, SignatureError, TokenError},
+    jose::{Claims, Header, Jwk, Jws, Validator, VerifiedJws},
 };
-use alloc::sync::Arc;
+use alloc::{borrow::Cow, sync::Arc};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use super::{verifying_key::VerifyingKey, Algorithm};
@@ -60,15 +63,30 @@ impl Verifier {
         }
     }
 
-    pub fn verify_jws<P>(&self, jws: &str) -> Result<(P, Header), JwsError<P>>
-    where
-        P: Validate + core::fmt::Debug + Clone + Serialize + DeserializeOwned,
-    {
-        let (header, payload, sig) = decode_jws::<P>(jws)?;
-        self.verify(header.key_id.as_deref(), &payload, &sig)?;
-        let payload: P = serde_json::from_slice(&payload)?;
-        payload.validate().map_err(|e| JwsError::Validation(e))?;
-        Ok((payload, header))
+    pub fn verify_jws<'t>(
+        &self,
+        jws: &'t str,
+        validator: &Validator,
+    ) -> Result<VerifiedJws<'t>, TokenError> {
+        let Jws {
+            header,
+            payload,
+            signature,
+        } = Jws::from_str(jws)?;
+        let header: Header = serde_json::from_slice(&header)?;
+        let jwk = self.verify(header.key_id.as_deref(), &payload, &signature)?;
+        let claims = serde_json::from_slice(&payload)?;
+        validator.validate(&claims)?;
+        let algorithm = jwk.dsa_algorithm().unwrap(); // safety: if the token can be validated, the algorithm is known.
+        let signature = Signature::new(algorithm, &signature)?;
+
+        Ok(VerifiedJws::new(
+            header,
+            claims,
+            signature,
+            Cow::Borrowed(jws),
+            jwk,
+        ))
     }
 
     pub(crate) fn from_keyring(
@@ -114,90 +132,94 @@ impl Verifier {
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        dsa::*,
+        jose::{Claims, NumericDate, Validator},
+    };
     use serde::{Deserialize, Serialize};
     use strum::IntoEnumIterator;
 
-    // #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-    // struct Payload {
-    //     exp: u64,
-    //     iss: String,
-    // }
-    // impl Validate for Payload {
-    //     type Error = String;
+    const NOW: NumericDate = NumericDate(1680495923);
 
-    //     fn validate(&self) -> Result<(), Self::Error> {
-    //         if self.iss.as_str() != ctx.as_str() {
-    //             return Err("invalid issuer".into());
-    //         }
-    //         Ok(())
-    //     }
-    // }
+    #[test]
+    fn test_verify() {
+        let msg = b"data to sign";
+        for alg in Algorithm::iter() {
+            let mut signer = Signer::new(alg, None, None);
+            let first_sig = signer.sign(msg);
+            let first_key_id = signer.primary_key_id().to_string();
+            let second = signer.add_key(Algorithm::Ed25519, None, None).unwrap();
+            signer.promote(second.id).unwrap();
+            let other_signer = Signer::new(alg, None, None);
 
-    // use crate::dsa::*;
-    // #[test]
-    // fn test_verify() {
-    //     let msg = b"data to sign";
-    //     for alg in Algorithm::iter() {
-    //         let mut signer = Signer::new(alg, None, None);
-    //         let first_sig = signer.sign(msg);
-    //         let first_key_id = signer.primary_key_id().to_string();
-    //         let second = signer.add_key(Algorithm::Ed25519, None, None).unwrap();
-    //         signer.promote(second.id).unwrap();
-    //         let other_signer = Signer::new(alg, None, None);
+            let sig = signer.sign(msg);
+            let invalid_sig = other_signer.sign(msg);
 
-    //         let sig = signer.sign(msg);
-    //         let invalid_sig = other_signer.sign(msg);
+            let verifier = signer.verifier();
+            assert!(verifier.verify(None, msg, &sig).is_ok());
+            assert!(verifier.verify(Some(&second.pub_id), msg, &sig).is_ok());
+            assert!(verifier
+                .verify(Some(&first_key_id), msg, &first_sig)
+                .is_ok());
+            assert!(verifier.verify(None, msg, &invalid_sig).is_err());
+        }
+    }
 
-    //         let verifier = signer.verifier();
-    //         assert!(verifier.verify(None, msg, &sig).is_ok());
-    //         assert!(verifier.verify(Some(&second.pub_id), msg, &sig).is_ok());
-    //         assert!(verifier
-    //             .verify(Some(&first_key_id), msg, &first_sig)
-    //             .is_ok());
-    //         assert!(verifier.verify(None, msg, &invalid_sig).is_err());
-    //     }
-    // }
-    // #[test]
-    // fn test_verify_jws() {
-    //     let payload = Payload {
-    //         exp: 100_000,
-    //         iss: "test".into(),
-    //     };
+    // {"alg":"ES256","kid":"1865549783"}
+    // {"alg":"ES384","kid":"3656448661"}
+    #[test]
+    fn test_verify_jws() {
+        let claims = Claims::builder()
+            .expiration_time(NOW + 100)
+            .issuer("https://example.com")
+            .audience("test")
+            .build()
+            .unwrap();
 
-    //     for alg in Algorithm::iter() {
-    //         let mut signer = Signer::new(alg, None, None);
-    //         let jws = signer.sign_jws(&payload).unwrap();
+        let validator = Validator::builder()
+            .expected_issuer("https://example.com".into())
+            .expected_audience("test".into())
+            .now_timestamp(NOW)
+            .clock_skew(core::time::Duration::from_secs(0))
+            .build()
+            .unwrap();
 
-    //         let verifier = signer.verifier();
-    //         let (res, header) = verifier
-    //             .verify_jws::<Payload>(&"test".to_string(), &jws)
-    //             .unwrap();
+        for alg in Algorithm::iter() {
+            let mut signer = Signer::new(alg, None, None);
+            let jws = signer.sign_jws(claims.clone()).unwrap();
 
-    //         assert_eq!(header.key_id, Some(signer.primary_key_id().to_string()));
-    //         assert_eq!(res, payload.clone());
+            let verifier = signer.verifier();
+            let verified_jws = verifier.verify_jws(jws.token(), &validator).unwrap();
 
-    //         assert!(verifier
-    //             .verify_jws::<Payload>(&"expect failure".to_string(), &jws)
-    //             .is_err());
+            println!("{verified_jws}");
+            assert_eq!(&jws, &verified_jws);
 
-    //         let second = signer.add_key(Algorithm::Ed25519, None, None).unwrap();
+            assert_eq!(
+                verified_jws.header().key_id,
+                Some(signer.primary_key_id().to_string())
+            );
 
-    //         signer.promote(second.id).unwrap();
-    //         let other_signer = Signer::new(alg, None, None);
+            assert_eq!(&claims, verified_jws.claims());
 
-    //         let jws = signer.sign_jws(&payload).unwrap();
-    //         let invalid_jws = other_signer.sign_jws(&payload).unwrap();
+            let second = signer.add_key(Algorithm::Ed25519, None, None).unwrap();
 
-    //         let verifier = signer.verifier();
-    //         let (res, header) = verifier
-    //             .verify_jws::<Payload>(&"test".to_string(), &jws)
-    //             .unwrap();
-    //         assert_eq!(res, payload.clone());
-    //         assert_eq!(header.key_id, Some(signer.primary_key_id().to_string()));
+            signer.promote(second.id).unwrap();
+            let other_signer = Signer::new(alg, None, None);
 
-    //         assert!(verifier
-    //             .verify_jws::<Payload>(&"test".to_string(), &invalid_jws)
-    //             .is_err());
-    //     }
-    // }
+            let jws = signer.sign_jws(claims.clone()).unwrap();
+            let invalid_jws = other_signer.sign_jws(claims.clone()).unwrap();
+
+            let verifier = signer.verifier();
+            let verified_jws = verifier.verify_jws(jws.token(), &validator).unwrap();
+
+            assert_eq!(
+                verified_jws.header().key_id,
+                Some(signer.primary_key_id().to_string())
+            );
+
+            assert!(verifier
+                .verify_jws(invalid_jws.token(), &validator)
+                .is_err());
+        }
+    }
 }

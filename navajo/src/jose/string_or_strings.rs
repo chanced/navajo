@@ -1,9 +1,19 @@
+use core::fmt::Display;
+
 use serde::{de::Visitor, Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StringOrStrings {
     String(String),
     Strings(Vec<String>),
+}
+impl Display for StringOrStrings {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Self::String(s) => write!(f, "{s}"),
+            Self::Strings(v) => write!(f, "{}", v.join(", ")),
+        }
+    }
 }
 impl StringOrStrings {
     pub fn push(&mut self, value: String) {
@@ -19,6 +29,12 @@ impl StringOrStrings {
         match self {
             Self::String(s) => vec![s],
             Self::Strings(v) => v.iter().map(|s| s.as_str()).collect(),
+        }
+    }
+    pub fn contains(&self, value: &str) -> bool {
+        match self {
+            Self::String(s) => s == value,
+            Self::Strings(v) => v.contains(&value.to_string()),
         }
     }
 }

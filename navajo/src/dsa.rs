@@ -8,7 +8,6 @@ mod signer;
 mod signing_key;
 mod verifier;
 mod verifying_key;
-mod validate;
 
 pub(crate) use verifying_key::VerifyingKey;
 pub(crate) type Material = SigningKey;
@@ -21,5 +20,3 @@ use key_pair::KeyPair;
 pub use signer::Signer;
 use signing_key::SigningKey;
 pub use verifier::Verifier;
-
-pub use validate::Validate;

@@ -2,7 +2,6 @@ use super::Algorithm;
 use crate::{key::Key, sensitive, Metadata, Origin, Status};
 use alloc::sync::Arc;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DsaKeyInfo {

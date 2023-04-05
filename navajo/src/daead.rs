@@ -11,8 +11,9 @@ use zeroize::ZeroizeOnDrop;
 
 use crate::{
     error::{DisableKeyError, KeyNotFoundError, RemoveKeyError},
-    keyring::{gen_id, Keyring},
-    KeyInfo, Metadata, Rng, SystemRng,
+    key::Key,
+    keyring::Keyring,
+    KeyInfo, Metadata, Origin, Rng, Status, SystemRng,
 };
 
 #[derive(Clone, Debug, ZeroizeOnDrop)]
@@ -22,21 +23,21 @@ pub struct Daead {
 
 impl Daead {
     pub fn new(algorithm: Algorithm, metadata: Option<Metadata>) -> Self {
-        Self::generate(&SystemRng, algorithm, metadata)
+        Self::create(&SystemRng, algorithm, metadata)
     }
 
-    fn generate<G>(rng: &G, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
+    fn create<G>(rng: &G, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
     where
         G: Rng,
     {
-        // let id = gen_id(rng);
-        // let metadata = metadata.map(Arc::new);
-        // let key = Material::generate(rng, algorithm, metadata.clone());
-        // let key = Key::new(0, Status::Primary, crate::Origin::Navajo, key, metadata);
-        // let keyring = Keyring::new(key);
-        todo!()
-        // Self { keyring }
+        let id = rng.u32().unwrap();
+        let material = Material::generate(rng, algorithm);
+        let metadata = metadata.map(Arc::new);
+        let key = Key::new(id, Status::Primary, Origin::Navajo, material, metadata);
+        let keyring = Keyring::new(key);
+        Self { keyring }
     }
+
     pub(crate) fn keyring(&self) -> &Keyring<Material> {
         &self.keyring
     }
@@ -53,8 +54,12 @@ impl Daead {
         algorithm: Algorithm,
         metadata: Option<Metadata>,
     ) -> KeyInfo<Algorithm> {
-        // self.keyring.add(&SystemRng, material, origin, meta)
-        todo!()
+        let material = Material::generate(&SystemRng, algorithm);
+        let id = self.keyring.next_id(&SystemRng);
+        let metadata = metadata.map(Arc::new);
+        let key = Key::new(id, Status::Primary, Origin::Navajo, material, metadata);
+        self.keyring.add(key);
+        self.keyring.last().into()
     }
 
     pub fn promote(
@@ -71,8 +76,11 @@ impl Daead {
         self.keyring.enable(key_id).map(|key| key.info())
     }
 
-    pub fn disable(&self, key_id: u32) -> Result<KeyInfo<Algorithm>, DisableKeyError<Algorithm>> {
-        todo!()
+    pub fn disable(
+        &mut self,
+        key_id: u32,
+    ) -> Result<KeyInfo<Algorithm>, DisableKeyError<Algorithm>> {
+        self.keyring.disable(key_id).map(|key| key.info())
     }
 
     pub fn remove_key(

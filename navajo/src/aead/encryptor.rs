@@ -168,7 +168,7 @@ where
         if self.counter() == 0 {
             let buf_len = self.buffered_len();
             if buf_len == 0 {
-                return Err(EncryptError::EmptyCleartext);
+                return Err(EncryptError::EmptyPlaintext);
             }
             if self.segment.is_none() {
                 return self.finalize_one_shot(aad.as_ref());

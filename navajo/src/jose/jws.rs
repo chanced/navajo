@@ -1,84 +1,173 @@
-use core::ops::Deref;
+use core::{fmt::Display, str::FromStr};
 
 use crate::{dsa::Signature, error::DecodeError};
+use alloc::{borrow::Cow, sync::Arc};
 use base64::engine::{general_purpose::URL_SAFE_NO_PAD, Engine};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use super::{Claims, Header};
-
-pub fn decode_jws<P>(jws: &str) -> Result<(Header, Vec<u8>, Vec<u8>), DecodeError> {
-    let split: Vec<&str> = jws.split('.').collect();
-
-    if split.len() != 3 {
-        return Err("malformed jws".into());
-    }
-    let header: Vec<u8> = URL_SAFE_NO_PAD.decode(split[0])?;
-    let payload: Vec<u8> = URL_SAFE_NO_PAD.decode(split[1])?;
-    let signature: Vec<u8> = URL_SAFE_NO_PAD.decode(split[2])?;
-    let header: Header = serde_json::from_slice(&header)?;
-
-    Ok((header, payload, signature))
+use super::{Claims, Header, Jwk};
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Jws<T> {
+    pub header: Vec<u8>,
+    pub payload: Vec<u8>,
+    pub signature: T,
 }
 
-pub fn encode_jws(
-    header: &Header,
-    payload: &[u8],
-    signature: &[u8],
-) -> Result<String, serde_json::Error> {
-    let header = URL_SAFE_NO_PAD.encode(serde_json::to_vec(header)?);
-    let payload = URL_SAFE_NO_PAD.encode(payload);
-    let signature = URL_SAFE_NO_PAD.encode(signature);
+impl<T> Display for Jws<T>
+where
+    T: AsRef<[u8]>,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let header = URL_SAFE_NO_PAD.encode(&self.header);
+        let payload = URL_SAFE_NO_PAD.encode(&self.payload);
+        let signature = URL_SAFE_NO_PAD.encode(self.signature.as_ref());
+        write!(f, "{}.{}.{}", header, payload, signature)
+    }
+}
 
-    Ok(format!("{}.{}.{}", header, payload, signature))
+impl<'de, T> Deserialize<'de> for Jws<T>
+where
+    T: From<Vec<u8>>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let jws: String = Deserialize::deserialize(deserializer)?;
+        let local = Jws::<Vec<u8>>::from_str(&jws).map_err(serde::de::Error::custom)?;
+        Ok(Jws {
+            header: local.header,
+            payload: local.payload,
+            signature: local.signature.into(),
+        })
+    }
+}
+
+impl FromStr for Jws<Vec<u8>> {
+    type Err = DecodeError;
+
+    fn from_str(jws: &str) -> Result<Self, Self::Err> {
+        let split: Vec<&str> = jws.split('.').collect();
+        if split.len() != 3 {
+            return Err("malformed jws".into());
+        }
+        let header: Vec<u8> = URL_SAFE_NO_PAD.decode(split[0])?;
+        let payload: Vec<u8> = URL_SAFE_NO_PAD.decode(split[1])?;
+        let signature: Vec<u8> = URL_SAFE_NO_PAD.decode(split[2])?;
+
+        Ok(Jws {
+            header,
+            payload,
+            signature,
+        })
+    }
+}
+impl TryFrom<String> for Jws<Vec<u8>> {
+    type Error = DecodeError;
+
+    fn try_from(jws: String) -> Result<Self, Self::Error> {
+        Self::from_str(&jws)
+    }
+}
+impl TryFrom<&String> for Jws<Vec<u8>> {
+    type Error = DecodeError;
+
+    fn try_from(jws: &String) -> Result<Self, Self::Error> {
+        Self::from_str(jws)
+    }
+}
+impl TryFrom<&str> for Jws<Vec<u8>> {
+    type Error = DecodeError;
+
+    fn try_from(jws: &str) -> Result<Self, Self::Error> {
+        Self::from_str(jws)
+    }
+}
+
+impl<T> Into<String> for Jws<T>
+where
+    T: AsRef<[u8]>,
+{
+    fn into(self) -> String {
+        let header = URL_SAFE_NO_PAD.encode(&self.header);
+        let payload = URL_SAFE_NO_PAD.encode(&self.payload);
+        let signature = URL_SAFE_NO_PAD.encode(&self.signature);
+        format!("{header}.{payload}.{signature}")
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Jws {
-    pub header: Header,
-    pub claims: Vec<u8>,
-    pub signature: Vec<u8>,
+pub struct VerifiedJws<'t> {
+    header: Header,
+    claims: Claims,
+    signature: Signature,
+    token: Cow<'t, str>,
+    jwk: Arc<Jwk>,
 }
-
-impl Serialize for Jws {
+impl Serialize for VerifiedJws<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        let jws = encode_jws(&self.header, &self.claims, &self.signature).unwrap();
-        serializer.serialize_str(&jws)
+        serializer.serialize_str(&self.token)
     }
 }
 
-pub struct VerifiedJws {
-    pub(crate) header: Header,
-    pub(crate) claims: Claims,
-    pub(crate) signature: Signature,
-    pub(crate) token: String,
-}
+impl<'t> VerifiedJws<'t> {
+    pub(crate) fn new(
+        header: Header,
+        claims: Claims,
+        signature: Signature,
+        token: Cow<'t, str>,
+        jwk: Arc<Jwk>,
+    ) -> VerifiedJws<'t> {
+        VerifiedJws {
+            header,
+            claims,
+            signature,
+            token,
+            jwk,
+        }
+    }
 
-impl VerifiedJws {
+    pub fn take_parts(self) -> (Header, Claims, Signature, Cow<'t, str>, Arc<Jwk>) {
+        (
+            self.header,
+            self.claims,
+            self.signature,
+            self.token,
+            self.jwk,
+        )
+    }
     pub fn claims(&self) -> &Claims {
         &self.claims
     }
     pub fn header(&self) -> &Header {
         &self.header
     }
-    pub fn signature(&self) -> &Signature {
+    pub fn signature(&self) -> &[u8] {
         &self.signature
     }
     pub fn token(&self) -> &str {
         &self.token
     }
+    pub fn jwk(&self) -> &Jwk {
+        &self.jwk
+    }
+}
+impl core::fmt::Display for VerifiedJws<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.token)
+    }
 }
 
-impl AsRef<str> for VerifiedJws {
+impl AsRef<str> for VerifiedJws<'_> {
     fn as_ref(&self) -> &str {
         &self.token
     }
 }
-
-impl Into<String> for VerifiedJws {
-    fn into(self) -> String {
-        self.token
+impl From<VerifiedJws<'_>> for String {
+    fn from(jws: VerifiedJws) -> Self {
+        jws.token.to_string()
     }
 }

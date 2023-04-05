@@ -19,3 +19,11 @@ use strum::{Display, EnumIter, IntoStaticStr};
 pub enum Algorithm {
     Aes256Siv,
 }
+
+impl Algorithm {
+    pub fn key_len(&self) -> usize {
+        match self {
+            Algorithm::Aes256Siv => 32,
+        }
+    }
+}

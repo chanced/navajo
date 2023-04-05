@@ -514,8 +514,6 @@ mod tests {
     use alloc::sync::Arc;
     use futures::lock::Mutex;
 
-    use crate::{envelope::InMemory, sensitive};
-
     #[derive(Default)]
     struct MockEnvelope {
         expected_value: Arc<Mutex<Option<Vec<u8>>>>,

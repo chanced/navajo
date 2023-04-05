@@ -41,11 +41,8 @@ impl Material {
     {
         let mut bytes = vec![0u8; algorithm.key_len()];
         rng.fill(&mut bytes).unwrap();
-        let bytes = bytes.into();
-        Self {
-            value: bytes,
-            algorithm,
-        }
+        let value = bytes.into();
+        Self { value, algorithm }
     }
     pub(super) fn cipher(&self) -> Cipher {
         Cipher::new(self.algorithm, &self.value)

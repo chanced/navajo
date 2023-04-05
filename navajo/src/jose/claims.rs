@@ -1,10 +1,11 @@
+use alloc::borrow::Cow;
 use derive_builder::Builder;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 use super::{NumericDate, StringOrStrings};
 
-#[derive(Debug, Serialize, Deserialize, Builder)]
+#[derive(Debug, PartialEq, Eq, Serialize, Clone, Deserialize, Builder, Default)]
 pub struct Claims {
     /// The "iss" (issuer) claim identifies the principal that issued the
     /// JWT.  The processing of this claim is generally application specific.
@@ -112,6 +113,11 @@ pub struct Claims {
 impl Claims {
     pub fn builder() -> ClaimsBuilder {
         ClaimsBuilder::default()
+    }
+}
+impl From<Claims> for Cow<'static, Claims> {
+    fn from(claims: Claims) -> Self {
+        Cow::Owned(claims)
     }
 }
 

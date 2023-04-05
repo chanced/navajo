@@ -27,7 +27,6 @@ use alloc::vec::Vec;
 use core::mem;
 use futures::{Stream, TryStream};
 pub(crate) use material::Material;
-use serde_json::Value;
 use size::Size;
 use zeroize::ZeroizeOnDrop;
 
@@ -127,6 +126,7 @@ impl Aead {
         A: AsRef<[u8]>,
         T: AsRef<[u8]>,
     {
+        
         let encryptor = Encryptor::new(self, None, plaintext.as_ref().to_vec());
         let result = encryptor
             .finalize(aad)?
@@ -355,13 +355,13 @@ impl Aead {
         &self.keyring
     }
 
-    fn create<G>(rng: &G, algorithm: Algorithm, meta: Option<Metadata>) -> Self
+    fn create<G>(rng: &G, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
     where
         G: Rng,
     {
         let id = rng.u32().unwrap();
         let material = Material::generate(rng, algorithm);
-        let metadata = meta.map(Arc::new);
+        let metadata = metadata.map(Arc::new);
         let key = Key::new(id, Status::Primary, Origin::Navajo, material, metadata);
         let keyring = Keyring::new(key);
         Self { keyring }

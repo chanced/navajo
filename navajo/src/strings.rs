@@ -1,8 +1,7 @@
 pub(crate) fn to_upper_remove_seperators(val: &str) -> String {
     val.chars()
         .filter(|c| !c.is_whitespace() && *c != '-' && *c != '_')
-        .map(|c| c.to_uppercase())
-        .flat_map(|c| c)
+        .flat_map(|c| c.to_uppercase())
         .collect::<String>()
 }
 

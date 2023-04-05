@@ -1,4 +1,4 @@
-use core::array::TryFromSliceError;
+use core::{array::TryFromSliceError, time::Duration};
 
 use alloc::{
     fmt::{self, Debug, Display},
@@ -12,7 +12,7 @@ pub trait Error: core::fmt::Debug + core::fmt::Display {}
 #[cfg(feature = "std")]
 pub use std::error::Error;
 
-use crate::dsa::Validate;
+use crate::jose::{NumericDate, StringOrStrings};
 
 #[derive(Debug)]
 pub struct RandomError(pub rand_core::Error);
@@ -112,12 +112,31 @@ impl core::fmt::Display for SegmentLimitExceededError {
     }
 }
 impl Error for SegmentLimitExceededError {}
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum EncryptDeterministicError {
+    Unspecified,
+    EmptyPlaintext,
+}
+impl Error for EncryptDeterministicError {}
+impl Display for EncryptDeterministicError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
+            Self::EmptyPlaintext => write!(f, "plaintext is empty"),
+        }
+    }
+}
+impl From<UnspecifiedError> for EncryptDeterministicError {
+    fn from(_: UnspecifiedError) -> Self {
+        Self::Unspecified
+    }
+}
 
 #[derive(Clone, Debug)]
 pub enum EncryptError {
     Unspecified,
     SegmentLimitExceeded,
-    EmptyCleartext,
+    EmptyPlaintext,
 }
 impl Error for EncryptError {}
 
@@ -126,7 +145,7 @@ impl fmt::Display for EncryptError {
         match self {
             Self::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
             Self::SegmentLimitExceeded => fmt::Display::fmt(&SegmentLimitExceededError, f),
-            Self::EmptyCleartext => write!(f, "plaintext is empty"),
+            Self::EmptyPlaintext => write!(f, "plaintext is empty"),
         }
     }
 }
@@ -723,19 +742,13 @@ impl From<ring::error::Unspecified> for SignatureError {
 }
 
 #[derive(Debug)]
-pub enum JwsError<C>
-where
-    C: Validate + core::fmt::Debug,
-{
+pub enum TokenError {
     Signature(SignatureError),
-    Validation(C::Error),
+    Validation(TokenValidationError),
     Json(serde_json::Error),
     Malformed,
 }
-impl<C> From<DecodeError> for JwsError<C>
-where
-    C: core::fmt::Debug + Validate,
-{
+impl From<DecodeError> for TokenError {
     fn from(e: DecodeError) -> Self {
         match e {
             DecodeError::Serde(e) => Self::Json(e),
@@ -744,64 +757,57 @@ where
         }
     }
 }
+#[cfg(feature = "std")]
+impl Error for TokenError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Signature(e) => Some(e),
+            Self::Validation(e) => Some(e),
+            Self::Json(e) => Some(e),
+            Self::Malformed => None,
+        }
+    }
+}
 
-impl<C> Error for JwsError<C> where C: core::fmt::Debug + Validate {}
-impl<C> From<serde_json::Error> for JwsError<C>
-where
-    C: core::fmt::Debug + Validate,
-{
+impl From<serde_json::Error> for TokenError {
     fn from(e: serde_json::Error) -> Self {
         Self::Json(e)
     }
 }
 
-impl<C> From<SignatureError> for JwsError<C>
-where
-    C: core::fmt::Debug + Validate,
-{
+impl From<SignatureError> for TokenError {
     fn from(e: SignatureError) -> Self {
         Self::Signature(e)
     }
 }
-impl<C> From<MalformedError> for JwsError<C>
-where
-    C: core::fmt::Debug + Validate,
-{
+impl From<MalformedError> for TokenError {
     fn from(_: MalformedError) -> Self {
         Self::Malformed
     }
 }
 
-impl<C> JwsError<C>
-where
-    C: core::fmt::Debug + Validate,
-{
-    pub fn from_validation_error(e: C::Error) -> Self {
-        Self::Validation(e)
-    }
-}
-impl<C> Display for JwsError<C>
-where
-    C: core::fmt::Debug + Validate,
-{
+impl Display for TokenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            JwsError::Signature(e) => write!(f, "signature error: {e}"),
-            JwsError::Validation(e) => write!(f, "validation error: {e}"),
-            JwsError::Malformed => write!(f, "malformed jws"),
-            JwsError::Json(e) => write!(f, "json error: {e}"),
+            TokenError::Signature(e) => write!(f, "signature error: {e}"),
+            TokenError::Validation(e) => write!(f, "validation error: {e}"),
+            TokenError::Malformed => write!(f, "malformed jws"),
+            TokenError::Json(e) => write!(f, "json error: {e}"),
         }
     }
 }
 
-impl<C> From<base64::DecodeError> for JwsError<C>
-where
-    C: core::fmt::Debug + Validate,
-{
+impl From<base64::DecodeError> for TokenError {
     fn from(_: base64::DecodeError) -> Self {
         Self::Malformed
     }
 }
+impl From<TokenValidationError> for TokenError {
+    fn from(e: TokenValidationError) -> Self {
+        Self::Validation(e)
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DuplicatePubIdError(pub String);
 
@@ -868,14 +874,14 @@ impl Display for InvalidNumericDateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             InvalidNumericDateError::InvalidTimestamp(i) => {
-                write!(f, "invalid timestamp: {}", i)
+                write!(f, "invalid timestamp: {i}")
             }
             InvalidNumericDateError::OutOfRange(u) => {
-                write!(f, "timestamp out of range: {}", u)
+                write!(f, "timestamp out of range: {u}")
             }
             #[cfg(feature = "std")]
             InvalidNumericDateError::SystemTime(e) => {
-                write!(f, "system time error: {}", e)
+                write!(f, "system time error: {e}",)
             }
         }
     }
@@ -897,3 +903,149 @@ impl From<i64> for InvalidNumericDateError {
     }
 }
 impl Error for InvalidNumericDateError {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TokenAudienceError {
+    pub expected_audience: Option<String>,
+    pub actual: Option<StringOrStrings>,
+}
+
+impl Display for TokenAudienceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.expected_audience {
+            Some(aud) => write!(f, "audience \"{aud}\" not present"),
+            None => write!(f, "error: audience present but not expected"),
+        }
+    }
+}
+impl Error for TokenAudienceError {}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct TokenExpiredError {
+    pub expiration_time: NumericDate,
+    pub now: NumericDate,
+    pub clock_skew: Duration,
+}
+
+impl Display for TokenExpiredError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "token is expired")
+    }
+}
+impl Error for TokenExpiredError {}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct TokenIssuerError {
+    pub expected_issuer: Option<String>,
+    pub actual: Option<String>,
+}
+impl Error for TokenIssuerError {}
+
+impl Display for TokenIssuerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.expected_issuer {
+            Some(iss) => match &self.actual {
+                Some(actual) => write!(f, "expected issuer \"{iss}\", got \"{actual}\""),
+                None => write!(f, "expected issuer \"{iss}\" but not present"),
+            },
+            None => write!(f, "issuer present but not expected"),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct TokenNotYetValidError {
+    pub not_before: NumericDate,
+    pub now: NumericDate,
+    pub clock_skew: Duration,
+}
+
+impl Display for TokenNotYetValidError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "token is not yet valid")
+    }
+}
+
+impl Error for TokenNotYetValidError {}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct TokenIssuedAtInFutureError {
+    pub issued_at: NumericDate,
+    pub now: NumericDate,
+    pub clock_skew: Duration,
+}
+impl Error for TokenIssuedAtInFutureError {}
+
+impl Display for TokenIssuedAtInFutureError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "token was issued in the future")
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum TokenValidationError {
+    Audience(TokenAudienceError),
+    Issuer(TokenIssuerError),
+    Expired(TokenExpiredError),
+    MissingExpiration,
+    NotYetValid(TokenNotYetValidError),
+    IssuedAtInFuture(TokenIssuedAtInFutureError),
+}
+impl Display for TokenValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TokenValidationError::Audience(err) => core::fmt::Display::fmt(err, f),
+            TokenValidationError::MissingExpiration => write!(f, "token is missing an exp claim"),
+            TokenValidationError::Expired(err) => core::fmt::Display::fmt(err, f),
+            TokenValidationError::NotYetValid(err) => core::fmt::Display::fmt(err, f),
+            TokenValidationError::IssuedAtInFuture(err) => core::fmt::Display::fmt(err, f),
+            TokenValidationError::Issuer(err) => core::fmt::Display::fmt(err, f),
+        }
+    }
+}
+
+impl From<TokenAudienceError> for TokenValidationError {
+    fn from(e: TokenAudienceError) -> Self {
+        Self::Audience(e)
+    }
+}
+
+impl From<TokenIssuerError> for TokenValidationError {
+    fn from(e: TokenIssuerError) -> Self {
+        Self::Issuer(e)
+    }
+}
+
+impl From<TokenExpiredError> for TokenValidationError {
+    fn from(e: TokenExpiredError) -> Self {
+        Self::Expired(e)
+    }
+}
+
+impl From<TokenNotYetValidError> for TokenValidationError {
+    fn from(e: TokenNotYetValidError) -> Self {
+        Self::NotYetValid(e)
+    }
+}
+
+impl From<TokenIssuedAtInFutureError> for TokenValidationError {
+    fn from(e: TokenIssuedAtInFutureError) -> Self {
+        Self::IssuedAtInFuture(e)
+    }
+}
+
+#[cfg(feature = "std")]
+impl Error for TokenValidationError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            TokenValidationError::Audience(err) => Some(err),
+            TokenValidationError::MissingExpiration => None,
+            TokenValidationError::Expired(err) => Some(err),
+            TokenValidationError::NotYetValid(err) => Some(err),
+            TokenValidationError::IssuedAtInFuture(err) => Some(err),
+            TokenValidationError::Issuer(err) => Some(err),
+        }
+    }
+}
+#[cfg(not(feature = "std"))]
+impl Error for TokenValidationError {}

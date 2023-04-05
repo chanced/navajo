@@ -4,6 +4,7 @@ use core::ops::{
 
 use crate::b64;
 use alloc::{sync::Arc, vec::Vec};
+use generic_array::{ArrayLength, GenericArray};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -144,8 +145,36 @@ impl<const N: usize> TryFrom<Bytes> for [u8; N] {
     }
 }
 
-fn x(v: Vec<u8>) {
-    let a: [u8; 32] = v.try_into().map_err(|e| {}).unwrap();
-}
-
 impl ZeroizeOnDrop for Bytes {}
+
+impl<N> TryInto<GenericArray<u8, N>> for Bytes
+where
+    N: ArrayLength<u8>,
+{
+    type Error = Bytes;
+    fn try_into(self) -> Result<GenericArray<u8, N>, Self::Error> {
+        if self.len() == N::to_usize() {
+            let mut array = GenericArray::default();
+            array.copy_from_slice(&self);
+            Ok(array)
+        } else {
+            Err(self)
+        }
+    }
+}
+impl<N> TryInto<GenericArray<u8, N>> for &Bytes
+where
+    N: ArrayLength<u8>,
+{
+    type Error = Bytes;
+
+    fn try_into(self) -> Result<GenericArray<u8, N>, Self::Error> {
+        if self.len() == N::to_usize() {
+            let mut array = GenericArray::default();
+            array.copy_from_slice(self);
+            Ok(array)
+        } else {
+            Err(self.clone())
+        }
+    }
+}
