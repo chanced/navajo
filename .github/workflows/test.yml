@@ -16,6 +16,8 @@ jobs:
         steps:
             - uses: actions/checkout@v3
             - uses: actions-rs/toolchain@v1
+              with:
+                  toolchain: nightly
             - uses: taiki-e/install-action@cargo-hack
               with:
                   toolchain: nightly
