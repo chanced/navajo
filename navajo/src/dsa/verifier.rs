@@ -1,14 +1,14 @@
 use core::str::FromStr;
 
-use super::DsaKeyInfo;
+
 
 use crate::{
     dsa::Signature,
     error::{DuplicatePubIdError, KeyNotFoundError, RemoveKeyError, SignatureError, TokenError},
-    jose::{Claims, Header, Jwk, Jws, Validator, VerifiedJws},
+    jose::{Header, Jwk, Jws, Validator, VerifiedJws},
 };
 use alloc::{borrow::Cow, sync::Arc};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use super::{verifying_key::VerifyingKey, Algorithm};
 

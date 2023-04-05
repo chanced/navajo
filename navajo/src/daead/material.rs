@@ -1,10 +1,10 @@
-use aes_siv::siv::Aes256Siv;
-use rust_crypto_aead::{Aead, KeyInit};
+
+
 use serde::{Deserialize, Serialize};
 use zeroize::ZeroizeOnDrop;
 
 use crate::{
-    error::{EncryptDeterministicError, EncryptError},
+    error::{EncryptDeterministicError},
     key::{Key, KeyMaterial},
     sensitive, Aad, Rng,
 };
@@ -42,8 +42,8 @@ impl Material {
 impl Key<Material> {
     pub(super) fn encrypt<A>(
         &self,
-        aad: Aad<A>,
-        cleartext: &[u8],
+        _aad: Aad<A>,
+        _cleartext: &[u8],
     ) -> Result<Vec<u8>, EncryptDeterministicError>
     where
         A: AsRef<[u8]>,

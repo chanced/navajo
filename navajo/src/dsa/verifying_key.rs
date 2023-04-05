@@ -1,13 +1,13 @@
 use crate::{
     error::{KeyError, SignatureError},
-    jose::{Algorithm as JwkAlgorithm, Jwk, KeyOperation, KeyUse},
+    jose::{Algorithm as JwkAlgorithm, Jwk},
     sensitive, Metadata,
 };
 use alloc::sync::Arc;
-use alloc::vec::Vec;
+
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+
 
 use super::{Algorithm, KeyPair};
 
@@ -89,7 +89,7 @@ impl VerifyingKey {
         let key_id = Some(pub_id.clone());
         let jwt_algorithm = algorithm.jwt_algorithm().into();
         let key_use = metadata.key_use().cloned();
-        let curve = algorithm.curve();
+        let _curve = algorithm.curve();
         let key_type = algorithm.key_type().into();
 
         let jwk = match algorithm {

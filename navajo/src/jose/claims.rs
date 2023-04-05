@@ -1,6 +1,6 @@
 use alloc::borrow::Cow;
 use derive_builder::Builder;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::{NumericDate, StringOrStrings};

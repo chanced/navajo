@@ -1,7 +1,7 @@
 use super::{Algorithm, Curve, KeyOperation, KeyType, KeyUse};
 use crate::{
     b64,
-    dsa::{self, VerifyingKey},
+    dsa::{self},
 };
 use serde::{Deserialize, Serialize};
 
