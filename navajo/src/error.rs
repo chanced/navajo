@@ -580,7 +580,10 @@ impl<A> From<KeyNotFoundError> for RemoveKeyError<A> {
     }
 }
 
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa"))]
+#[cfg(all(
+    std,
+    any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa")
+))]
 impl<A> std::error::Error for RemoveKeyError<A> where A: Debug {}
 
 #[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
@@ -611,7 +614,10 @@ impl<A> From<KeyNotFoundError> for DisableKeyError<A> {
     }
 }
 
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
+#[cfg(all(
+    std,
+    any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa")
+))]
 impl<A> std::error::Error for DisableKeyError<A> where A: Debug {}
 
 pub enum VerifyStreamError<E> {
