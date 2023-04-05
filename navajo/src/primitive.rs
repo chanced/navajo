@@ -279,47 +279,53 @@ struct PrimitiveData {
     #[serde(flatten)]
     keys: Value,
 }
-
+#[cfg(feature = "aead")]
 impl From<crate::Aead> for Primitive {
     fn from(value: crate::Aead) -> Self {
         Primitive::Aead(value)
     }
 }
-impl From<crate::Daead> for Primitive {
-    fn from(value: crate::Daead) -> Self {
-        Primitive::Daead(value)
-    }
-}
-impl From<crate::Mac> for Primitive {
-    fn from(value: crate::Mac) -> Self {
-        Primitive::Mac(value)
-    }
-}
-
-impl From<crate::Signer> for Primitive {
-    fn from(value: crate::Signer) -> Self {
-        Primitive::Dsa(value)
-    }
-}
-
+#[cfg(feature = "aead")]
 impl From<&crate::Aead> for Primitive {
     fn from(value: &crate::Aead) -> Self {
         Primitive::Aead(value.clone())
     }
 }
 
+#[cfg(feature = "daead")]
+impl From<crate::Daead> for Primitive {
+    fn from(value: crate::Daead) -> Self {
+        Primitive::Daead(value)
+    }
+}
+
+#[cfg(feature = "daead")]
 impl From<&crate::Daead> for Primitive {
     fn from(value: &crate::Daead) -> Self {
         Primitive::Daead(value.clone())
     }
 }
 
+#[cfg(feature = "mac")]
+impl From<crate::Mac> for Primitive {
+    fn from(value: crate::Mac) -> Self {
+        Primitive::Mac(value)
+    }
+}
+#[cfg(feature = "mac")]
 impl From<&crate::Mac> for Primitive {
     fn from(value: &crate::Mac) -> Self {
         Primitive::Mac(value.clone())
     }
 }
 
+#[cfg(feature = "dsa")]
+impl From<crate::Signer> for Primitive {
+    fn from(value: crate::Signer) -> Self {
+        Primitive::Dsa(value)
+    }
+}
+#[cfg(feature = "dsa")]
 impl From<&crate::Signer> for Primitive {
     fn from(value: &crate::Signer) -> Self {
         Primitive::Dsa(value.clone())
