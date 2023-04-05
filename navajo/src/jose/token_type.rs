@@ -1,6 +1,6 @@
 use core::fmt::Display;
 
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

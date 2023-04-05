@@ -1,6 +1,6 @@
 use core::{fmt::Display, str::FromStr};
 
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

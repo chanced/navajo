@@ -1,5 +1,6 @@
 use core::time::Duration;
 
+use alloc::{borrow::ToOwned, string::ToString};
 use derive_builder::Builder;
 
 use crate::error::{
@@ -10,6 +11,7 @@ use crate::error::{
 use super::{Claims, NumericDate, StringOrStrings};
 
 #[derive(Debug, Clone, Builder)]
+#[cfg_attr(not(feature = "std"), builder(no_std))]
 /// Validates a JWS
 pub struct Validator<'a> {
     #[builder(default, setter(strip_option))]

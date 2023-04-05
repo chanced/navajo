@@ -8,6 +8,7 @@ use super::{
     size::{AES_128_GCM, AES_256_GCM, CHACHA20_POLY1305, XCHACHA20_POLY1305},
     Method,
 };
+use alloc::string::ToString;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoStaticStr};
 

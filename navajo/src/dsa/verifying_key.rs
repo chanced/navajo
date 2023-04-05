@@ -346,6 +346,7 @@ impl TryFrom<&Jwk> for VerifyingKey {
 
 #[cfg(test)]
 mod tests {
+    use alloc::string::ToString;
     use strum::IntoEnumIterator;
 
     use crate::{dsa::signing_key::SigningKey, SystemRng};

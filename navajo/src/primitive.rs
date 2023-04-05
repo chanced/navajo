@@ -526,7 +526,7 @@ mod tests {
 
         fn encrypt_dek<A, P>(
             &self,
-            aad: Aad<A>,
+            _aad: Aad<A>,
             plaintext: P,
         ) -> core::pin::Pin<
             Box<dyn futures::Future<Output = Result<Vec<u8>, Self::EncryptError>> + Send + '_>,

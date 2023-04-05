@@ -248,15 +248,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    #[allow(dead_code)]
-    use super::*;
-    #[allow(dead_code)]
-    use crate::aead::Algorithm;
-    #[allow(dead_code)]
-    use futures::{stream, TryStreamExt};
     #[cfg(feature = "std")]
     #[tokio::test]
     async fn test_stream_roundtrip() {
+        use super::*;
+        use crate::aead::Algorithm;
+        use futures::{stream, TryStreamExt};
+
         let data_stream = stream::iter(vec![
             Vec::from("hello".as_bytes()),
             Vec::from(" ".as_bytes()),
@@ -276,6 +274,10 @@ mod tests {
     #[cfg(feature = "std")]
     #[tokio::test]
     async fn test_stream_with_aad_roundtrip() {
+        use super::*;
+        use crate::aead::Algorithm;
+        use futures::{stream, TryStreamExt};
+
         let mut data = vec![0u8; 5556];
         let rng = crate::SystemRng::new();
         rng.fill(&mut data).unwrap();

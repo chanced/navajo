@@ -1,3 +1,4 @@
+use alloc::string::ToString;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

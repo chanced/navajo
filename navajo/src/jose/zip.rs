@@ -1,6 +1,6 @@
 use core::str::FromStr;
 
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use serde::{Deserialize, Serialize};
 
 use crate::strings::to_upper_remove_seperators;

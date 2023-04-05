@@ -463,7 +463,7 @@ mod tests {
                     continue;
                 }
             }
-            if let Err(e) = aead.decrypt_in_place(Aad(&aad), &mut plaintext) {
+            if aead.decrypt_in_place(Aad(&aad), &mut plaintext).is_err() {
                 return false;
             }
             if src != plaintext {

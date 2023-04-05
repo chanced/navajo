@@ -1,5 +1,6 @@
 use core::str::FromStr;
 
+use alloc::string::ToString;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, IntoStaticStr};
 

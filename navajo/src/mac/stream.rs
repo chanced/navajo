@@ -137,13 +137,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::mac::Algorithm;
-    use futures::stream;
 
     #[cfg(feature = "std")]
     #[tokio::test]
     async fn test_mac_stream() {
+        use super::*;
+        use crate::mac::Algorithm;
+        use futures::stream;
+
         let long_str = r#"[cia.gov](https://www.cia.gov/stories/story/navajo-code-talkers-and-the-unbreakable-code/)
 
         Navajo Code Talkers and the Unbreakable Code

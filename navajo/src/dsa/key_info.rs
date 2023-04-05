@@ -1,6 +1,9 @@
 use super::Algorithm;
 use crate::{key::Key, sensitive, Metadata, Origin, Status};
-use alloc::{string::String, sync::Arc};
+use alloc::{
+    string::{String, ToString},
+    sync::Arc,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize)]

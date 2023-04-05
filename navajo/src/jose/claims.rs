@@ -6,6 +6,7 @@ use serde_json::Value;
 use super::{NumericDate, StringOrStrings};
 
 #[derive(Debug, PartialEq, Eq, Clone, Default, Serialize, Deserialize, Builder)]
+#[cfg_attr(not(feature = "std"), builder(no_std))]
 pub struct Claims {
     /// The `"iss"` (issuer) claim identifies the principal that issued the
     /// JWT.  The processing of this claim is generally application specific.
@@ -208,7 +209,7 @@ impl ClaimsBuilder {
 
 #[cfg(test)]
 mod tests {
-    use alloc::vec;
+    use alloc::{string::ToString, vec};
 
     use super::*;
 

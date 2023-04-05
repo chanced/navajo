@@ -335,7 +335,7 @@ default = [
 	"chrono",
 	"time",
 	# "ring",
-	# "std", 
+	"std",
 	"aead",
 	"dsa",
 	"mac",
@@ -347,12 +347,11 @@ default = [
 	"daead",
 ]
 ed25519 = ["ed25519-dalek"]
-dsa = ["dep:signature", "ed25519", "p256", "p384"]
+dsa = ["signature", "ed25519", "p256", "p384"]
 mac = ["sha2", "hmac"]
 hkdf = ["sha2", "hmac"]
 aead = ["hkdf"]
 daead = ["aes-siv"]
-signature = ["dsa"]
 std = [
 	"miniz_oxide/std",
 	"ring?/std",

@@ -5,7 +5,11 @@ use crate::{
     error::{DuplicatePubIdError, KeyNotFoundError, RemoveKeyError, SignatureError, TokenError},
     jose::{Header, Jwk, Jws, Validator, VerifiedJws},
 };
-use alloc::{borrow::Cow, string::String, sync::Arc};
+use alloc::{
+    borrow::{Cow, ToOwned},
+    string::{String, ToString},
+    sync::Arc,
+};
 use serde::{Deserialize, Serialize};
 
 use super::{verifying_key::VerifyingKey, Algorithm};
@@ -134,6 +138,7 @@ mod tests {
         dsa::*,
         jose::{Claims, NumericDate, Validator},
     };
+    use alloc::string::ToString;
     use strum::IntoEnumIterator;
 
     const NOW: NumericDate = NumericDate(1680495923);

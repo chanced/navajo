@@ -6,7 +6,11 @@ use crate::{
 use core::fmt::Debug;
 
 use super::{verifying_key::VerifyingKey, KeyPair, Signature};
-use alloc::{borrow::Cow, string::String, sync::Arc};
+use alloc::{
+    borrow::Cow,
+    string::{String, ToString},
+    sync::Arc,
+};
 use serde::{Deserialize, Serialize};
 use zeroize::ZeroizeOnDrop;
 

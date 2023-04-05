@@ -7,11 +7,14 @@ use alloc::{
     string::{String, ToString},
 };
 
-#[cfg(not(feature = "std"))]
-pub trait Error: core::fmt::Debug + core::fmt::Display {}
-
 #[cfg(feature = "std")]
 pub use std::error::Error;
+
+#[cfg(not(feature = "std"))]
+pub trait Error: Debug + Display {}
+
+#[cfg(not(feature = "std"))]
+impl<T> Error for T where T: Display + Debug {}
 
 use crate::jose::{NumericDate, StringOrStrings};
 
@@ -29,7 +32,7 @@ impl RandomError {
         self.0
     }
 }
-
+#[cfg(feature = "std")]
 impl Error for RandomError {}
 
 impl core::fmt::Display for RandomError {
@@ -67,7 +70,7 @@ pub enum KeyNotFoundError {
     Key(u32),
     PubId(String),
 }
-
+#[cfg(feature = "std")]
 impl Error for KeyNotFoundError {}
 impl From<u32> for KeyNotFoundError {
     fn from(key: u32) -> Self {
@@ -90,6 +93,8 @@ impl fmt::Display for KeyNotFoundError {
 
 #[derive(Clone, Debug)]
 pub struct UnspecifiedError;
+
+#[cfg(feature = "std")]
 impl Error for UnspecifiedError {}
 
 #[cfg(feature = "ring")]
@@ -112,12 +117,16 @@ impl core::fmt::Display for SegmentLimitExceededError {
         write!(f, "counter limit exceeded")
     }
 }
+
+#[cfg(feature = "std")]
 impl Error for SegmentLimitExceededError {}
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum EncryptDeterministicError {
     Unspecified,
     EmptyPlaintext,
 }
+
+#[cfg(feature = "std")]
 impl Error for EncryptDeterministicError {}
 impl Display for EncryptDeterministicError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -139,6 +148,8 @@ pub enum EncryptError {
     SegmentLimitExceeded,
     EmptyPlaintext,
 }
+
+#[cfg(feature = "std")]
 impl Error for EncryptError {}
 
 impl fmt::Display for EncryptError {
@@ -228,6 +239,7 @@ pub enum DecryptError {
     DisabledKey(KeyDisabledError),
 }
 
+#[cfg(feature = "std")]
 impl Error for DecryptError {}
 
 impl From<KeyNotFoundError> for DecryptError {
@@ -318,27 +330,41 @@ where
 
 #[derive(Debug)]
 pub struct MalformedError(Box<dyn Error>);
-impl Error for MalformedError {}
+
 impl From<base64::DecodeError> for MalformedError {
     fn from(e: base64::DecodeError) -> Self {
-        Self(e.into())
+        Self(Box::new(e))
     }
 }
 impl From<serde_json::Error> for MalformedError {
     fn from(e: serde_json::Error) -> Self {
-        Self(e.into())
+        Self(Box::new(e))
     }
 }
 
 impl From<&'static str> for MalformedError {
     fn from(s: &'static str) -> Self {
-        Self(s.into())
+        #[cfg(feature = "std")]
+        {
+            s.into()
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            self(Box::new(s))
+        }
     }
 }
 
 impl From<String> for MalformedError {
     fn from(s: String) -> Self {
-        Self(s.into())
+        #[cfg(feature = "std")]
+        {
+            s.into()
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            self(Box::new(s))
+        }
     }
 }
 
@@ -350,6 +376,8 @@ impl fmt::Display for MalformedError {
 
 #[derive(Clone, Debug)]
 pub struct InvalidAlgorithmError(pub String);
+
+#[cfg(feature = "std")]
 impl Error for InvalidAlgorithmError {}
 
 impl fmt::Display for InvalidAlgorithmError {
@@ -379,6 +407,8 @@ pub enum TruncationError {
     LengthExceeded,
     MinLengthNotMet,
 }
+
+#[cfg(feature = "std")]
 impl Error for TruncationError {}
 
 impl Display for TruncationError {
@@ -442,6 +472,8 @@ impl From<UnspecifiedError> for MacVerificationError {
 
 #[derive(Debug)]
 pub struct SealError(pub String);
+
+#[cfg(feature = "std")]
 impl Error for SealError {}
 
 impl fmt::Display for SealError {
@@ -475,6 +507,8 @@ impl From<chacha20poly1305::Error> for SealError {
 
 #[derive(Debug)]
 pub struct OpenError(pub String);
+
+#[cfg(feature = "std")]
 impl Error for OpenError {}
 
 impl fmt::Display for OpenError {
@@ -613,6 +647,7 @@ where
 impl<E> std::error::Error for VerifyStreamError<E> where E: std::error::Error {}
 
 #[cfg(not(feature = "std"))]
+#[cfg(feature = "std")]
 impl<E> Error for VerifyStreamError<E> where E: core::fmt::Debug + core::fmt::Display {}
 
 impl<E> From<MacVerificationError> for VerifyStreamError<E> {
@@ -623,6 +658,8 @@ impl<E> From<MacVerificationError> for VerifyStreamError<E> {
 
 #[derive(Clone, Debug)]
 pub struct InvalidLengthError;
+
+#[cfg(feature = "std")]
 impl Error for InvalidLengthError {}
 
 impl Display for InvalidLengthError {
@@ -645,7 +682,10 @@ impl From<rust_crypto_hkdf::InvalidLength> for InvalidLengthError {
 }
 
 pub struct KeyError(pub String);
+
+#[cfg(feature = "std")]
 impl Error for KeyError {}
+
 impl fmt::Display for KeyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "malformed key: {}", self.0)
@@ -720,6 +760,7 @@ pub enum SignatureError {
     InvalidLen(usize),
 }
 
+#[cfg(feature = "std")]
 impl Error for SignatureError {}
 
 impl Display for SignatureError {
@@ -817,6 +858,8 @@ impl Display for DuplicatePubIdError {
         write!(f, "duplicate pub id: {}", self.0)
     }
 }
+
+#[cfg(feature = "std")]
 impl Error for DuplicatePubIdError {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -828,6 +871,7 @@ impl Display for InvalidCurveError {
     }
 }
 
+#[cfg(feature = "std")]
 impl Error for InvalidCurveError {}
 
 #[derive(Debug)]
@@ -851,6 +895,8 @@ impl Display for DecodeError {
         }
     }
 }
+
+#[cfg(feature = "std")]
 impl Error for DecodeError {}
 impl From<serde_json::Error> for DecodeError {
     fn from(e: serde_json::Error) -> Self {
@@ -903,6 +949,8 @@ impl From<i64> for InvalidNumericDateError {
         Self::InvalidTimestamp(e)
     }
 }
+
+#[cfg(feature = "std")]
 impl Error for InvalidNumericDateError {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -919,6 +967,8 @@ impl Display for TokenAudienceError {
         }
     }
 }
+
+#[cfg(feature = "std")]
 impl Error for TokenAudienceError {}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -933,6 +983,8 @@ impl Display for TokenExpiredError {
         write!(f, "token is expired")
     }
 }
+
+#[cfg(feature = "std")]
 impl Error for TokenExpiredError {}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -940,6 +992,8 @@ pub struct TokenIssuerError {
     pub expected_issuer: Option<String>,
     pub actual: Option<String>,
 }
+
+#[cfg(feature = "std")]
 impl Error for TokenIssuerError {}
 
 impl Display for TokenIssuerError {
@@ -967,6 +1021,7 @@ impl Display for TokenNotYetValidError {
     }
 }
 
+#[cfg(feature = "std")]
 impl Error for TokenNotYetValidError {}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -975,6 +1030,8 @@ pub struct TokenIssuedAtInFutureError {
     pub now: NumericDate,
     pub clock_skew: Duration,
 }
+
+#[cfg(feature = "std")]
 impl Error for TokenIssuedAtInFutureError {}
 
 impl Display for TokenIssuedAtInFutureError {
@@ -1048,5 +1105,3 @@ impl Error for TokenValidationError {
         }
     }
 }
-#[cfg(not(feature = "std"))]
-impl Error for TokenValidationError {}
