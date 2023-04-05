@@ -557,8 +557,8 @@ pub enum RemoveKeyError<A> {
     IsPrimaryKey(crate::KeyInfo<A>),
     KeyNotFound(KeyNotFoundError),
 }
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa"))]
+
 impl<A> fmt::Display for RemoveKeyError<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -580,7 +580,7 @@ impl<A> From<KeyNotFoundError> for RemoveKeyError<A> {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa"))]
 impl<A> std::error::Error for RemoveKeyError<A> where A: Debug {}
 
 #[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
@@ -611,7 +611,7 @@ impl<A> From<KeyNotFoundError> for DisableKeyError<A> {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 impl<A> std::error::Error for DisableKeyError<A> where A: Debug {}
 
 pub enum VerifyStreamError<E> {
