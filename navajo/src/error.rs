@@ -350,7 +350,7 @@ impl From<&'static str> for MalformedError {
         }
         #[cfg(not(feature = "std"))]
         {
-            self(Box::new(s))
+            Self(Box::new(s))
         }
     }
 }
@@ -363,7 +363,7 @@ impl From<String> for MalformedError {
         }
         #[cfg(not(feature = "std"))]
         {
-            self(Box::new(s))
+            Self(Box::new(s))
         }
     }
 }
