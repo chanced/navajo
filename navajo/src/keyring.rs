@@ -12,7 +12,7 @@ use crate::Status;
 
 use alloc::sync::Arc;
 #[cfg(not(feature = "std"))]
-use alloc::{format, string::String, vec, vec::Vec};
+use alloc::{format, vec::Vec};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
