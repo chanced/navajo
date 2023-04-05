@@ -581,7 +581,7 @@ impl<A> From<KeyNotFoundError> for RemoveKeyError<A> {
 }
 
 #[cfg(all(
-    std,
+    feature = "std",
     any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa")
 ))]
 impl<A> std::error::Error for RemoveKeyError<A> where A: Debug {}
@@ -615,7 +615,7 @@ impl<A> From<KeyNotFoundError> for DisableKeyError<A> {
 }
 
 #[cfg(all(
-    std,
+    feature = "std",
     any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa")
 ))]
 impl<A> std::error::Error for DisableKeyError<A> where A: Debug {}
