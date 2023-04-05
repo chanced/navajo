@@ -354,7 +354,6 @@ daead = ["aes-siv"]
 std = [
 	"miniz_oxide/std",
 	"ring?/std",
-	"hex/std",
 	"serde/std",
 	"serde_json/std",
 	"zeroize/std",
