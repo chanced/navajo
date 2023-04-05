@@ -123,4 +123,14 @@ impl Signer {
         self.verifier.remove(key.pub_id())?;
         self.keyring.remove(key_id).map(|k| k.info())
     }
+
+    pub fn set_key_metadata(
+        &mut self,
+        key_id: u32,
+        metadata: Option<Metadata>,
+    ) -> Result<DsaKeyInfo, KeyNotFoundError> {
+        self.keyring.update_key_metadata(key_id, metadata)?;
+        let key = self.keyring.get(key_id)?;
+        Ok(DsaKeyInfo::new(key))
+    }
 }

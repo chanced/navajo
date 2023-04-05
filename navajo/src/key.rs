@@ -55,6 +55,9 @@ where
     pub(crate) fn id(&self) -> u32 {
         self.id
     }
+    pub(crate) fn set_metadata(&mut self, metadata: Option<Metadata>) {
+        self.metadata = metadata.map(Arc::new);
+    }
     pub(crate) fn metadata(&self) -> Option<Arc<Metadata>> {
         self.metadata.clone()
     }

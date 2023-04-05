@@ -539,7 +539,39 @@ impl SetKeyMetadata {
         stdin: impl 'static + AsyncRead + Unpin,
         stdout: impl 'static + AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        todo!()
+        let SetKeyMetadata {
+            io,
+            envelope,
+            key_id,
+            metadata,
+            clear_metadata,
+        } = self;
+        let (input, output) = io.get(stdin, stdout).await?;
+        let aad = envelope.get_aad().await?;
+        let envelope = envelope.get_envelope()?;
+
+        let meta: Option<navajo::Metadata> = if clear_metadata {
+            None
+        } else {
+            metadata.try_into()?
+        };
+
+        let mut primitive = envelope.open(aad.clone(), input).await?;
+        match primitive.borrow_mut() {
+            Primitive::Aead(aead) => {
+                aead.set_key_metadata(key_id, meta)?;
+            }
+            Primitive::Daead(daead) => {
+                daead.set_key_metadata(key_id, meta)?;
+            }
+            Primitive::Mac(mac) => {
+                mac.set_key_metadata(key_id, meta)?;
+            }
+            Primitive::Dsa(sig) => {
+                sig.set_key_metadata(key_id, meta)?;
+            }
+        }
+        envelope.seal_and_write(output, aad, primitive).await
     }
 }
 
@@ -676,7 +708,6 @@ impl IntegrationArgs {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[tokio::test]
     async fn test_migrate() {

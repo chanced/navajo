@@ -86,5 +86,5 @@ pub mod jose;
 
 pub(crate) mod strings;
 
-mod metadata;
-pub use metadata::{Metadata, MetadataKeys, RESERVED_METADATA_KEYS};
+pub mod metadata;
+pub use metadata::{Metadata, RESERVED_METADATA_KEYS};

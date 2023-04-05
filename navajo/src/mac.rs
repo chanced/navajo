@@ -593,7 +593,7 @@ impl Mac {
         metadata: Option<Metadata>,
     ) -> Result<MacKeyInfo, KeyNotFoundError> {
         self.keyring
-            .update_meta(key_id, metadata)
+            .update_key_metadata(key_id, metadata)
             .map(MacKeyInfo::new)
     }
 
@@ -623,6 +623,16 @@ impl Mac {
         let info = MacKeyInfo::new(&key);
         self.keyring.add(key);
         Ok(info)
+    }
+
+    pub fn set_key_metadata(
+        &mut self,
+        key_id: u32,
+        metadata: Option<Metadata>,
+    ) -> Result<MacKeyInfo, KeyNotFoundError> {
+        self.keyring.update_key_metadata(key_id, metadata)?;
+        let key = self.keyring.get(key_id)?;
+        Ok(MacKeyInfo::new(key))
     }
 }
 

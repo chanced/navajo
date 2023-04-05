@@ -1,10 +1,8 @@
-
-
 use serde::{Deserialize, Serialize};
 use zeroize::ZeroizeOnDrop;
 
 use crate::{
-    error::{EncryptDeterministicError},
+    error::EncryptDeterministicError,
     key::{Key, KeyMaterial},
     sensitive, Aad, Rng,
 };
@@ -67,7 +65,8 @@ impl KeyMaterial for Material {
 #[cfg(test)]
 mod tests {
 
-    use generic_array::GenericArray;
+    use aes_siv::siv::Aes256Siv;
+    use rust_crypto_aead::KeyInit;
 
     use crate::SystemRng;
 
@@ -77,7 +76,8 @@ mod tests {
     fn spike() {
         let mut bytes = vec![0u8; 64];
         SystemRng.fill(&mut bytes).unwrap();
-        let bytes: sensitive::Bytes = bytes.into();
+        let _: sensitive::Bytes = bytes.into();
+
         let k = Aes256Siv::generate_key(rand_core::OsRng::default());
         dbg!(k.len());
     }

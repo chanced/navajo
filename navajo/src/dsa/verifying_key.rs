@@ -8,7 +8,6 @@ use alloc::sync::Arc;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{Deserialize, Serialize};
 
-
 use super::{Algorithm, KeyPair};
 
 #[derive(Clone, Deserialize)]
@@ -53,15 +52,15 @@ impl VerifyingKey {
     pub fn verify(&self, msg: &[u8], signature: &[u8]) -> Result<(), SignatureError> {
         self.inner.verify(msg, signature)
     }
-    pub fn pub_id(&self) -> &str {
-        &self.pub_id
-    }
-    pub fn key_use(&self) -> Option<&crate::jose::KeyUse> {
-        self.jwk.key_use.as_ref()
-    }
-    pub fn key_operations(&self) -> &[crate::jose::KeyOperation] {
-        self.jwk.key_operations.as_ref()
-    }
+    // pub fn pub_id(&self) -> &str {
+    //     &self.pub_id
+    // }
+    // pub fn key_use(&self) -> Option<&crate::jose::KeyUse> {
+    //     self.jwk.key_use.as_ref()
+    // }
+    // pub(crate) fn key_operations(&self) -> &[crate::jose::KeyOperation] {
+    //     self.jwk.key_operations.as_ref()
+    // }
 
     pub fn algorithm(&self) -> Algorithm {
         match self.inner.as_ref() {
@@ -197,8 +196,8 @@ impl Ecdsa {
                 }
                 #[cfg(not(feature = "ring"))]
                 {
-                    let encoded_point = p256::EncodedPoint::from_bytes(&key)
-                        .map_err(|e| format!("key data is malformed: {}", e))?;
+                    let encoded_point = p256::EncodedPoint::from_bytes(key)
+                        .map_err(|e| format!("key data is malformed: {e}"))?;
                     let key = p256::ecdsa::VerifyingKey::from_encoded_point(&encoded_point)?;
                     Ok(Self::P256(key))
                 }
@@ -207,8 +206,8 @@ impl Ecdsa {
                 if key.len() != 97 {
                     return Err(KeyError("key data is malformed".into()));
                 }
-                let encoded_point = p384::EncodedPoint::from_bytes(&key)
-                    .map_err(|e| format!("key data is malformed: {}", e))?;
+                let encoded_point = p384::EncodedPoint::from_bytes(key)
+                    .map_err(|e| format!("key data is malformed: {e}"))?;
                 let key = p384::ecdsa::VerifyingKey::from_encoded_point(&encoded_point)?;
                 Ok(Self::P384(key))
             }
@@ -234,12 +233,12 @@ impl Ecdsa {
                 Self::P256(key) => {
                     use p256::ecdsa::{signature::Verifier, Signature as EcdsaSignature};
 
-                    let sig: EcdsaSignature = EcdsaSignature::try_from(sig.as_ref())?;
+                    let sig: EcdsaSignature = EcdsaSignature::try_from(sig)?;
                     Ok(key.verify(msg, &sig)?)
                 }
                 Self::P384(key) => {
                     use p384::ecdsa::{signature::Verifier, Signature as EcdsaSignature};
-                    let sig: EcdsaSignature = EcdsaSignature::try_from(sig.as_ref())?;
+                    let sig: EcdsaSignature = EcdsaSignature::try_from(sig)?;
                     Ok(key.verify(msg, &sig)?)
                 }
             }
@@ -284,8 +283,8 @@ impl Ed25519 {
         {
             use ed25519_dalek::Verifier;
             let signature = ed25519_dalek::Signature::from_slice(signature)?;
-            let result = self.0.verify(msg, &signature)?;
-            Ok(result)
+
+            Ok(self.0.verify(msg, &signature)?)
         }
     }
 }

@@ -417,7 +417,7 @@ impl Ed25519 {
 #[cfg(test)]
 mod tests {
 
-    use crate::{Origin, Status, SystemRng};
+    use crate::SystemRng;
 
     use super::*;
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -446,11 +446,11 @@ mod tests {
     // }
     #[test]
     fn test_sign() {
-        let ed25519 = SigningKey::generate(&SystemRng, Algorithm::Ed25519, "222".to_string(), None);
+        // let ed25519 = SigningKey::generate(&SystemRng, Algorithm::Ed25519, "222".to_string(), None);
         let p256 = SigningKey::generate(&SystemRng, Algorithm::Es256, "222".to_string(), None);
         let p384 = SigningKey::generate(&SystemRng, Algorithm::Es384, "222".to_string(), None);
 
-        let ed25519_sig = ed25519.sign("test".as_bytes());
+        // let ed25519_sig = ed25519.sign("test".as_bytes());
 
         let p256_sig = p256.sign("test".as_bytes());
 

@@ -89,4 +89,14 @@ impl Daead {
     ) -> Result<KeyInfo<Algorithm>, RemoveKeyError<Algorithm>> {
         self.keyring.remove(key_id).map(|k| k.info())
     }
+
+    pub fn set_key_metadata(
+        &mut self,
+        key_id: u32,
+        metadata: Option<Metadata>,
+    ) -> Result<KeyInfo<Algorithm>, KeyNotFoundError> {
+        self.keyring.update_key_metadata(key_id, metadata)?;
+        let key = self.keyring.get(key_id)?;
+        Ok(key.info())
+    }
 }

@@ -31,7 +31,8 @@ impl KeyOperation {
             KeyOperation::Other(s) => s,
         }
     }
-    pub fn as_value(&self) -> Value {
+
+    pub fn into_json_value(self) -> Value {
         Value::String(self.as_str().to_string())
     }
 }
@@ -74,25 +75,13 @@ impl From<&str> for KeyOperation {
 }
 
 impl From<KeyOperation> for String {
-    fn from(ko: KeyOperation) -> Self {
-        ko.as_str().to_string()
+    fn from(key_op: KeyOperation) -> Self {
+        key_op.as_str().to_string()
     }
 }
 
-pub(crate) fn key_ops_from_value(value: Value) -> Vec<KeyOperation> {
-    if let Value::Object(obj) = value {
-        if let Some(Value::Array(arr)) = obj.get("key_ops") {
-            return arr
-                .iter()
-                .filter_map(|v| {
-                    if let Value::String(s) = v {
-                        Some(KeyOperation::from(s))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-        }
+impl From<KeyOperation> for Value {
+    fn from(key_op: KeyOperation) -> Self {
+        key_op.into_json_value()
     }
-    Vec::new()
 }

@@ -3,12 +3,27 @@ use core::{fmt::Display, str::FromStr};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::KeyOperation;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(from = "String", into = "String")]
 pub enum KeyUse {
     Signature,
     Encryption,
     Other(String),
+}
+
+impl KeyUse {
+    pub fn as_str(&self) -> &str {
+        match self {
+            KeyUse::Signature => "sig",
+            KeyUse::Encryption => "enc",
+            KeyUse::Other(s) => s,
+        }
+    }
+    pub fn into_json_value(self) -> Value {
+        Value::String(self.as_str().to_string())
+    }
 }
 
 impl Display for KeyUse {
@@ -49,25 +64,14 @@ impl From<&str> for KeyUse {
     }
 }
 
-impl KeyUse {
-    pub fn as_str(&self) -> &str {
-        match self {
-            KeyUse::Signature => "sig",
-            KeyUse::Encryption => "enc",
-            KeyUse::Other(s) => s,
-        }
-    }
-    pub fn as_value(&self) -> Value {
-        Value::String(self.as_str().to_string())
+impl From<KeyUse> for Value {
+    fn from(key_use: KeyUse) -> Self {
+        key_use.into_json_value()
     }
 }
 
-// pub(crate) fn key_use_maybe_from_value(value: &Value) -> Option<KeyUse> {
-//     match value {
-//         Value::Object(obj) => match obj.get("use") {
-//             Some(Value::String(str)) => Some(KeyUse::from(str)),
-//             _ => None,
-//         },
-//         _ => None,
-//     }
-// }
+impl From<&KeyUse> for Value {
+    fn from(key_use: &KeyUse) -> Self {
+        key_use.clone().into_json_value()
+    }
+}

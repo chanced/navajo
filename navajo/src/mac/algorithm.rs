@@ -6,7 +6,8 @@ use strum::{Display, EnumIter, IntoStaticStr};
 
 use crate::{
     error::{InvalidAlgorithmError, KeyError},
-    rand::Rng, strings::to_upper_remove_seperators,
+    rand::Rng,
+    strings::to_upper_remove_seperators,
 };
 
 const SHA2_256_KEY_LEN: usize = 32;
@@ -100,15 +101,14 @@ impl FromStr for Algorithm {
     type Err = InvalidAlgorithmError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        
         match to_upper_remove_seperators(s).as_str() {
             #[cfg(feature = "blake3")]
-            "BLAKE3" => return OK(Algorithm::Blake3),
-            "SHA256" | "SHA2256" => return Ok(Algorithm::Sha256),
-            "SHA384" | "SHA2384" => return Ok(Algorithm::Sha384),
-            "SHA512" | "SHA2512" => return Ok(Algorithm::Sha512),
+            "BLAKE3" => Ok(Algorithm::Blake3),
+            "SHA256" | "SHA2256" => Ok(Algorithm::Sha256),
+            "SHA384" | "SHA2384" => Ok(Algorithm::Sha384),
+            "SHA512" | "SHA2512" => Ok(Algorithm::Sha512),
             #[cfg(all(feature = "sha3", feature = "hmac"))]
-            "SHA3256" => return Ok(Algorithm::Sha3_256),
+            "SHA3256" => Ok(Algorithm::Sha3_256),
             #[cfg(all(feature = "sha3", feature = "hmac"))]
             "SHA3224" => Ok(Algorithm::Sha3_224),
             #[cfg(all(feature = "sha3", feature = "hmac"))]
@@ -156,7 +156,7 @@ impl Algorithm {
         let mut key = alloc::vec![0u8; self.default_key_len()];
         rng.fill(&mut key).unwrap();
         key
-}
+    }
     pub fn tag_len(&self) -> usize {
         match self {
             #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]

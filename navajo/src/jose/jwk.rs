@@ -323,7 +323,7 @@ impl TryInto<dsa::Algorithm> for &Jwk {
 
     fn try_into(self) -> Result<dsa::Algorithm, Self::Error> {
         self.dsa_algorithm()
-            .ok_or_else(|| "unable to determine signature algorithm")
+            .ok_or("unable to determine signature algorithm")
     }
 }
 pub type Jwks = Vec<Jwk>;

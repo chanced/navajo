@@ -126,7 +126,6 @@ impl Aead {
         A: AsRef<[u8]>,
         T: AsRef<[u8]>,
     {
-        
         let encryptor = Encryptor::new(self, None, plaintext.as_ref().to_vec());
         let result = encryptor
             .finalize(aad)?
@@ -348,7 +347,9 @@ impl Aead {
         key_id: impl Into<u32>,
         meta: Option<Metadata>,
     ) -> Result<AeadKeyInfo, KeyNotFoundError> {
-        self.keyring.update_meta(key_id, meta).map(AeadKeyInfo::new)
+        self.keyring
+            .update_key_metadata(key_id, meta)
+            .map(AeadKeyInfo::new)
     }
 
     pub(crate) fn keyring(&self) -> &Keyring<Material> {
@@ -365,6 +366,16 @@ impl Aead {
         let key = Key::new(id, Status::Primary, Origin::Navajo, material, metadata);
         let keyring = Keyring::new(key);
         Self { keyring }
+    }
+
+    pub fn set_key_metadata(
+        &mut self,
+        key_id: u32,
+        metadata: Option<Metadata>,
+    ) -> Result<AeadKeyInfo, KeyNotFoundError> {
+        self.keyring.update_key_metadata(key_id, metadata)?;
+        let key = self.keyring.get(key_id)?;
+        Ok(AeadKeyInfo::new(key))
     }
 }
 

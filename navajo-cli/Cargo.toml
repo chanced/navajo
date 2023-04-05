@@ -10,7 +10,7 @@ description = "Navajo CLI"
 name = "navajo"
 
 [dependencies]
-navajo = { path = "../navajo" }
+navajo = { version = "0.0.1", features = ["blake3", "cmac", "aes"]}
 navajo-gcp = { path = "../navajo-gcp" }
 
 strum = { version = "0.24", features = ["derive", "strum_macros"] }

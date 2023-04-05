@@ -1,7 +1,5 @@
 use core::str::FromStr;
 
-
-
 use crate::{
     dsa::Signature,
     error::{DuplicatePubIdError, KeyNotFoundError, RemoveKeyError, SignatureError, TokenError},
@@ -136,7 +134,6 @@ mod tests {
         dsa::*,
         jose::{Claims, NumericDate, Validator},
     };
-    use serde::{Deserialize, Serialize};
     use strum::IntoEnumIterator;
 
     const NOW: NumericDate = NumericDate(1680495923);

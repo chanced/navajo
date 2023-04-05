@@ -238,7 +238,7 @@ where
         self.keys.last().unwrap()
     }
 
-    pub(crate) fn update_meta(
+    pub(crate) fn update_key_metadata(
         &mut self,
         id: impl Into<u32>,
         meta: Option<Metadata>,

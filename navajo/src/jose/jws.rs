@@ -21,7 +21,7 @@ where
         let header = URL_SAFE_NO_PAD.encode(&self.header);
         let payload = URL_SAFE_NO_PAD.encode(&self.payload);
         let signature = URL_SAFE_NO_PAD.encode(self.signature.as_ref());
-        write!(f, "{}.{}.{}", header, payload, signature)
+        write!(f, "{header}.{payload}.{signature}")
     }
 }
 
@@ -84,14 +84,14 @@ impl TryFrom<&str> for Jws<Vec<u8>> {
     }
 }
 
-impl<T> Into<String> for Jws<T>
+impl<T> From<Jws<T>> for String
 where
     T: AsRef<[u8]>,
 {
-    fn into(self) -> String {
-        let header = URL_SAFE_NO_PAD.encode(&self.header);
-        let payload = URL_SAFE_NO_PAD.encode(&self.payload);
-        let signature = URL_SAFE_NO_PAD.encode(&self.signature);
+    fn from(jws: Jws<T>) -> String {
+        let header = URL_SAFE_NO_PAD.encode(&jws.header);
+        let payload = URL_SAFE_NO_PAD.encode(&jws.payload);
+        let signature = URL_SAFE_NO_PAD.encode(&jws.signature);
         format!("{header}.{payload}.{signature}")
     }
 }

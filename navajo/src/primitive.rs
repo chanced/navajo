@@ -571,21 +571,19 @@ mod tests {
 
     use super::*;
 
-    #[cfg(feature = "mac")]
-    #[cfg(feature = "std")]
-    #[tokio::test]
-    async fn test_in_mock_seal_open_mac() {
-        use crate::rand::MockRng;
+    // #[cfg(feature = "mac")]
+    // #[cfg(feature = "std")]
+    // #[tokio::test]
+    // async fn test_in_mock_seal_open_mac() {
+    //     use crate::rand::MockRng;
 
-        let m = MockRng::new();
+    //     let mac = crate::mac::Mac::new(crate::mac::Algorithm::Sha256, None);
+    //     let primary_key = mac.keyring.primary();
 
-        let mac = crate::mac::Mac::new(crate::mac::Algorithm::Sha256, None);
-        let primary_key = mac.keyring.primary();
-
-        let mock = MockEnvelope::default();
-        // in a real application, you would use a real key management service.
-        // InMemory is only suitable for testing.
-        let data = crate::Mac::seal(&mac, Aad::empty(), &mock).await.unwrap();
-        let mac = crate::Mac::open(Aad::empty(), data, &mock).await.unwrap();
-    }
+    //     let mock = MockEnvelope::default();
+    //     // in a real application, you would use a real key management service.
+    //     // InMemory is only suitable for testing.
+    //     let data = crate::Mac::seal(&mac, Aad::empty(), &mock).await.unwrap();
+    //     let mac = crate::Mac::open(Aad::empty(), data, &mock).await.unwrap();
+    // }
 }

@@ -22,7 +22,12 @@ impl KeyType {
             KeyType::Okp => "OKP",
         }
     }
-    pub fn as_value(&self) -> Value {
+    pub fn into_json_value(self) -> Value {
         Value::String(self.as_str().to_string())
+    }
+}
+impl From<KeyType> for Value {
+    fn from(key_type: KeyType) -> Self {
+        key_type.into_json_value()
     }
 }

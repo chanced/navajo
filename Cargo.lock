@@ -613,9 +613,9 @@ dependencies = [
 
 [[package]]
 name = "curve25519-dalek"
-version = "4.0.0-rc.1"
+version = "4.0.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d4ba9852b42210c7538b75484f9daa0655e9a3ac04f693747bb0f02cf3cfe16"
+checksum = "03d928d978dbec61a1167414f5ec534f24bea0d7a0d24dd9b6233d3d8223e585"
 dependencies = [
  "cfg-if",
  "digest",
@@ -815,14 +815,13 @@ dependencies = [
 
 [[package]]
 name = "ed25519-dalek"
-version = "2.0.0-pre.0"
-source = "git+https://github.com/dalek-cryptography/ed25519-dalek#7dc1bbd85527306e67bc4741968bd79ea1ae25b1"
+version = "2.0.0-rc.2"
+source = "git+https://github.com/dalek-cryptography/ed25519-dalek#80aac08c1ca4a4a14912707650413b59c989e79a"
 dependencies = [
  "curve25519-dalek",
  "ed25519",
  "rand_core",
  "serde",
- "serde_bytes",
  "sha2",
  "zeroize",
 ]
@@ -943,9 +942,9 @@ dependencies = [
 
 [[package]]
 name = "fiat-crypto"
-version = "0.1.17"
+version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a214f5bb88731d436478f3ae1f8a277b62124089ba9fb67f4f93fb100ef73c90"
+checksum = "e825f6987101665dea6ec934c09ec6d721de7bc1bf92248e1d5810c8cd636b77"
 
 [[package]]
 name = "flate2"
@@ -1668,7 +1667,7 @@ dependencies = [
 
 [[package]]
 name = "navajo"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "aead",
  "aes",
@@ -2557,15 +2556,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb7d1f0d3021d347a83e556fc4683dea2ea09d87bccdf88ff5c12545d89d5efb"
 dependencies = [
  "serde_derive",
-]
-
-[[package]]
-name = "serde_bytes"
-version = "0.11.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "416bda436f9aab92e02c8e10d49a15ddd339cea90b6e340fe51ed97abb548294"
-dependencies = [
- "serde",
 ]
 
 [[package]]
