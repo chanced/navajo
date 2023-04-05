@@ -1,9 +1,10 @@
 use core::{array::TryFromSliceError, time::Duration};
 
 use alloc::{
+    boxed::Box,
     fmt::{self, Debug, Display},
     format,
-    string::{String, ToString}, boxed::Box,
+    string::{String, ToString},
 };
 
 #[cfg(not(feature = "std"))]
@@ -694,7 +695,7 @@ impl From<ed25519_dalek::SignatureError> for KeyError {
         Self(e.to_string())
     }
 }
-
+#[cfg(feature = "signature")]
 impl From<signature::Error> for SignatureError {
     fn from(e: signature::Error) -> Self {
         Self::Failure(e.to_string())

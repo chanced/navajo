@@ -19,7 +19,9 @@ pub use claims::Claims;
 pub use curve::Curve;
 pub use header::Header;
 pub use jwk::{Jwk, Jwks};
-pub use jws::{Jws, VerifiedJws};
+pub use jws::Jws;
+#[cfg(feature = "dsa")]
+pub use jws::VerifiedJws;
 pub use key_operation::KeyOperation;
 pub use key_type::KeyType;
 pub use key_use::KeyUse;
