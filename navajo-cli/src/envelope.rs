@@ -1,4 +1,4 @@
-use navajo::{primitive::Primitive, Aad};
+use navajo::{Aad, Primitive};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[derive(Clone, Debug)]

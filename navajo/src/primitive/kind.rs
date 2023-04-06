@@ -14,7 +14,7 @@ pub enum Kind {
     // Hpke,
     #[serde(rename = "MAC")]
     Mac,
-    #[serde(rename = "Signature")]
+    #[serde(rename = "DSA")]
     Signature,
 }
 

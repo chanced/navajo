@@ -26,8 +26,11 @@ jobs:
               run: cargo hack check --feature-powerset --no-dev-deps --workspace
             - name: Build
               run: cargo hack build --verbose --workspace
+
             - name: Run tests
               run: cargo hack test --verbose --workspace
+              with:
+                  toolchain: nightly
               env:
                   CARGO_INCREMENTAL: "0"
                   RUSTFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests"

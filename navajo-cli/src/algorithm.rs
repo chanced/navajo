@@ -2,7 +2,7 @@
 
 use clap::ValueEnum;
 
-use navajo::primitive::Kind;
+use navajo::Kind;
 
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum, strum::Display)]
 pub enum Algorithm {

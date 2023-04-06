@@ -3,9 +3,7 @@ use std::{borrow::BorrowMut, path::PathBuf};
 use crate::{algorithm::Algorithm, envelope::Envelope};
 use clap::{Parser, Subcommand};
 use navajo::{
-    primitive::{Kind, Primitive},
-    secret_store::SecretStore,
-    sensitive, Aad, Aead, Daead, Mac, Signer,
+    secret_store::SecretStore, sensitive, Aad, Aead, Daead, Kind, Mac, Primitive, Signer,
 };
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use url::Url;
