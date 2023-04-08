@@ -6,6 +6,8 @@ use crate::{
     Aad, Buffer,
 };
 
+use alloc::string::ToString;
+
 use super::Algorithm;
 use aes_siv::siv::Aes256Siv;
 
@@ -18,6 +20,7 @@ impl Cipher {
         if key.len() != algorithm.key_len() {
             return Err(KeyError("invalid key length".to_string()));
         }
+
         let cipher = aes_siv::siv::Aes256Siv::new_from_slice(key)
             .map_err(|err| KeyError(err.to_string()))?;
         Ok(Self(cipher))

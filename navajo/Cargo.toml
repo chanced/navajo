@@ -332,10 +332,10 @@ features = ["full"] # todo: reduce this.
 
 [features]
 default = [
-	"chrono",
-	"time",
-	# "ring",
 	"std",
+	# "chrono",
+	# "time",
+	# "ring",
 	"aead",
 	"dsa",
 	"mac",

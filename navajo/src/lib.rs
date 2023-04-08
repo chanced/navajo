@@ -59,7 +59,8 @@ pub use origin::Origin;
 
 #[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 mod primitive;
-pub use crate::primitive::{Kind, Primitive};
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
+pub use primitive::{Kind, Primitive};
 
 pub mod rand;
 pub use rand::{Rng, SystemRng};
