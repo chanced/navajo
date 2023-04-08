@@ -816,7 +816,8 @@ dependencies = [
 [[package]]
 name = "ed25519-dalek"
 version = "2.0.0-rc.2"
-source = "git+https://github.com/dalek-cryptography/ed25519-dalek#80aac08c1ca4a4a14912707650413b59c989e79a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "798f704d128510932661a3489b08e3f4c934a01d61c5def59ae7b8e48f19665a"
 dependencies = [
  "curve25519-dalek",
  "ed25519",
