@@ -24,9 +24,6 @@ jobs:
                   override: true
             - name: Check
               run: cargo hack check --feature-powerset --no-dev-deps --workspace
-            - name: Build
-              run: cargo hack build --verbose --workspace
-
             - name: Run tests
               run: cargo test --workspace
               env:

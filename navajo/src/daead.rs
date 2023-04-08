@@ -190,7 +190,6 @@ mod tests {
 
         assert_eq!(primary_key.id().to_be_bytes(), &ciphertext[..4]);
 
-        println!("ciphertext: {}", String::from_utf8_lossy(&ciphertext));
         let decrypted = daead.decrypt_deterministically(aad, &ciphertext).unwrap();
         assert_eq!(plaintext, &decrypted[..]);
         {
