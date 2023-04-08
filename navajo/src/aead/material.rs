@@ -35,15 +35,16 @@ impl KeyMaterial for Material {
     }
 }
 impl Material {
-    pub(super) fn generate<G>(rng: &G, algorithm: Algorithm) -> Self
+    pub(super) fn generate<N>(rng: &N, algorithm: Algorithm) -> Self
     where
-        G: Rng,
+        N: Rng,
     {
         let mut bytes = vec![0u8; algorithm.key_len()];
         rng.fill(&mut bytes).unwrap();
         let value = bytes.into();
         Self { value, algorithm }
     }
+
     pub(super) fn cipher(&self) -> Cipher {
         Cipher::new(self.algorithm, &self.value)
     }

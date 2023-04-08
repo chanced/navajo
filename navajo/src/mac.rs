@@ -13,16 +13,14 @@ mod try_stream;
 mod verifier;
 
 pub use algorithm::Algorithm;
-use alloc::sync::Arc;
 pub use computer::Computer;
-use futures::{Stream, TryStream};
 pub use key_info::MacKeyInfo;
 pub use stream::{ComputeStream, MacStream, VerifyStream};
-pub use try_stream::{ComputeTryStream, MacTryStream, VerifyTryStream};
-
 pub use tag::Tag;
+pub use try_stream::{ComputeTryStream, MacTryStream, VerifyTryStream};
 pub use verifier::Verifier;
-use zeroize::ZeroizeOnDrop;
+
+pub(crate) use material::Material;
 
 use crate::error::{
     KeyError, KeyNotFoundError, MacVerificationError, OpenError, RemoveKeyError, SealError,
@@ -31,9 +29,27 @@ use crate::key::Key;
 use crate::primitive::Primitive;
 use crate::rand::{Rng, SystemRng};
 use crate::{Aad, Envelope, Keyring, Metadata, Origin, Status};
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use context::*;
-pub(crate) use material::Material;
+use futures::{Stream, TryStream};
+use zeroize::ZeroizeOnDrop;
+
+const SHA2_256_KEY_LEN: usize = 32;
+const SHA2_384_KEY_LEN: usize = 48;
+const SHA2_512_KEY_LEN: usize = 64;
+const SHA3_224_KEY_LEN: usize = 32;
+const SHA3_256_KEY_LEN: usize = 32;
+const SHA3_384_KEY_LEN: usize = 48;
+const SHA3_512_KEY_LEN: usize = 64;
+#[cfg(feature = "blake3")]
+const BLAKE3_KEY_LEN: usize = 32;
+#[cfg(feature = "aes")]
+const AES128_KEY_LEN: usize = 16;
+#[cfg(feature = "aes")]
+const AES192_KEY_LEN: usize = 24;
+#[cfg(feature = "aes")]
+const AES256_KEY_LEN: usize = 32;
 
 /// Message Authentication Code Keyring (HMAC & CMAC)
 #[derive(Clone, Debug, ZeroizeOnDrop)]
@@ -184,16 +200,16 @@ impl Mac {
     }
 
     #[cfg(test)]
-    pub fn new_with_rng<R>(rng: &R, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
+    pub fn new_with_rng<N>(rng: &N, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
     where
-        R: Rng,
+        N: Rng,
     {
         Self::generate(rng, algorithm, metadata)
     }
 
-    fn generate<G>(rng: &G, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
+    fn generate<N>(rng: &N, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
     where
-        G: Rng,
+        N: Rng,
     {
         let bytes = algorithm.generate_key(rng);
         // safe, the key is generated
@@ -237,8 +253,8 @@ impl Mac {
         Self::import_key(&SystemRng, key, algorithm, prefix, metadata)
     }
     #[cfg(test)]
-    pub fn new_external_key_with_rng<G, K>(
-        rng: &G,
+    pub fn new_external_key_with_rng<K, N>(
+        rng: &N,
         key: K,
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
@@ -246,13 +262,13 @@ impl Mac {
     ) -> Result<Self, KeyError>
     where
         K: AsRef<[u8]>,
-        G: Rng,
+        N: Rng,
     {
         Self::import_key(rng, key, algorithm, prefix, metadata)
     }
 
-    fn import_key<K, G>(
-        rng: &G,
+    fn import_key<K, N>(
+        rng: &N,
         key: K,
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
@@ -260,7 +276,7 @@ impl Mac {
     ) -> Result<Self, KeyError>
     where
         K: AsRef<[u8]>,
-        G: Rng,
+        N: Rng,
     {
         let material = Material::new(key.as_ref(), prefix, algorithm)?;
         let metadata = metadata.map(Arc::new);
@@ -356,9 +372,9 @@ impl Mac {
     /// // println!("tag: {}", hex::encode(&tag));
     /// ```
     #[cfg(feature = "std")]
-    pub fn compute_reader<R: ?Sized>(&self, reader: &mut R) -> Result<Tag, std::io::Error>
+    pub fn compute_reader<N: ?Sized>(&self, reader: &mut N) -> Result<Tag, std::io::Error>
     where
-        R: std::io::Read,
+        N: std::io::Read,
     {
         let mut compute = Computer::new(self);
         std::io::copy(reader, &mut compute)?;
@@ -403,14 +419,14 @@ impl Mac {
     /// ```
     ///
     #[cfg(feature = "std")]
-    pub fn verify_reader<T, R: ?Sized>(
+    pub fn verify_reader<T, N: ?Sized>(
         &self,
         tag: T,
-        reader: &mut R,
+        reader: &mut N,
     ) -> Result<Tag, crate::error::MacVerificationReadError>
     where
         T: AsRef<Tag>,
-        R: std::io::Read,
+        N: std::io::Read,
     {
         let mut verify = Verifier::new(tag, self);
         std::io::copy(reader, &mut verify)?;
@@ -480,38 +496,48 @@ impl Mac {
         VerifyTryStream::new(stream, verify)
     }
 
-    pub fn add_key(&mut self, algorithm: Algorithm, metadata: Option<Metadata>) -> MacKeyInfo {
-        self.generate_key(&SystemRng, algorithm, Origin::Navajo, metadata)
-    }
-
-    #[cfg(test)]
-    pub fn add_key_with_rng<G>(
+    fn generate_key<N>(
         &mut self,
-        rng: &G,
-        algorithm: Algorithm,
-        metadata: Option<Metadata>,
-    ) -> MacKeyInfo
-    where
-        G: Rng,
-    {
-        self.generate_key(rng, algorithm, Origin::Navajo, metadata)
-    }
-    fn generate_key<R>(
-        &mut self,
-        rng: &R,
+        rng: &N,
         algorithm: Algorithm,
         origin: Origin,
         metadata: Option<Metadata>,
     ) -> MacKeyInfo
     where
-        R: Rng,
+        N: Rng,
     {
         let bytes = algorithm.generate_key(rng);
         self.create_key(rng, algorithm, &bytes, None, origin, metadata)
             .unwrap() // safe, the key is generated
     }
 
-    pub fn add_external_key<K>(
+    /// Returns [`MacKeyInfo`] for the primary key.
+    pub fn primary_key(&self) -> MacKeyInfo {
+        self.keyring.primary().into()
+    }
+    /// Returns a [`Vec`] containing a [`MacKeyInfo`] for each key in this keyring.
+    pub fn keys(&self) -> Vec<MacKeyInfo> {
+        self.keyring.keys().iter().map(MacKeyInfo::new).collect()
+    }
+
+    pub fn add(&mut self, algorithm: Algorithm, metadata: Option<Metadata>) -> MacKeyInfo {
+        self.generate_key(&SystemRng, algorithm, Origin::Navajo, metadata)
+    }
+
+    #[cfg(test)]
+    pub fn add_with_rng<N>(
+        &mut self,
+        rng: &N,
+        algorithm: Algorithm,
+        metadata: Option<Metadata>,
+    ) -> MacKeyInfo
+    where
+        N: Rng,
+    {
+        self.generate_key(rng, algorithm, Origin::Navajo, metadata)
+    }
+
+    pub fn add_external<K>(
         &mut self,
         key: K,
         algorithm: Algorithm,
@@ -531,9 +557,9 @@ impl Mac {
         )
     }
 
-    pub fn add_external_key_with_rng<R, K>(
+    pub fn add_external_with_rng<N, K>(
         &mut self,
-        rng: &R,
+        rng: &N,
         key: K,
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
@@ -541,7 +567,7 @@ impl Mac {
     ) -> Result<MacKeyInfo, KeyError>
     where
         K: AsRef<[u8]>,
-        R: Rng,
+        N: Rng,
     {
         self.create_key(
             rng,
@@ -551,15 +577,6 @@ impl Mac {
             Origin::External,
             metadata,
         )
-    }
-
-    /// Returns [`MacKeyInfo`] for the primary key.
-    pub fn primary_key(&self) -> MacKeyInfo {
-        self.keyring.primary().into()
-    }
-    /// Returns a [`Vec`] containing a [`MacKeyInfo`] for each key in this keyring.
-    pub fn keys(&self) -> Vec<MacKeyInfo> {
-        self.keyring.keys().iter().map(MacKeyInfo::new).collect()
     }
 
     pub fn promote(
@@ -580,7 +597,7 @@ impl Mac {
         self.keyring.enable(key_id).map(MacKeyInfo::new)
     }
 
-    pub fn remove_key(
+    pub fn delete(
         &mut self,
         key_id: impl Into<u32>,
     ) -> Result<MacKeyInfo, RemoveKeyError<Algorithm>> {
@@ -604,9 +621,9 @@ impl Mac {
         Self { keyring }
     }
 
-    fn create_key<G>(
+    fn create_key<N>(
         &mut self,
-        rng: &G,
+        rng: &N,
         algorithm: Algorithm,
         value: &[u8],
         prefix: Option<&[u8]>,
@@ -614,7 +631,7 @@ impl Mac {
         metadata: Option<Metadata>,
     ) -> Result<MacKeyInfo, KeyError>
     where
-        G: Rng,
+        N: Rng,
     {
         let material = Material::new(value, prefix, algorithm)?;
         let id = self.keyring.next_id(rng);

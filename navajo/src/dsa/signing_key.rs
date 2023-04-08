@@ -100,14 +100,14 @@ impl SigningKey {
     }
     #[cfg(test)]
     #[allow(dead_code)]
-    pub fn new_with_rng<G>(
-        rng: &G,
+    pub fn new_with_rng<N>(
+        rng: &N,
         algorithm: Algorithm,
         pub_id: String,
         metadata: Option<Metadata>,
     ) -> Self
     where
-        G: Rng,
+        N: Rng,
     {
         let metadata = metadata.map(Arc::new);
         Self::generate(rng, algorithm, pub_id, metadata)
@@ -131,14 +131,14 @@ impl SigningKey {
         })
     }
 
-    pub(super) fn generate<G>(
-        rng: &G,
+    pub(super) fn generate<N>(
+        rng: &N,
         algorithm: Algorithm,
         pub_id: String,
         metadata: Option<Arc<Metadata>>,
     ) -> Self
     where
-        G: Rng,
+        N: Rng,
     {
         let key_pair = Inner::generate_key_pair(rng, algorithm);
         let inner = Arc::new(Inner::from_key_pair(algorithm, &key_pair).unwrap());
@@ -224,9 +224,9 @@ impl Debug for Inner {
     }
 }
 impl Inner {
-    fn generate_key_pair<G>(rng: &G, algorithm: Algorithm) -> KeyPair
+    fn generate_key_pair<N>(rng: &N, algorithm: Algorithm) -> KeyPair
     where
-        G: Rng,
+        N: Rng,
     {
         match algorithm {
             Algorithm::Ed25519 => Ed25519::generate_key_pair(rng, algorithm),
@@ -264,9 +264,9 @@ enum Ecdsa {
     P384(p384::ecdsa::SigningKey),
 }
 impl Ecdsa {
-    fn generate_key_pair<G>(rng: &G, algorithm: Algorithm) -> KeyPair
+    fn generate_key_pair<N>(rng: &N, algorithm: Algorithm) -> KeyPair
     where
-        G: Rng,
+        N: Rng,
     {
         match algorithm {
             Algorithm::Es256 => {

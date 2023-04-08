@@ -88,13 +88,13 @@ impl VerifyingKey {
         let key_id = Some(pub_id.clone());
         let jwt_algorithm = algorithm.jwt_algorithm().into();
         let key_use = metadata.key_use().cloned();
-        let _curve = algorithm.curve();
+        let curve = algorithm.curve();
         let key_type = algorithm.key_type().into();
 
         let jwk = match algorithm {
             Algorithm::Es256 => Jwk {
                 key_id,
-                curve: algorithm.curve(),
+                curve,
                 algorithm: jwt_algorithm,
                 key_type,
                 key_use,
@@ -106,7 +106,7 @@ impl VerifyingKey {
 
             Algorithm::Es384 => Jwk {
                 key_id,
-                curve: algorithm.curve(),
+                curve,
                 algorithm: jwt_algorithm,
                 key_type,
                 key_use,
@@ -117,7 +117,7 @@ impl VerifyingKey {
             },
             Algorithm::Ed25519 => Jwk {
                 key_id,
-                curve: algorithm.curve(),
+                curve,
                 algorithm: jwt_algorithm,
                 key_type,
                 key_use,

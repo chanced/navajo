@@ -137,7 +137,8 @@ mod tests {
         let rng = SystemRng::new();
         rng.fill(&mut data).unwrap();
         let aead = Aead::new(Algorithm::ChaCha20Poly1305, None);
-        let mut encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), Vec::new());
+
+        let mut encryptor = Encryptor::new(rng, &aead, Some(Segment::FourKilobytes), Vec::new());
         encryptor.update(Aad::empty(), &data).unwrap();
         let ciphertext = encryptor
             .finalize(Aad::empty())

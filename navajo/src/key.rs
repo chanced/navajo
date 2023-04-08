@@ -83,6 +83,11 @@ where
         self.status = Status::Secondary;
         self.info()
     }
+
+    pub fn key_bytes(&self) -> [u8; 4] {
+        self.id.to_be_bytes()
+    }
+
     pub(crate) fn info(&self) -> KeyInfo<M::Algorithm>
     where
         M: KeyMaterial,

@@ -16,7 +16,6 @@ where
     T: AsRef<Tag>,
 {
     pub(super) fn new(tag: T, mac: &Mac) -> Self {
-        let _t = tag.as_ref();
         let hasher = Computer::new(mac);
         Self { tag, hasher }
     }

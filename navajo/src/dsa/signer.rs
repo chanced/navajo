@@ -35,14 +35,14 @@ impl Signer {
         Self { keyring, verifier }
     }
 
-    fn generate<G>(
-        rng: &G,
+    fn generate<N>(
+        rng: &N,
         algorithm: Algorithm,
         pub_id: Option<String>,
         metadata: Option<Metadata>,
     ) -> Self
     where
-        G: Rng,
+        N: Rng,
     {
         let id = rng.u32().unwrap();
         let metadata = metadata.map(Arc::new);
@@ -62,10 +62,10 @@ impl Signer {
     }
 
     pub fn keys(&self) -> Vec<DsaKeyInfo> {
-        todo!()
+        self.keyring.keys().iter().map(DsaKeyInfo::new).collect()
     }
 
-    pub fn add_key(
+    pub fn add(
         &mut self,
         algorithm: Algorithm,
         pub_id: Option<String>,
@@ -78,7 +78,7 @@ impl Signer {
         let verifying_key = signing_key.verifying_key.clone();
         let key = Key::new(id, Status::Secondary, Origin::Navajo, signing_key, metadata);
         self.keyring.add(key.clone());
-        self.verifier.add_key(verifying_key)?;
+        self.verifier.add(verifying_key)?;
         Ok(DsaKeyInfo::new(&key))
     }
 
@@ -118,13 +118,13 @@ impl Signer {
         Ok(DsaKeyInfo::new(key))
     }
 
-    pub fn remove(
+    pub fn delete(
         &mut self,
         key_id: impl Into<u32>,
     ) -> Result<KeyInfo<Algorithm>, RemoveKeyError<Algorithm>> {
         let key_id = key_id.into();
         let key = self.keyring.get(key_id)?;
-        self.verifier.remove(key.pub_id())?;
+        self.verifier.delete(key.pub_id())?;
         self.keyring.remove(key_id).map(|k| k.info())
     }
 

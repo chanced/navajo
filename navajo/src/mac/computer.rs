@@ -148,9 +148,7 @@ mod tests {
         let second_key =
             hex::decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
                 .unwrap();
-        let second_key = mac
-            .add_external_key(&second_key, Sha256, None, None)
-            .unwrap();
+        let second_key = mac.add_external(&second_key, Sha256, None, None).unwrap();
         mac.promote(&second_key).unwrap();
         let expected =
             hex::decode("72fd211411c56848ccc90eafd19269a7fa1c3067d5bce20836575d786f828f4e")

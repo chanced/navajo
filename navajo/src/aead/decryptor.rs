@@ -3,7 +3,7 @@ use super::{
     Material,
 };
 use crate::{
-    error::DecryptError,
+    error::{DecryptError, KeyDisabledError},
     hkdf::{self, Salt},
     key::Key,
     Aad, Aead, Buffer,
@@ -192,7 +192,11 @@ where
         if self.key_id.is_none() {
             if let Some((i, key_id)) = self.parse_key_id(idx) {
                 idx = i;
-                self.key = Some(self.cipher.as_ref().keyring.get(key_id)?.clone());
+                let key = self.cipher.as_ref().keyring.get(key_id)?;
+                if key.status().is_disabled() {
+                    return Err(DecryptError::DisabledKey(KeyDisabledError(key_id)));
+                }
+                self.key = Some(key.clone());
             } else {
                 self.move_cursor(idx);
                 return Ok(false);
@@ -409,11 +413,11 @@ mod tests {
 
     #[test]
     fn test_one_shot() {
+        let rng = SystemRng;
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
         let mut data = vec![0u8; 1024];
-        let rng = SystemRng::new();
         rng.fill(&mut data).unwrap();
-        let encryptor = Encryptor::new(&aead, None, data.clone());
+        let encryptor = Encryptor::new(rng, &aead, None, data.clone());
         let ciphertext = encryptor.finalize(Aad::empty()).unwrap().next().unwrap();
         let decryptor = Decryptor::new(&aead, ciphertext);
         let result = decryptor.finalize(Aad(&[])).unwrap().next().unwrap();
@@ -426,7 +430,7 @@ mod tests {
         let mut data = vec![0u8; 65536];
         let rng = SystemRng::new();
         rng.fill(&mut data).unwrap();
-        let encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), data.clone());
+        let encryptor = Encryptor::new(rng, &aead, Some(Segment::FourKilobytes), data.clone());
         let enc_seg: Vec<Vec<u8>> = encryptor.finalize(Aad::empty()).unwrap().collect();
         let ciphertext = enc_seg.concat();
         let decryptor = Decryptor::new(&aead, ciphertext);
@@ -452,8 +456,8 @@ mod tests {
     #[test]
     fn test_online() {
         let aead = Aead::new(Algorithm::Aes256Gcm, None);
-
-        let enc = Encryptor::new(&aead, None, b"hello world".to_vec());
+        let rng = SystemRng;
+        let enc = Encryptor::new(rng, &aead, None, b"hello world".to_vec());
         // enc.nonce = Some(nonce.clone());
         let ciphertext = enc
             .finalize(Aad(b"additional data"))
@@ -477,7 +481,7 @@ mod tests {
         let algorithm = Algorithm::Aes256Gcm;
         let aead = Aead::new(algorithm, None);
         let key = aead.keyring.primary();
-        let mut encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), vec![]);
+        let mut encryptor = Encryptor::new(rng, &aead, Some(Segment::FourKilobytes), vec![]);
         let mut ciphertext_chunks: Vec<Vec<u8>> = vec![];
         let aad = Aad(b"additional data");
 

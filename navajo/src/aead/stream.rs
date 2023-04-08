@@ -1,18 +1,16 @@
 use core::task::Poll::{Pending, Ready};
 
+use super::{Decryptor, Encryptor, Segment};
+use crate::{
+    error::{DecryptError, EncryptError},
+    Aad, Aead, Rng, SystemRng,
+};
 use alloc::{collections::VecDeque, vec, vec::Vec};
 use futures::{
     stream::{Fuse, FusedStream},
     Stream, StreamExt,
 };
 use pin_project::pin_project;
-
-use crate::{
-    error::{DecryptError, EncryptError},
-    Aad, Aead,
-};
-
-use super::{Decryptor, Encryptor, Segment};
 
 pub trait AeadStream: Stream {
     fn encrypt<C, A>(self, segment: Segment, aad: Aad<A>, aead: C) -> EncryptStream<Self, A>
@@ -22,7 +20,7 @@ pub trait AeadStream: Stream {
         C: AsRef<Aead> + Send + Sync,
         A: AsRef<[u8]> + Send + Sync,
     {
-        EncryptStream::new(self, segment, aad, aead)
+        EncryptStream::new(SystemRng, self, segment, aad, aead)
     }
     fn decrypt<C, A>(self, aad: Aad<A>, cipher: C) -> DecryptStream<Self, C, A>
     where
@@ -31,9 +29,10 @@ pub trait AeadStream: Stream {
         C: AsRef<Aead> + Send + Sync,
         A: AsRef<[u8]> + Send + Sync,
     {
-        DecryptStream::new(self, cipher, aad)
+        DecryptStream::new(SystemRng, self, cipher, aad)
     }
 }
+
 impl<T> AeadStream for T
 where
     T: Stream,
@@ -42,29 +41,31 @@ where
 }
 
 #[pin_project]
-pub struct EncryptStream<S, A>
+pub struct EncryptStream<S, A, N = SystemRng>
 where
     S: Stream + Sized,
     A: AsRef<[u8]>,
+    N: Rng,
 {
     #[pin]
     stream: Fuse<S>,
-    encryptor: Option<Encryptor<Vec<u8>>>,
+    encryptor: Option<Encryptor<Vec<u8>, N>>,
     queue: VecDeque<Vec<u8>>,
     aad: Aad<A>,
     done: bool,
 }
 
-impl<S, A> EncryptStream<S, A>
+impl<S, A, N> EncryptStream<S, A, N>
 where
     S: Stream + Sized,
     A: AsRef<[u8]> + Send + Sync,
+    N: Rng,
 {
-    pub fn new<C>(stream: S, segment: Segment, aad: Aad<A>, aead: C) -> Self
+    pub fn new<C>(rng: N, stream: S, segment: Segment, aad: Aad<A>, aead: C) -> Self
     where
         C: AsRef<Aead> + Send + Sync,
     {
-        let encryptor = Encryptor::new(aead.as_ref(), Some(segment), vec![]);
+        let encryptor = Encryptor::new(rng, aead.as_ref(), Some(segment), vec![]);
         Self {
             stream: stream.fuse(),
             encryptor: Some(encryptor),
@@ -74,22 +75,24 @@ where
         }
     }
 }
-impl<S, D> FusedStream for EncryptStream<S, D>
+impl<S, A, N> FusedStream for EncryptStream<S, A, N>
 where
     S: Stream + Sized,
     S::Item: AsRef<[u8]>,
-    D: AsRef<[u8]> + Send + Sync,
+    A: AsRef<[u8]> + Send + Sync,
+    N: Rng,
 {
     fn is_terminated(&self) -> bool {
         self.done
     }
 }
 
-impl<S, D> Stream for EncryptStream<S, D>
+impl<S, D, N> Stream for EncryptStream<S, D, N>
 where
     S: Stream,
     S::Item: AsRef<[u8]>,
     D: AsRef<[u8]> + Send + Sync,
+    N: Rng,
 {
     type Item = Result<Vec<u8>, EncryptError>;
     fn poll_next(
@@ -149,8 +152,9 @@ where
     }
 }
 #[pin_project]
-pub struct DecryptStream<S, C, A>
+pub struct DecryptStream<S, C, A, N = SystemRng>
 where
+    N: Rng,
     S: Stream + Sized,
     C: AsRef<Aead> + Send + Sync,
     A: AsRef<[u8]>,
@@ -161,17 +165,20 @@ where
     queue: VecDeque<Vec<u8>>,
     aad: Aad<A>,
     done: bool,
+    rng: N,
 }
 
-impl<S, C, A> DecryptStream<S, C, A>
+impl<S, C, A, N> DecryptStream<S, C, A, N>
 where
+    N: Rng,
     S: Stream,
     C: AsRef<Aead> + Send + Sync,
     A: AsRef<[u8]> + Send + Sync,
 {
-    pub fn new(stream: S, cipher: C, aad: Aad<A>) -> Self {
+    pub fn new(rng: N, stream: S, cipher: C, aad: Aad<A>) -> Self {
         let decryptor = Decryptor::new(cipher, vec![]);
         Self {
+            rng,
             aad,
             stream: stream.fuse(),
             decryptor: Some(decryptor),
@@ -181,8 +188,9 @@ where
     }
 }
 
-impl<S, C, D> Stream for DecryptStream<S, C, D>
+impl<S, C, D, N> Stream for DecryptStream<S, C, D, N>
 where
+    N: Rng,
     S: Stream,
     S::Item: AsRef<[u8]>,
     C: AsRef<Aead> + Send + Sync,

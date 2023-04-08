@@ -23,7 +23,7 @@ pub enum Algorithm {
 impl Algorithm {
     pub fn key_len(&self) -> usize {
         match self {
-            Algorithm::Aes256Siv => 32,
+            Algorithm::Aes256Siv => 64,
         }
     }
 }

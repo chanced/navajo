@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::{Aad, Aead};
+use crate::{Aad, Aead, Rng, SystemRng};
 
 use super::{Encryptor, Segment};
 
@@ -12,26 +12,33 @@ use super::{Encryptor, Segment};
 /// [`finalize`](`Self::finalize`) **must** be called or the ciphertext will be
 /// incomplete. [`Aead::encrypt_writer`] handles the finalization.
 #[cfg(feature = "std")]
-pub struct EncryptWriter<'write, W, A>
+pub struct EncryptWriter<'write, W, A, N = SystemRng>
 where
     W: Write,
     A: AsRef<[u8]>,
+    N: Rng,
 {
-    encryptor: Encryptor<Vec<u8>>,
+    encryptor: Encryptor<Vec<u8>, N>,
     writer: &'write mut W,
     aad: Aad<A>,
     counter: usize,
 }
-impl<'write, W, A> EncryptWriter<'write, W, A>
+impl<'write, W, A, N> EncryptWriter<'write, W, A, N>
 where
     W: Write,
     A: AsRef<[u8]>,
+    N: Rng,
 {
-    pub fn new<C>(writer: &'write mut W, segment: Segment, aad: Aad<A>, cipher: C) -> Self
+    pub fn new<C>(rng: N, writer: &'write mut W, segment: Segment, aad: Aad<A>, cipher: C) -> Self
     where
         C: AsRef<Aead>,
     {
-        let encryptor = Encryptor::new(cipher, Some(segment), Vec::with_capacity(segment.into()));
+        let encryptor = Encryptor::new(
+            rng,
+            cipher,
+            Some(segment),
+            Vec::with_capacity(segment.into()),
+        );
         Self {
             encryptor,
             writer,

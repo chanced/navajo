@@ -64,9 +64,9 @@ impl Aead {
     }
 
     #[cfg(test)]
-    pub fn new_with_rng<G>(rng: &G, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
+    pub fn new_with_rng<N>(rng: &N, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
     where
-        G: Rng,
+        N: Rng,
     {
         Self::create(rng, algorithm, metadata)
     }
@@ -94,7 +94,7 @@ impl Aead {
         A: AsRef<[u8]>,
         T: Buffer,
     {
-        let encryptor = Encryptor::new(self, None, mem::take(plaintext));
+        let encryptor = Encryptor::new(SystemRng, self, None, mem::take(plaintext));
         let result = encryptor
             .finalize(aad)?
             .next()
@@ -126,7 +126,7 @@ impl Aead {
         A: AsRef<[u8]>,
         T: AsRef<[u8]>,
     {
-        let encryptor = Encryptor::new(self, None, plaintext.as_ref().to_vec());
+        let encryptor = Encryptor::new(SystemRng, self, None, plaintext.as_ref().to_vec());
         let result = encryptor
             .finalize(aad)?
             .next()
@@ -193,7 +193,7 @@ impl Aead {
         S::Item: AsRef<[u8]>,
         A: AsRef<[u8]> + Send + Sync,
     {
-        EncryptStream::new(stream, segment, aad, self)
+        EncryptStream::new(SystemRng, stream, segment, aad, self)
     }
 
     pub fn encrypt_try_stream<S, A>(
@@ -208,7 +208,7 @@ impl Aead {
         S::Error: Send + Sync,
         A: AsRef<[u8]> + Send + Sync,
     {
-        EncryptTryStream::new(stream, segment, aad, self)
+        EncryptTryStream::new(SystemRng, stream, segment, aad, self)
     }
 
     #[cfg(feature = "std")]
@@ -224,7 +224,7 @@ impl Aead {
         W: std::io::Write,
         A: 'w + AsRef<[u8]>,
     {
-        let mut writer = EncryptWriter::new(writer, segment, aad, self);
+        let mut writer = EncryptWriter::new(SystemRng, writer, segment, aad, self);
         f(&mut writer)?;
         writer.finalize()
     }
@@ -270,7 +270,7 @@ impl Aead {
         S::Item: AsRef<[u8]>,
         A: AsRef<[u8]> + Send + Sync,
     {
-        DecryptStream::new(stream, self.clone(), aad)
+        DecryptStream::new(SystemRng, stream, self.clone(), aad)
     }
 
     pub fn decrypt_try_stream<S, A>(&self, stream: S, aad: Aad<A>) -> DecryptTryStream<S, Self, A>
@@ -284,9 +284,9 @@ impl Aead {
     }
 
     #[cfg(feature = "std")]
-    pub fn decrypt_reader<R, A>(&self, reader: R, aad: Aad<A>) -> DecryptReader<R, A, &Self>
+    pub fn decrypt_reader<N, A>(&self, reader: N, aad: Aad<A>) -> DecryptReader<N, A, &Self>
     where
-        R: std::io::Read,
+        N: std::io::Read,
         A: AsRef<[u8]>,
     {
         DecryptReader::new(reader, aad, self)
@@ -302,16 +302,6 @@ impl Aead {
         self.keyring.keys().iter().map(AeadKeyInfo::new).collect()
     }
 
-    pub fn add_key(&mut self, algorithm: Algorithm, metadata: Option<Metadata>) -> AeadKeyInfo {
-        let id = self.keyring.next_id(&SystemRng);
-        let metadata = metadata.map(Arc::new);
-        let material = Material::generate(&SystemRng, algorithm);
-        let key = Key::new(id, Status::Secondary, Origin::Navajo, material, metadata);
-        let info = AeadKeyInfo::new(&key);
-        self.keyring.add(key);
-        info
-    }
-
     /// Returns [`AeadKeyInfo`] for the primary key.
     pub fn primary_key(&self) -> AeadKeyInfo {
         self.keyring.primary().into()
@@ -324,6 +314,15 @@ impl Aead {
         self.keyring.promote(key_id).map(AeadKeyInfo::new)
     }
 
+    pub fn add(&mut self, algorithm: Algorithm, metadata: Option<Metadata>) -> AeadKeyInfo {
+        let id = self.keyring.next_id(&SystemRng);
+        let metadata = metadata.map(Arc::new);
+        let material = Material::generate(&SystemRng, algorithm);
+        let key = Key::new(id, Status::Secondary, Origin::Navajo, material, metadata);
+        let info = AeadKeyInfo::new(&key);
+        self.keyring.add(key);
+        info
+    }
     pub fn disable(
         &mut self,
         key_id: impl Into<u32>,
@@ -335,7 +334,7 @@ impl Aead {
         self.keyring.enable(key_id).map(AeadKeyInfo::new)
     }
 
-    pub fn remove_key(
+    pub fn delete(
         &mut self,
         key_id: impl Into<u32>,
     ) -> Result<AeadKeyInfo, RemoveKeyError<Algorithm>> {
@@ -356,9 +355,9 @@ impl Aead {
         &self.keyring
     }
 
-    fn create<G>(rng: &G, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
+    fn create<N>(rng: &N, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
     where
-        G: Rng,
+        N: Rng,
     {
         let id = rng.u32().unwrap();
         let material = Material::generate(rng, algorithm);

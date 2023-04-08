@@ -104,7 +104,7 @@ impl Verifier {
         }
     }
 
-    pub(crate) fn add_key(&mut self, key: VerifyingKey) -> Result<(), DuplicatePubIdError> {
+    pub(crate) fn add(&mut self, key: VerifyingKey) -> Result<(), DuplicatePubIdError> {
         if self.keys.contains_key(&key.pub_id) {
             Err(DuplicatePubIdError(key.pub_id))
         } else {
@@ -115,7 +115,7 @@ impl Verifier {
         }
     }
 
-    pub(crate) fn remove(&mut self, pub_id: &str) -> Result<Jwk, RemoveKeyError<Algorithm>> {
+    pub(crate) fn delete(&mut self, pub_id: &str) -> Result<Jwk, RemoveKeyError<Algorithm>> {
         let k = self
             .keys
             .get(pub_id)
@@ -150,7 +150,7 @@ mod tests {
             let mut signer = Signer::new(alg, None, None);
             let first_sig = signer.sign(msg);
             let first_key_id = signer.primary_key_id().to_string();
-            let second = signer.add_key(Algorithm::Ed25519, None, None).unwrap();
+            let second = signer.add(Algorithm::Ed25519, None, None).unwrap();
             signer.promote(second.id).unwrap();
             let other_signer = Signer::new(alg, None, None);
 
@@ -203,7 +203,7 @@ mod tests {
 
             assert_eq!(&claims, verified_jws.claims());
 
-            let second = signer.add_key(Algorithm::Ed25519, None, None).unwrap();
+            let second = signer.add(Algorithm::Ed25519, None, None).unwrap();
 
             signer.promote(second.id).unwrap();
             let other_signer = Signer::new(alg, None, None);

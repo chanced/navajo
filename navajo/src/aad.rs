@@ -14,6 +14,9 @@ impl Aad<[u8; 0]> {
         Self([0u8; 0])
     }
 }
+
+impl<A: AsRef<[u8]>> Copy for Aad<A> where A: Copy {}
+
 impl<A> Aad<A>
 where
     A: AsRef<[u8]>,
@@ -62,5 +65,3 @@ where
         self.as_ref()
     }
 }
-
-impl<A> Copy for Aad<A> where A: AsRef<[u8]> + Copy {}

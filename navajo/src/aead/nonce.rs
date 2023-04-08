@@ -43,9 +43,9 @@ impl core::cmp::PartialEq<[u8]> for SingleNonce {
     }
 }
 impl SingleNonce {
-    pub(crate) fn new<R>(rng: R, size: usize) -> Self
+    pub(crate) fn new<N>(rng: N, size: usize) -> Self
     where
-        R: Rng,
+        N: Rng,
     {
         let mut result = match size {
             12 => Self::Twelve([0u8; 12]),
@@ -139,9 +139,9 @@ pub(crate) enum NonceSequence {
 }
 
 impl NonceSequence {
-    pub(crate) fn new<R>(rng: R, size: usize) -> Self
+    pub(crate) fn new<N>(rng: N, size: usize) -> Self
     where
-        R: Rng,
+        N: Rng,
     {
         let mut result = match size {
             12 => Self::Twelve(0, [0u8; 12]),

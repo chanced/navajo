@@ -37,11 +37,7 @@ impl Error for RandomError {}
 
 impl core::fmt::Display for RandomError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "navajo: error generating random bytes\n\ncaused by: {}",
-            self.0
-        )
+        write!(f, "error generating random bytes\n\ncaused by: {}", self.0)
     }
 }
 
@@ -61,7 +57,7 @@ impl From<rand_core::Error> for RandomError {
 pub struct KeyDisabledError(pub u32);
 impl Display for KeyDisabledError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "navajo: key is disabled: {}", self.0)
+        write!(f, "key is disabled: {}", self.0)
     }
 }
 
@@ -87,7 +83,7 @@ impl KeyNotFoundError {
 }
 impl fmt::Display for KeyNotFoundError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "navajo: missing key: {}", self.id_string())
+        write!(f, "missing key: {}", self.id_string())
     }
 }
 
@@ -106,7 +102,7 @@ impl From<ring::error::Unspecified> for UnspecifiedError {
 
 impl fmt::Display for UnspecifiedError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "navajo: unspecified error")
+        write!(f, "unspecified error")
     }
 }
 
@@ -121,22 +117,24 @@ impl core::fmt::Display for SegmentLimitExceededError {
 #[cfg(feature = "std")]
 impl Error for SegmentLimitExceededError {}
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum EncryptDeterministicError {
+pub enum EncryptDeterministicallyError {
     Unspecified,
     EmptyPlaintext,
+    PlaintextTooLong,
 }
 
 #[cfg(feature = "std")]
-impl Error for EncryptDeterministicError {}
-impl Display for EncryptDeterministicError {
+impl Error for EncryptDeterministicallyError {}
+impl Display for EncryptDeterministicallyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
             Self::EmptyPlaintext => write!(f, "plaintext is empty"),
+            Self::PlaintextTooLong => write!(f, "plaintext is too long"),
         }
     }
 }
-impl From<UnspecifiedError> for EncryptDeterministicError {
+impl From<UnspecifiedError> for EncryptDeterministicallyError {
     fn from(_: UnspecifiedError) -> Self {
         Self::Unspecified
     }
@@ -276,7 +274,7 @@ impl fmt::Display for DecryptError {
             Self::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
             Self::KeyNotFound(e) => fmt::Display::fmt(e, f),
             Self::SegmentLimitExceeded => fmt::Display::fmt(&SegmentLimitExceededError, f),
-            Self::EmptyCiphertext => write!(f, "navajo: ciphertext must not be empty"),
+            Self::EmptyCiphertext => write!(f, "ciphertext must not be empty"),
             Self::DisabledKey(e) => fmt::Display::fmt(e, f),
         }
     }
@@ -290,6 +288,68 @@ impl From<UnspecifiedError> for DecryptError {
 #[cfg(feature = "ring")]
 impl From<ring::error::Unspecified> for DecryptError {
     fn from(_: ring::error::Unspecified) -> Self {
+        Self::Unspecified
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum DecryptDeterministicallyError {
+    /// The underlying cryptography library, *ring* returned an unspecified error.
+    Unspecified,
+    /// The keyset does not contain the key used to encrypt the ciphertext
+    KeyNotFound(KeyNotFoundError),
+    SegmentLimitExceeded,
+    EmptyCiphertext,
+    DisabledKey(KeyDisabledError),
+    CiphertextTooShort,
+}
+
+#[cfg(feature = "std")]
+impl Error for DecryptDeterministicallyError {}
+
+impl From<KeyNotFoundError> for DecryptDeterministicallyError {
+    fn from(e: KeyNotFoundError) -> Self {
+        Self::KeyNotFound(e)
+    }
+}
+impl From<SegmentLimitExceededError> for DecryptDeterministicallyError {
+    fn from(_: SegmentLimitExceededError) -> Self {
+        Self::SegmentLimitExceeded
+    }
+}
+#[cfg(feature = "std")]
+impl From<DecryptDeterministicallyError> for std::io::Error {
+    fn from(e: DecryptDeterministicallyError) -> Self {
+        Self::new(std::io::ErrorKind::Other, e)
+    }
+}
+
+impl From<MalformedError> for DecryptDeterministicallyError {
+    fn from(_: MalformedError) -> Self {
+        Self::Unspecified
+    }
+}
+
+impl From<rust_crypto_aead::Error> for DecryptDeterministicallyError {
+    fn from(_: rust_crypto_aead::Error) -> Self {
+        Self::Unspecified
+    }
+}
+impl fmt::Display for DecryptDeterministicallyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unspecified => fmt::Display::fmt(&UnspecifiedError, f),
+            Self::KeyNotFound(e) => fmt::Display::fmt(e, f),
+            Self::SegmentLimitExceeded => fmt::Display::fmt(&SegmentLimitExceededError, f),
+            Self::EmptyCiphertext => write!(f, "ciphertext must not be empty"),
+            Self::DisabledKey(e) => fmt::Display::fmt(e, f),
+            Self::CiphertextTooShort => write!(f, "cleartext is too short"),
+        }
+    }
+}
+
+impl From<UnspecifiedError> for DecryptDeterministicallyError {
+    fn from(_e: UnspecifiedError) -> Self {
         Self::Unspecified
     }
 }
@@ -370,7 +430,7 @@ impl From<String> for MalformedError {
 
 impl fmt::Display for MalformedError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "navajo: malformed data: {}", &self.0)
+        write!(f, "malformed data: {}", &self.0)
     }
 }
 
@@ -382,11 +442,7 @@ impl Error for InvalidAlgorithmError {}
 
 impl fmt::Display for InvalidAlgorithmError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "navajo: invalid or unsupported algorithm: \"{}\"",
-            self.0
-        )
+        write!(f, "invalid or unsupported algorithm: \"{}\"", self.0)
     }
 }
 
@@ -415,10 +471,10 @@ impl Display for TruncationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NotTruncatable(alg) => {
-                write!(f, "navajo: truncation not supported for algorithm {alg}")
+                write!(f, "truncation not supported for algorithm {alg}")
             }
-            Self::LengthExceeded => write!(f, "navajo: truncation length exceeded"),
-            Self::MinLengthNotMet => write!(f, "navajo: truncation min length not met"),
+            Self::LengthExceeded => write!(f, "truncation length exceeded"),
+            Self::MinLengthNotMet => write!(f, "truncation min length not met"),
         }
     }
 }
@@ -478,7 +534,7 @@ impl Error for SealError {}
 
 impl fmt::Display for SealError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "error: failed to seal:\n\ncaused by:\n\t{}", self.0)
+        write!(f, "failed to seal:\n\ncaused by:\n\t{}", self.0)
     }
 }
 impl From<String> for SealError {
@@ -513,7 +569,7 @@ impl Error for OpenError {}
 
 impl fmt::Display for OpenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "error: failed to open:\n\ncaused by:\n\t{}", self.0)
+        write!(f, "failed to open:\n\ncaused by:\n\t{}", self.0)
     }
 }
 
@@ -562,7 +618,7 @@ pub enum RemoveKeyError<A> {
 impl<A> fmt::Display for RemoveKeyError<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::IsPrimaryKey(_) => write!(f, "navajo: cannot remove primary key"),
+            Self::IsPrimaryKey(_) => write!(f, "cannot remove primary key"),
             Self::KeyNotFound(e) => fmt::Display::fmt(e, f),
         }
     }
@@ -596,7 +652,7 @@ pub enum DisableKeyError<A> {
 impl<A> fmt::Display for DisableKeyError<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::IsPrimaryKey(_) => write!(f, "cannot Disable primary key"),
+            Self::IsPrimaryKey(_) => write!(f, "cannot disable primary key"),
             Self::KeyNotFound(e) => fmt::Display::fmt(e, f),
         }
     }
@@ -641,11 +697,8 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Upstream(e) => write!(
-                f,
-                "navajo: failed to verify stream due to upstream error;\n\t{e}"
-            ),
-            Self::FailedVerification => write!(f, "navajo: failed to verify stream"),
+            Self::Upstream(e) => write!(f, "failed to verify stream due to upstream error;\n\t{e}"),
+            Self::FailedVerification => write!(f, "failed to verify stream"),
         }
     }
 }
@@ -699,7 +752,7 @@ impl fmt::Display for KeyError {
 }
 impl fmt::Debug for KeyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "navajo: malformed key: {}", self.0)
+        write!(f, "malformed key: {}", self.0)
     }
 }
 

@@ -34,11 +34,14 @@ impl Status {
     pub fn is_secondary(&self) -> bool {
         *self == Self::Secondary
     }
-
-    // /// Returns `true` if `Disabled`.
-    // pub fn is_disabled(&self) -> bool {
-    //     matches!(self, Self::Disabled)
-    // }
+    /// Returns `true` if the `Status` is `Primary` or `Secondary`.
+    pub fn is_enabled(&self) -> bool {
+        !self.is_disabled()
+    }
+    /// Returns `true` if `Disabled`.
+    pub fn is_disabled(&self) -> bool {
+        matches!(self, Self::Disabled)
+    }
 }
 
 impl From<Status> for i8 {

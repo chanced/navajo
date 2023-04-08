@@ -1,20 +1,20 @@
 #![doc = include_str!("./daead/README.md")]
 
 mod algorithm;
+mod cipher;
 mod material;
 
 pub use algorithm::Algorithm;
-use alloc::{sync::Arc, vec::Vec};
 pub(crate) use material::Material;
 
-use zeroize::ZeroizeOnDrop;
-
 use crate::{
-    error::{DisableKeyError, KeyNotFoundError, RemoveKeyError},
+    error::{DisableKeyError, EncryptDeterministicallyError, KeyNotFoundError, RemoveKeyError},
     key::Key,
     keyring::Keyring,
-    KeyInfo, Metadata, Origin, Rng, Status, SystemRng,
+    Aad, Buffer, KeyInfo, Metadata, Origin, Rng, Status, SystemRng,
 };
+use alloc::{sync::Arc, vec::Vec};
+use zeroize::ZeroizeOnDrop;
 
 #[derive(Clone, Debug, ZeroizeOnDrop)]
 pub struct Daead {
@@ -26,9 +26,9 @@ impl Daead {
         Self::create(&SystemRng, algorithm, metadata)
     }
 
-    fn create<G>(rng: &G, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
+    fn create<N>(rng: &N, algorithm: Algorithm, metadata: Option<Metadata>) -> Self
     where
-        G: Rng,
+        N: Rng,
     {
         let id = rng.u32().unwrap();
         let material = Material::generate(rng, algorithm);
@@ -46,14 +46,89 @@ impl Daead {
     }
 
     pub fn keys(&self) -> Vec<KeyInfo<crate::daead::Algorithm>> {
-        todo!()
+        self.keyring.keys().iter().map(|k| k.info()).collect()
     }
 
-    pub fn add_key(
-        &mut self,
-        algorithm: Algorithm,
-        metadata: Option<Metadata>,
-    ) -> KeyInfo<Algorithm> {
+    pub fn encrypt_in_place_deterministically<A, B>(
+        &self,
+        aad: Aad<A>,
+        plaintext: &mut B,
+    ) -> Result<(), EncryptDeterministicallyError>
+    where
+        A: AsRef<[u8]>,
+        B: Buffer,
+    {
+        self.keyring
+            .primary()
+            .encrypt_in_place_deterministically(aad, plaintext)
+    }
+    /// Encrypts the given plaintext deterministically for each enabled key
+    /// within the keyring for queries.
+    pub fn encrypt_for_query_deterministically<A>(
+        &self,
+        aad: Aad<A>,
+        plaintext: &[u8],
+    ) -> Result<Vec<Vec<u8>>, EncryptDeterministicallyError>
+    where
+        A: AsRef<[u8]>,
+    {
+        let plaintext = plaintext.to_vec();
+        let mut ciphertexts = Vec::new();
+        let aad = Aad(aad.0.as_ref());
+        for key in self
+            .keyring
+            .keys()
+            .iter()
+            .rev()
+            .filter(|k| k.status().is_enabled())
+        {
+            ciphertexts.push(key.encrypt_deterministically(aad, &plaintext)?);
+        }
+        Ok(ciphertexts)
+    }
+
+    pub fn encrypt_deterministically(
+        &self,
+        aad: Aad<&[u8]>,
+        plaintext: &[u8],
+    ) -> Result<Vec<u8>, EncryptDeterministicallyError> {
+        self.keyring
+            .primary()
+            .encrypt_deterministically(aad, plaintext)
+    }
+
+    pub fn decrypt_deterministically(
+        &self,
+        aad: Aad<&[u8]>,
+        ciphertext: &[u8],
+    ) -> Result<Vec<u8>, crate::error::DecryptDeterministicallyError> {
+        let mut buf = ciphertext.to_vec();
+        self.decrypt_in_place_deterministically(aad, &mut buf)?;
+        Ok(buf)
+    }
+
+    pub fn decrypt_in_place_deterministically<A, B>(
+        &self,
+        aad: Aad<A>,
+        ciphertext: &mut B,
+    ) -> Result<(), crate::error::DecryptDeterministicallyError>
+    where
+        A: AsRef<[u8]>,
+        B: Buffer,
+    {
+        if ciphertext.len() < 4 {
+            return Err(crate::error::DecryptDeterministicallyError::CiphertextTooShort);
+        }
+
+        let mut id_bytes = ciphertext.split_off(4);
+
+        core::mem::swap(ciphertext, &mut id_bytes);
+        let id = u32::from_be_bytes(id_bytes.as_ref().try_into().unwrap()); // safe: len checked above
+        let key = self.keyring.get(id)?;
+        key.decrypt_in_place_deterministically(aad, ciphertext)
+    }
+
+    pub fn add(&mut self, algorithm: Algorithm, metadata: Option<Metadata>) -> KeyInfo<Algorithm> {
         let material = Material::generate(&SystemRng, algorithm);
         let id = self.keyring.next_id(&SystemRng);
         let metadata = metadata.map(Arc::new);
@@ -83,7 +158,7 @@ impl Daead {
         self.keyring.disable(key_id).map(|key| key.info())
     }
 
-    pub fn remove_key(
+    pub fn delete(
         &mut self,
         key_id: impl Into<u32>,
     ) -> Result<KeyInfo<Algorithm>, RemoveKeyError<Algorithm>> {
@@ -98,5 +173,53 @@ impl Daead {
         self.keyring.update_key_metadata(key_id, metadata)?;
         let key = self.keyring.get(key_id)?;
         Ok(key.info())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encrypt_decrypt_deterministically() {
+        let mut daead = Daead::new(Algorithm::Aes256Siv, None);
+        let primary_key = daead.keyring().primary();
+        let plaintext = b"hello world test";
+        let aad = Aad(b"my aad".as_ref());
+        let ciphertext = daead.encrypt_deterministically(aad, plaintext).unwrap();
+
+        assert_eq!(primary_key.id().to_be_bytes(), &ciphertext[..4]);
+
+        println!("ciphertext: {}", String::from_utf8_lossy(&ciphertext));
+        let decrypted = daead.decrypt_deterministically(aad, &ciphertext).unwrap();
+        assert_eq!(plaintext, &decrypted[..]);
+        {
+            let new_key = daead.add(Algorithm::Aes256Siv, None);
+            daead.promote(new_key).unwrap();
+        }
+
+        let decrypted = daead.decrypt_deterministically(aad, &ciphertext).unwrap();
+        assert_eq!(plaintext, &decrypted[..]);
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_query_deterministically() {
+        let mut daead = Daead::new(Algorithm::Aes256Siv, None);
+        daead.add(Algorithm::Aes256Siv, None);
+        {
+            let new_key = daead.add(Algorithm::Aes256Siv, None);
+            daead.promote(new_key).unwrap();
+        }
+
+        let plaintext = b"hello world test";
+        let aad = Aad(b"my aad".as_ref());
+        let ciphertexts = daead
+            .encrypt_for_query_deterministically(aad, plaintext)
+            .unwrap();
+        assert_eq!(ciphertexts.len(), 3);
+        for ciphertext in ciphertexts {
+            let decrypted = daead.decrypt_deterministically(aad, &ciphertext).unwrap();
+            assert_eq!(plaintext, &decrypted[..]);
+        }
     }
 }

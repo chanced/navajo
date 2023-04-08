@@ -313,9 +313,9 @@ where
         &self.keys
     }
 
-    pub(crate) fn next_id<G>(&self, rng: &G) -> u32
+    pub(crate) fn next_id<N>(&self, rng: &N) -> u32
     where
-        G: Rng,
+        N: Rng,
     {
         let mut id = gen_id(rng);
         while self.keys.iter().any(|k| k.id() == id) {
@@ -329,7 +329,7 @@ impl<M> Keyring<M> where M: KeyMaterial + Serialize {}
 
 impl<M> Keyring<M> where M: KeyMaterial + DeserializeOwned {}
 
-pub(crate) fn gen_id<G: Rng>(rng: &G) -> u32 {
+pub(crate) fn gen_id<N: Rng>(rng: &N) -> u32 {
     let mut value = rng.u32().unwrap();
     while value < 1_000_000 {
         value = rng.u32().unwrap();

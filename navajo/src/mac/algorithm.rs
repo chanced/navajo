@@ -10,22 +10,6 @@ use crate::{
     strings::to_upper_remove_seperators,
 };
 
-const SHA2_256_KEY_LEN: usize = 32;
-const SHA2_384_KEY_LEN: usize = 48;
-const SHA2_512_KEY_LEN: usize = 64;
-const SHA3_224_KEY_LEN: usize = 32;
-const SHA3_256_KEY_LEN: usize = 32;
-const SHA3_384_KEY_LEN: usize = 48;
-const SHA3_512_KEY_LEN: usize = 64;
-#[cfg(feature = "blake3")]
-const BLAKE3_KEY_LEN: usize = 32;
-#[cfg(feature = "aes")]
-const AES128_KEY_LEN: usize = 16;
-#[cfg(feature = "aes")]
-const AES192_KEY_LEN: usize = 24;
-#[cfg(feature = "aes")]
-const AES256_KEY_LEN: usize = 32;
-
 #[derive(
     Debug,
     Clone,
@@ -149,9 +133,9 @@ impl TryFrom<&str> for Algorithm {
 }
 
 impl Algorithm {
-    pub(super) fn generate_key<R>(&self, rng: &R) -> Vec<u8>
+    pub(super) fn generate_key<N>(&self, rng: &N) -> Vec<u8>
     where
-        R: Rng,
+        N: Rng,
     {
         let mut key = alloc::vec![0u8; self.default_key_len()];
         rng.fill(&mut key).unwrap();
@@ -196,7 +180,7 @@ impl Algorithm {
             }
             #[cfg(all(feature = "aes", feature = "cmac"))]
             Algorithm::Aes128 => {
-                if len != AES128_KEY_LEN {
+                if len != super::AES128_KEY_LEN {
                     Err("AES-128 key length must be 16 bytes".into())
                 } else {
                     Ok(())
@@ -204,7 +188,7 @@ impl Algorithm {
             }
             #[cfg(all(feature = "aes", feature = "cmac"))]
             Algorithm::Aes192 => {
-                if len != AES192_KEY_LEN {
+                if len != super::AES192_KEY_LEN {
                     Err("AES-192 key length must be 24 bytes".into())
                 } else {
                     Ok(())
@@ -212,7 +196,7 @@ impl Algorithm {
             }
             #[cfg(all(feature = "aes", feature = "cmac"))]
             Algorithm::Aes256 => {
-                if len != AES256_KEY_LEN {
+                if len != super::AES256_KEY_LEN {
                     Err("AES-256 key length must be 32 bytes".into())
                 } else {
                     Ok(())
@@ -224,27 +208,27 @@ impl Algorithm {
     pub fn default_key_len(&self) -> usize {
         match self {
             #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
-            Algorithm::Sha256 => SHA2_256_KEY_LEN,
+            Algorithm::Sha256 => super::SHA2_256_KEY_LEN,
             #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
-            Algorithm::Sha384 => SHA2_384_KEY_LEN,
+            Algorithm::Sha384 => super::SHA2_384_KEY_LEN,
             #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
-            Algorithm::Sha512 => SHA2_512_KEY_LEN,
+            Algorithm::Sha512 => super::SHA2_512_KEY_LEN,
             #[cfg(all(feature = "sha3", feature = "hmac"))]
-            Algorithm::Sha3_224 => SHA3_224_KEY_LEN,
+            Algorithm::Sha3_224 => super::SHA3_224_KEY_LEN,
             #[cfg(all(feature = "sha3", feature = "hmac"))]
-            Algorithm::Sha3_256 => SHA3_256_KEY_LEN,
+            Algorithm::Sha3_256 => super::SHA3_256_KEY_LEN,
             #[cfg(all(feature = "sha3", feature = "hmac"))]
-            Algorithm::Sha3_384 => SHA3_384_KEY_LEN,
+            Algorithm::Sha3_384 => super::SHA3_384_KEY_LEN,
             #[cfg(all(feature = "sha3", feature = "hmac"))]
-            Algorithm::Sha3_512 => SHA3_512_KEY_LEN,
+            Algorithm::Sha3_512 => super::SHA3_512_KEY_LEN,
             #[cfg(feature = "blake3")]
-            Algorithm::Blake3 => BLAKE3_KEY_LEN,
+            Algorithm::Blake3 => super::BLAKE3_KEY_LEN,
             #[cfg(all(feature = "aes", feature = "cmac"))]
-            Algorithm::Aes128 => AES128_KEY_LEN,
+            Algorithm::Aes128 => super::AES128_KEY_LEN,
             #[cfg(all(feature = "aes", feature = "cmac"))]
-            Algorithm::Aes192 => AES192_KEY_LEN,
+            Algorithm::Aes192 => super::AES192_KEY_LEN,
             #[cfg(all(feature = "aes", feature = "cmac"))]
-            Algorithm::Aes256 => AES256_KEY_LEN,
+            Algorithm::Aes256 => super::AES256_KEY_LEN,
         }
     }
 }

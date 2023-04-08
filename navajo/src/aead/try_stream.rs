@@ -21,7 +21,7 @@ pub trait AeadTryStream: TryStream {
         C: AsRef<Aead> + Send + Sync,
         A: AsRef<[u8]> + Send + Sync,
     {
-        EncryptTryStream::new(self, segment, aad, cipher)
+        EncryptTryStream::new(SystemRng, self, segment, aad, cipher)
     }
     fn decrypt<C, A>(self, aad: Aad<A>, cipher: C) -> DecryptTryStream<Self, C, A>
     where
@@ -43,34 +43,35 @@ where
 }
 
 #[pin_project]
-pub struct EncryptTryStream<S, A, G = SystemRng>
+pub struct EncryptTryStream<S, A, N = SystemRng>
 where
+    N: Rng,
     S: TryStream + Sized,
     S::Ok: AsRef<[u8]>,
     S::Error: Send + Sync,
-    G: Rng,
     A: AsRef<[u8]> + Send + Sync,
 {
     #[pin]
     stream: S,
-    encryptor: Option<Encryptor<Vec<u8>, G>>,
+    encryptor: Option<Encryptor<Vec<u8>, N>>,
     queue: VecDeque<Vec<u8>>,
     aad: Aad<A>,
     done: bool,
 }
 
-impl<S, A> EncryptTryStream<S, A>
+impl<S, A, N> EncryptTryStream<S, A, N>
 where
+    N: Rng,
     S: TryStream + Sized,
     S::Ok: AsRef<[u8]>,
     S::Error: Send + Sync,
     A: AsRef<[u8]> + Send + Sync,
 {
-    pub fn new<C>(stream: S, segment: Segment, aad: Aad<A>, cipher: C) -> Self
+    pub fn new<C>(rng: N, stream: S, segment: Segment, aad: Aad<A>, cipher: C) -> Self
     where
         C: AsRef<Aead>,
     {
-        let encryptor = Encryptor::new(cipher.as_ref(), Some(segment), vec![]);
+        let encryptor = Encryptor::new(rng, cipher.as_ref(), Some(segment), vec![]);
         Self {
             stream,
             encryptor: Some(encryptor),
@@ -80,8 +81,9 @@ where
         }
     }
 }
-impl<S, D> FusedStream for EncryptTryStream<S, D>
+impl<S, D, N> FusedStream for EncryptTryStream<S, D, N>
 where
+    N: Rng,
     S: TryStream + Sized,
     S::Ok: AsRef<[u8]>,
     S::Error: Send + Sync,
@@ -92,8 +94,9 @@ where
     }
 }
 
-impl<S, D> Stream for EncryptTryStream<S, D>
+impl<S, D, N> Stream for EncryptTryStream<S, D, N>
 where
+    N: Rng,
     S: TryStream,
     S::Ok: AsRef<[u8]>,
     S::Error: Send + Sync,

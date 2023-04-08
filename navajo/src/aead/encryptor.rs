@@ -54,10 +54,10 @@ use super::{
 /// be of the size specified by [`Segment`] except for the last, which will be no greater than
 /// [`Segment`].
 #[derive(ZeroizeOnDrop, Debug)]
-pub struct Encryptor<B, G = SystemRng>
+pub struct Encryptor<B, N = SystemRng>
 where
     B: Buffer,
-    G: Rng,
+    N: Rng,
 {
     key: Key<Material>,
     buf: BufferZeroizer<B>,
@@ -71,31 +71,20 @@ where
     segments: VecDeque<B>,
 
     #[zeroize(skip)]
-    rand: G,
+    rng: N,
 }
 
-impl<B> Encryptor<B, SystemRng>
+impl<B, N> Encryptor<B, N>
 where
     B: Buffer,
+    N: Rng,
 {
-    pub fn new<C>(cipher: C, segment: Option<Segment>, buf: B) -> Self
+    pub fn new<C>(rng: N, cipher: C, segment: Option<Segment>, buf: B) -> Self
     where
+        N: Rng,
         C: AsRef<Aead>,
     {
-        Self::create(SystemRng, cipher.as_ref(), segment, buf)
-    }
-}
-impl<B, G> Encryptor<B, G>
-where
-    B: Buffer,
-    G: Rng,
-{
-    #[cfg(test)]
-    pub fn new_with_rng(rand: G, aead: &Aead, segment: Option<Segment>, buf: B) -> Self {
-        Self::create(rand, aead, segment, buf)
-    }
-    fn create(rand: G, aead: &Aead, segment: Option<Segment>, buf: B) -> Self {
-        let key = aead.keyring.primary().clone();
+        let key = cipher.as_ref().keyring.primary().clone();
         Self {
             key,
             segment,
@@ -103,9 +92,10 @@ where
             nonce_seq: None,
             cipher: None,
             segments: VecDeque::new(),
-            rand,
+            rng,
         }
     }
+
     pub fn update<A, C>(&mut self, aad: Aad<A>, plaintext: C) -> Result<(), EncryptError>
     where
         A: AsRef<[u8]>,
@@ -135,8 +125,8 @@ where
                 let mut header: Option<Vec<u8>> = None;
                 if self.counter() == 0 {
                     let nonce_seq =
-                        NonceSequence::new(self.rand.clone(), self.algorithm().nonce_len());
-                    let (salt, derived_key) = derive_key(self.rand.clone(), &self.key, aad);
+                        NonceSequence::new(self.rng.clone(), self.algorithm().nonce_len());
+                    let (salt, derived_key) = derive_key(self.rng.clone(), &self.key, aad);
                     let header_bytes = self.header(self.segment, nonce_seq.prefix(), &salt);
                     self.nonce_seq = Some(nonce_seq);
                     header = Some(header_bytes);
@@ -193,7 +183,7 @@ where
     }
 
     fn finalize_one_shot(mut self, aad: &[u8]) -> Result<IntoIter<B>, EncryptError> {
-        let nonce = SingleNonce::new(self.rand.clone(), self.algorithm().nonce_len());
+        let nonce = SingleNonce::new(self.rng.clone(), self.algorithm().nonce_len());
         let header = self.header(None, &nonce, &[]);
         let cipher = self.key.cipher();
         let mut buf = mem::take(&mut self.buf.0);
@@ -266,9 +256,9 @@ where
         Ok(segments.into_iter())
     }
 }
-fn derive_key<G>(rng: G, key: &Key<Material>, aad: &[u8]) -> (Vec<u8>, sensitive::Bytes)
+fn derive_key<N>(rng: N, key: &Key<Material>, aad: &[u8]) -> (Vec<u8>, sensitive::Bytes)
 where
-    G: Rng,
+    N: Rng,
 {
     let mut salt_bytes = vec![0u8; key.algorithm().key_len()];
     rng.fill(&mut salt_bytes).unwrap();
@@ -296,10 +286,10 @@ mod tests {
     fn test_one_shot_adds_header() {
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
         let key = aead.keyring.primary();
+        let rng = SystemRng;
         let mut buf = vec![0u8; 100];
-        let rng = SystemRng::new();
         rng.fill(&mut buf).unwrap();
-        let encryptor = Encryptor::new(&aead, None, buf);
+        let encryptor = Encryptor::new(rng, &aead, None, buf);
         let result = encryptor.finalize(Aad([])).unwrap().next().unwrap();
         assert!(result.len() > 100);
         assert_eq!(result[0], Method::Online);
@@ -308,12 +298,12 @@ mod tests {
 
     #[test]
     fn test_streaming_buffer_size() {
+        let rng = SystemRng;
         let algorithm = Algorithm::Aes128Gcm;
         let aead = Aead::new(algorithm, None);
         let mut buf = vec![0u8; 65536];
-        let rng = SystemRng::new();
         rng.fill(&mut buf).unwrap();
-        let encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), buf);
+        let encryptor = Encryptor::new(rng, &aead, Some(Segment::FourKilobytes), buf);
 
         let expected = FOUR_KB
             - Method::LEN
@@ -326,12 +316,12 @@ mod tests {
 
     #[test]
     fn test_streaming_adds_header() {
+        let rng = SystemRng;
         let aead = Aead::new(Algorithm::Aes128Gcm, None);
         let key = aead.keyring.primary();
-        let rng = SystemRng::new();
         let mut buf = vec![0u8; 65536];
         rng.fill(&mut buf).unwrap();
-        let encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), buf);
+        let encryptor = Encryptor::new(rng, &aead, Some(Segment::FourKilobytes), buf);
         let result: Vec<Vec<u8>> = encryptor.finalize(Aad::empty()).unwrap().collect();
         assert!(result.len() == 17);
         assert_eq!(
@@ -351,11 +341,11 @@ mod tests {
     #[test]
     fn test_online() {
         let aead = Aead::new(Algorithm::Aes256Gcm, None);
-
+        let rng = SystemRng;
         let msg = b"hello world.".to_vec();
-
         let data = b"hello world.".to_vec();
-        let enc = Encryptor::new(&aead, None, data);
+
+        let enc = Encryptor::new(rng, &aead, None, data);
         let ciphertext = enc
             .finalize(Aad(b"additional data"))
             .unwrap()
@@ -382,7 +372,7 @@ mod tests {
         let key_id = key.id();
         let key_material = key.material().bytes();
 
-        let mut encryptor = Encryptor::new(&aead, Some(Segment::FourKilobytes), vec![]);
+        let mut encryptor = Encryptor::new(rng, &aead, Some(Segment::FourKilobytes), vec![]);
         let mut ciphertext_chunks: Vec<Vec<u8>> = vec![];
         let aad = b"additional data";
 

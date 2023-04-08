@@ -238,16 +238,16 @@ impl AddKey {
         let mut primitive = envelope.open(aad.clone(), input).await?;
         match primitive {
             Primitive::Aead(ref mut aead) => {
-                aead.add_key(algorithm.try_into()?, metadata);
+                aead.add(algorithm.try_into()?, metadata);
             }
             Primitive::Daead(ref mut daead) => {
-                daead.add_key(algorithm.try_into()?, metadata);
+                daead.add(algorithm.try_into()?, metadata);
             }
             Primitive::Mac(ref mut mac) => {
-                mac.add_key(algorithm.try_into()?, metadata);
+                mac.add(algorithm.try_into()?, metadata);
             }
             Primitive::Dsa(ref mut sig) => {
-                sig.add_key(algorithm.try_into()?, pub_id, metadata)?;
+                sig.add(algorithm.try_into()?, pub_id, metadata)?;
             }
         }
         envelope.seal_and_write(output, aad, primitive).await
@@ -404,16 +404,16 @@ impl DeleteKey {
         let mut primitive = envelope.open(aad.clone(), input).await?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
-                aead.remove_key(key_id)?;
+                aead.delete(key_id)?;
             }
             Primitive::Daead(daead) => {
-                daead.remove_key(key_id)?;
+                daead.delete(key_id)?;
             }
             Primitive::Mac(mac) => {
-                mac.remove_key(key_id)?;
+                mac.delete(key_id)?;
             }
             Primitive::Dsa(sig) => {
-                sig.remove(key_id)?;
+                sig.delete(key_id)?;
             }
         }
         envelope.seal_and_write(output, aad, primitive).await

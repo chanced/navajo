@@ -180,7 +180,7 @@ impl Envelope for PlaintextJson {
     fn decrypt_dek<'a, A, C>(
         &'a self,
         _aad: Aad<A>,
-        _cleartext: C,
+        _plaintext: C,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::DecryptError>> + Send + '_>>
     where
         A: 'static + AsRef<[u8]>,
@@ -225,7 +225,7 @@ mod tests {
 
         let mut m = Mac::new(Algorithm::Sha256, None);
 
-        m.add_key(Algorithm::Sha512, None);
+        m.add(Algorithm::Sha512, None);
 
         let m_keys = m.keys();
 
