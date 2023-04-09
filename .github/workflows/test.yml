@@ -21,6 +21,8 @@ jobs:
               with:
                   toolchain: nightly
                   override: true
+            - name: Rust Cache
+              uses: Swatinem/rust-cache@v2.2.1
             - name: Check
               run: cargo hack check --feature-powerset --no-dev-deps --workspace
             - name: Run tests
