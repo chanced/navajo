@@ -52,7 +52,7 @@ impl Signer {
             pub_id.unwrap_or(id.to_string()),
             metadata.clone(),
         );
-        let key = Key::new(0, Status::Primary, crate::Origin::Navajo, key, metadata);
+        let key = Key::new(id, Status::Primary, crate::Origin::Navajo, key, metadata);
         let keyring = Keyring::new(key);
         let verifier = Verifier::from_keyring(keyring.clone());
         Self { keyring, verifier }

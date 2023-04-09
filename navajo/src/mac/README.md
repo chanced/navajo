@@ -96,7 +96,7 @@ assert_eq!(encode(tag), "d8efa1da7b16626d2c193874314bc0a4a67e4f4a77c86a755947c8f
 
 // alternatively:
 let mut mac = Mac::new(Algorithm::Sha256, None /* Option<serde_json::value::Value> */);
-let key = mac.add_external_key(
+let key = mac.add_external(
     &external_key,
     Algorithm::Sha256,
     None, // Option<&[u8]>

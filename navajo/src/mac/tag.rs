@@ -36,7 +36,7 @@ use alloc::{sync::Arc, vec::Vec};
 /// To compute a `Tag` to match a different library, use a [`Mac`] with the
 /// provided key(s). To do so, create a new instance with
 /// [`Mac::new_with_external_tag`] or add to an existing keyring with
-/// [`Mac::add_external_key`]. For libraries such as
+/// [`Mac::add_external`]. For libraries such as
 /// [Tink](https://developers.google.com/tink) that use headers, make sure to
 /// include their prefix during construction by passing the `prefix` argument.
 ///

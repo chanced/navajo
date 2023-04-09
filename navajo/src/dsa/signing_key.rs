@@ -277,9 +277,10 @@ impl Ecdsa {
                 let signing_key = p256::ecdsa::SigningKey::from_bytes(&key).unwrap();
                 let public_key = signing_key.verifying_key();
                 let encoded_point = public_key.to_encoded_point(false);
+                let encoded_point_bytes = encoded_point.as_bytes();
                 KeyPair {
                     private: sensitive::Bytes::new(&key),
-                    public: sensitive::Bytes::new(encoded_point.as_bytes()),
+                    public: sensitive::Bytes::new(encoded_point_bytes),
                 }
             }
             Algorithm::Es384 => {

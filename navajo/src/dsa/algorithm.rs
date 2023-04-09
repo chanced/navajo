@@ -111,8 +111,8 @@ impl Algorithm {
         &self,
     ) -> &'static ring::signature::EcdsaVerificationAlgorithm {
         match self {
-            Algorithm::Es256 => &ring::signature::ECDSA_P256_SHA256_ASN1,
-            Algorithm::Es384 => &ring::signature::ECDSA_P384_SHA384_ASN1,
+            Algorithm::Es256 => &ring::signature::ECDSA_P256_SHA256_FIXED,
+            Algorithm::Es384 => &ring::signature::ECDSA_P384_SHA384_FIXED,
             _ => unreachable!("not an ecdsa algorithm: {}", self),
         }
     }

@@ -333,18 +333,10 @@ features = ["full"] # todo: reduce this.
 [features]
 default = [
 	"std",
-	# "chrono",
-	# "time",
 	# "ring",
 	"aead",
 	"dsa",
 	"mac",
-	# "rayon",
-	#"cmac",
-	#"aes",
-	#"blake3",    
-	#"sha3", 
-	# "rsa",
 	"daead",
 ]
 ed25519 = ["ed25519-dalek"]

@@ -838,7 +838,7 @@ impl Display for SignatureError {
 #[cfg(feature = "ring")]
 impl From<ring::error::Unspecified> for SignatureError {
     fn from(_: ring::error::Unspecified) -> Self {
-        Self::Failure("signature verification failed".to_string())
+        Self::Failure("unspecified error occurred".to_string())
     }
 }
 
