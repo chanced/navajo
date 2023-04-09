@@ -36,10 +36,7 @@ impl Verifier {
             if let Some(key) = self.keys.get(id) {
                 match key.verify(msg, sig) {
                     Ok(_) => return Ok(key.jwk()),
-                    Err(e) => {
-                        dbg!(&e);
-                        return Err(e);
-                    }
+                    Err(e) => return Err(e),
                 }
             } else {
                 return Err(SignatureError::KeyNotFound(id.to_string()));
@@ -150,7 +147,6 @@ mod tests {
     fn test_verify() {
         let msg = b"data to sign";
         for alg in Algorithm::iter() {
-            dbg!(alg);
             let mut signer = Signer::new(alg, None, None);
             let first_sig = signer.sign(msg);
             let first_key_id = signer.primary_key_id().to_string();
@@ -202,7 +198,6 @@ mod tests {
         for alg in Algorithm::iter() {
             let mut signer = Signer::new(alg, None, None);
             let jws = signer.sign_jws(claims.clone());
-            dbg!(&jws);
             assert!(jws.is_ok());
             let jws = jws.unwrap();
             let verifier = signer.verifier();
