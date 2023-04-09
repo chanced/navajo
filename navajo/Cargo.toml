@@ -1,0 +1,371 @@
+
+[package]
+name = "navajo"
+version = "0.0.1"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["Chance Dinkins"]
+description = "cryptographic APIs"
+
+#------------------------------------------------------#
+#                                                      #
+#                     Dependencies                     #
+#                                                      #
+#------------------------------------------------------#
+
+# futures
+# https://docs.rs/futures/0.3.27/futures/
+[dependencies.futures]
+version = "0.3"
+
+# pin-project
+# https://docs.rs/pin-project/1.0.12/pin_project/
+[dependencies.pin-project]
+version = "1.0"
+
+# chrono
+# https://docs.rs/chrono/0.4.24/chrono/
+[dependencies.chrono]
+version = "0.4"
+default-features = false
+optional = true
+features = ["alloc"]
+
+# time
+# https://docs.rs/time/0.3.20/time/
+[dependencies.time]
+version = "0.3"
+optional = true
+default-features = false
+features = ["alloc"]
+
+# miniz_oxide
+# https://docs.rs/miniz_oxide/0.7.1/miniz_oxide/
+[dependencies.miniz_oxide]
+version = "0.7"
+
+# rayon
+# https://docs.rs/rayon/1.7.0/rayon/
+[dependencies.rayon]
+version = "1.6"
+optional = true
+
+# serde
+# https://serde.rs/ 
+# https://docs.rs/serde/1.0.158/serde/
+[dependencies.serde]
+version = "1.0"
+default-features = false
+features = ["alloc", "derive", "rc"]
+
+# serde_json
+# https://docs.rs/serde_json/1.0.94/serde_json/
+# https://serde.rs/ 
+[dependencies.serde_json]
+version = "1.0"
+default-features = false
+features = ["alloc", "raw_value"]
+
+# base64
+# https://docs.rs/base64/0.21.0/base64/
+[dependencies.base64]
+version = "0.21"
+default-features = false
+features = ["alloc"]
+
+# url
+# https://docs.rs/url/2.3.1/url/
+[dependencies.url]
+version = "2.3"
+features = ["serde"]
+
+# derive_builder
+# https://docs.rs/derive_builder/0.12.0/derive_builder/
+[dependencies.derive_builder]
+version = "0.12.0"
+default-features = false
+
+# inherent
+# https://docs.rs/inherent/1.0.6/inherent/
+[dependencies.inherent]
+version = "1"
+
+# zeroize
+# https://docs.rs/zeroize/1.5.7/zeroize/
+[dependencies.zeroize]
+version = "1.5"
+features = ["alloc", "zeroize_derive", "serde"]
+
+# rand_core
+# https://docs.rs/rand_core/0.6.4/rand_core/
+[dependencies.rand_core]
+version = "0.6"
+features = ["getrandom"]
+
+# strum
+# https://docs.rs/strum/0.24.1/strum/
+[dependencies.strum]
+version = "0.24"
+default-features = false
+features = ["derive", "strum_macros"]
+
+# strum_macros
+# https://docs.rs/strum_macros/0.24.3/strum_macros/
+[dependencies.strum_macros]
+version = "0.24"
+
+# bytes
+# https://docs.rs/bytes/1.4.0/bytes/
+[dependencies.bytes]
+version = "1.4"
+optional = true
+
+# ring
+# https://docs.rs/ring/0.16.20/ring/
+[dependencies.ring]
+version = "0.16"
+optional = true
+
+# typenum
+# https://docs.rs/typenum/1.16.0/typenum/
+[dependencies.typenum]
+features = ["no_std"]
+version = "1.16"
+
+# generic-array
+# https://docs.rs/generic-array/0.14.6/generic_array/
+[dependencies.generic-array]
+version = "0.14.6"
+
+# aes-siv
+# https://docs.rs/aes-siv/0.7.0/aes_siv/
+[dependencies.aes-siv]
+version = "0.7"
+optional = true
+
+# crypto-common
+# https://docs.rs/crypto-common/0.1.6/crypto_common/
+[dependencies.crypto-common]
+version = "0.1.6"
+
+# chacha20poly1305
+# https://docs.rs/chacha20poly1305/0.10.1/chacha20poly1305/
+[dependencies.chacha20poly1305]
+version = "0.10"
+
+# hmac
+# https://docs.rs/hmac/0.12.1/hmac/
+[dependencies.hmac]
+version = "0.12"
+optional = true
+default-features = false
+features = ["reset"]
+
+# aead
+# https://docs.rs/aead/0.5.1/aead/
+[dependencies.rust_crypto_aead]
+version = "0.5"
+package = "aead"
+
+# aes-gcm
+# https://docs.rs/aes-gcm/0.10.1/aes_gcm/
+[dependencies.aes-gcm]
+version = "0.10"
+features = ["zeroize"]
+
+# p256
+# https://docs.rs/p256/0.12.0/p256/
+[dependencies.p256]
+version = "0.12"
+optional = true
+features = ["ecdsa", "pkcs8", "pem", "hash2curve"]
+
+# p384
+# https://docs.rs/p384/0.13.0/p384/
+[dependencies.p384]
+version = "0.12"
+optional = true
+features = ["ecdsa", "pkcs8", "pem", "hash2curve"]
+
+# sha2
+# https://docs.rs/sha2/0.10.6/sha2/
+[dependencies.sha2]
+version = "0.10"
+optional = true
+
+# sha3
+# https://docs.rs/sha3/0.10.6/sha3/
+[dependencies.sha3]
+version = "0.10"
+optional = true
+default-features = false
+
+# pkcs8
+# https://docs.rs/pkcs8/0.10.1/pkcs8/
+[dependencies.pkcs8]
+version = "0.10"
+default-features = false
+features = ["alloc", "pem"]
+
+# cmac
+# https://docs.rs/cmac/0.7.2/cmac/
+[dependencies.cmac]
+version = "0.7"
+optional = true
+features = ["zeroize"]
+
+# subtle
+# https://docs.rs/subtle/2.5.0/subtle/
+[dependencies.subtle]
+version = "2.4"
+
+# blake3
+# https://docs.rs/blake3/1.3.3/blake3/
+[dependencies.blake3]
+version = "1.3"
+optional = true
+
+# hkdf
+# https://docs.rs/hkdf/0.12.3/hkdf/
+[dependencies.rust_crypto_hkdf]
+package = "hkdf"
+version = "0.12"
+
+# aes
+# https://docs.rs/aes/0.8.2/aes/
+[dependencies.aes]
+version = "0.8.2"
+optional = true
+features = ["zeroize"]
+
+# digest
+# https://docs.rs/digest/0.10.6/digest/
+[dependencies.digest]
+version = "0.10"
+default-features = false
+features = ["alloc"]
+
+# ed25519-dalek
+# https://docs.rs/ed25519-dalek/2.0.0-rc.2/ed25519_dalek/index.html
+[dependencies.ed25519-dalek]
+version = "2.0.0-rc.2"
+# git = "https://github.com/dalek-cryptography/ed25519-dalek"
+optional = true
+default-features = false
+features = ["alloc", "rand_core", "pkcs8", "pem", "zeroize", "serde"]
+
+# sec1
+# https://docs.rs/sec1/0.7.1/sec1/
+[dependencies.sec1]
+version = "0.7.1"
+
+# elliptic-curve
+# https://docs.rs/elliptic-curve/0.13.2/elliptic_curve/
+[dependencies.elliptic-curve]
+version = "0.13"
+features = ["sec1"]
+
+# signature
+# https://docs.rs/signature/2.0.0/signature/
+[dependencies.signature]
+version = "2.0"
+optional = true
+
+
+# # rsa
+# [dependencies.rsa]
+# version = "0.8"
+# optional = true
+# default-features = false
+# features = ["pem", "pkcs5", "sha2"]
+
+
+#------------------------------------------------------#
+#                                                      #
+#                  Test Dependencies                   #
+#                                                      #
+#------------------------------------------------------#
+
+# quickcheck TODO: replace with proptest
+[dev-dependencies.quickcheck]
+version = "1.0"
+
+# quickcheck_macros
+[dev-dependencies.quickcheck_macros]
+version = "1.0"
+
+# quickcheck_async 
+[dev-dependencies.quickcheck_async]
+version = "0.1"
+
+# mockall
+# https://docs.rs/mockall/0.11.3/mockall/
+[dev-dependencies.mockall]
+version = "0.11"
+
+# proptest
+# https://docs.rs/proptest/1.1.0/proptest/
+[dev-dependencies.proptest]
+version = "1.1"
+
+# hex
+[dev-dependencies.hex]
+version = "0.4"
+default-features = false
+features = ["serde", "alloc"]
+
+# hex-literal
+[dev-dependencies.hex-literal]
+version = "0.3"
+
+# tokio
+[dev-dependencies.tokio]
+version = "1.14"
+features = ["full"] # todo: reduce this.
+
+
+#------------------------------------------------------#
+#                                                      #
+#                    Feature Flags                     #
+#                                                      #
+#------------------------------------------------------#
+
+[features]
+default = [
+	"std",
+	# "ring",
+	"aead",
+	"dsa",
+	"mac",
+	"daead",
+]
+ed25519 = ["ed25519-dalek"]
+dsa = ["signature", "ed25519", "p256", "p384"]
+mac = ["sha2", "hmac"]
+hkdf = ["sha2", "hmac"]
+aead = ["hkdf"]
+daead = ["aes-siv"]
+std = [
+	"miniz_oxide/std",
+	"ring?/std",
+	"serde/std",
+	"serde_json/std",
+	"zeroize/std",
+	"aes-gcm/std",
+	"aes-siv?/std",
+	"hmac?/std",
+	"rand_core/std",
+	"cmac?/std",
+	"signature?/std",
+	"chacha20poly1305/std",
+	"pkcs8/std",
+	"cmac?/std",
+	"sha2/std",
+	"sha3/std",
+	"ed25519-dalek?/std",
+	"base64/std",
+	"derive_builder/std",
+	# "anyhow/default",
+	# "anyhow/std",
+	# "rsa?/std",
+]

@@ -1,0 +1,28 @@
+[package]
+name = "navajo-cli"
+version = "0.0.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["Chance Dinkins"]
+description = "Navajo CLI"
+
+[[bin]]
+name = "navajo"
+
+[dependencies]
+navajo = { version = "0.0.1", features = [
+	"std",
+	"blake3",
+	"sha3",
+	"cmac",
+	"aes",
+] }
+navajo-gcp = { path = "../navajo-gcp" }
+
+strum = { version = "0.24", features = ["derive", "strum_macros"] }
+clap = { version = "4.2", features = ["derive", "wrap_help"] }
+tokio = { version = "1.26", features = ["full"] }
+url = "2.3"
+serde = { version = "1.0" }
+serde_json = { version = "1.0" }
+base64 = "0.21"

@@ -1,0 +1,10 @@
+[package]
+name = "navajo-aws"
+version = "0.0.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["Chance Dinkins"]
+description = "Navajo GCP KMS integration"
+
+
+[dependencies]
