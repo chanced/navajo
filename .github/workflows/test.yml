@@ -26,15 +26,26 @@ jobs:
             - name: Check
               run: cargo hack check --feature-powerset --no-dev-deps --workspace
             - name: Run tests
-              run: cargo test --workspace
-              env:
-                  CARGO_INCREMENTAL: "0"
-                  RUSTFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests"
-                  RUSTDOCFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests"
-            - name: rust-grcov
-              uses: actions-rs/grcov@v0.1.5
-            - name: Codecov
-              uses: codecov/codecov-action@v3.1.0
+              run: cargo test --workspace --verbose
+    coverage:
+        runs-on: ubuntu-latest
+        name: ubuntu / stable / coverage
+        steps:
+            - uses: actions/checkout@v3
               with:
-                  verbose: true
+                  submodules: true
+            - name: Install stable
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: llvm-tools-preview
+            - name: cargo install cargo-llvm-cov
+              uses: taiki-e/install-action@cargo-llvm-cov
+            - name: cargo generate-lockfile
+              if: hashFiles('Cargo.lock') == ''
+              run: cargo generate-lockfile
+            - name: cargo llvm-cov
+              run: cargo llvm-cov --locked --all-features --lcov --output-path lcov.info
+            - name: Upload to codecov.io
+              uses: codecov/codecov-action@v3
+              with:
                   fail_ci_if_error: true
