@@ -332,11 +332,11 @@ impl Ecdsa {
             match self {
                 Ecdsa::P256(key) => {
                     let sig = key.sign(&ring::rand::SystemRandom::new(), data).unwrap(); // this will only fail if ring's RNG fails
-                    super::Signature::P256(sig)
+                    super::Signature::P256(sig.as_ref().try_into().unwrap())
                 }
                 Ecdsa::P384(key) => {
                     let sig = key.sign(&ring::rand::SystemRandom::new(), data).unwrap(); // this will only fail if ring's RNG fails
-                    super::Signature::P384(sig)
+                    super::Signature::P384(sig.as_ref().try_into().unwrap())
                 }
             }
         }
@@ -407,7 +407,7 @@ impl Ed25519 {
         #[cfg(feature = "ring")]
         {
             let signature = self.0.sign(msg);
-            super::Signature::Ed25519(signature)
+            super::Signature::Ed25519(signature.as_ref().try_into().unwrap())
         }
         #[cfg(not(feature = "ring"))]
         {

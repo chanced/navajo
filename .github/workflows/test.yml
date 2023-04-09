@@ -31,6 +31,7 @@ jobs:
         runs-on: ubuntu-latest
         name: ubuntu / stable / coverage
         steps:
+            - uses: Swatinem/rust-cache@v2.2.1
             - uses: actions/checkout@v3
               with:
                   submodules: true

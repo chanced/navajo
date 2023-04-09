@@ -180,7 +180,6 @@ enum Ecdsa {
 
 impl Ecdsa {
     fn from_bytes(algorithm: Algorithm, key: &[u8]) -> Result<Self, KeyError> {
-        #[cfg(not(feature = "ring"))]
         match algorithm {
             Algorithm::Es256 => {
                 if key.len() != 65 {
@@ -190,7 +189,7 @@ impl Ecdsa {
                 {
                     let key = ring::signature::UnparsedPublicKey::new(
                         algorithm.ring_ecdsa_verifying_algorithm(),
-                        key,
+                        sensitive::Bytes::from(key),
                     );
                     Ok(Self::P256(key))
                 }
@@ -206,10 +205,21 @@ impl Ecdsa {
                 if key.len() != 97 {
                     return Err(KeyError("key data is malformed".into()));
                 }
-                let encoded_point = p384::EncodedPoint::from_bytes(key)
-                    .map_err(|e| format!("key data is malformed: {e}"))?;
-                let key = p384::ecdsa::VerifyingKey::from_encoded_point(&encoded_point)?;
-                Ok(Self::P384(key))
+                #[cfg(feature = "ring")]
+                {
+                    let key = ring::signature::UnparsedPublicKey::new(
+                        algorithm.ring_ecdsa_verifying_algorithm(),
+                        sensitive::Bytes::from(key),
+                    );
+                    Ok(Self::P384(key))
+                }
+                #[cfg(not(feature = "ring"))]
+                {
+                    let encoded_point = p384::EncodedPoint::from_bytes(key)
+                        .map_err(|e| format!("key data is malformed: {e}"))?;
+                    let key = p384::ecdsa::VerifyingKey::from_encoded_point(&encoded_point)?;
+                    Ok(Self::P384(key))
+                }
             }
             _ => unreachable!(),
         }
@@ -260,9 +270,8 @@ impl Ed25519 {
         {
             let verifying_key = ring::signature::UnparsedPublicKey::new(
                 &ring::signature::ED25519,
-                key_pair.public.clone(),
+                sensitive::Bytes::new(bytes),
             );
-            let verifying_key = Arc::new(verifying_key);
             Ok(Self(verifying_key))
         }
         #[cfg(not(feature = "ring"))]
@@ -277,7 +286,7 @@ impl Ed25519 {
     fn verify(&self, msg: &[u8], signature: &[u8]) -> Result<(), SignatureError> {
         #[cfg(feature = "ring")]
         {
-            self.0.verify(&msg, signature)?
+            Ok(self.0.verify(&msg, signature)?)
         }
         #[cfg(not(feature = "ring"))]
         {
