@@ -52,7 +52,7 @@ impl Verifier {
                 .par_bridge()
                 .find_any(|k| k.verify(msg, sig).is_ok())
                 .ok_or(SignatureError::Failure("failed to verify signature".into()))
-                .map(|k| k.clone().into());
+                .map(|k| k.jwk());
         }
         #[cfg(not(feature = "rayon"))]
         {

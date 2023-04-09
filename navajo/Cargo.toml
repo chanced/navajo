@@ -339,6 +339,7 @@ default = [
 	"aead",
 	"dsa",
 	"mac",
+	# "rayon",
 	#"cmac",
 	#"aes",
 	#"blake3",    
