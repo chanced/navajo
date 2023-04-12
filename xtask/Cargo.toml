@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 xshell = "0.2"
+clap = { version = "4.2", features = ["derive", "wrap_help"] }
