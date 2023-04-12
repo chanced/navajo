@@ -1,6 +1,6 @@
 [package]
 name = "navajo-cli"
-version = "0.0.0"
+version = "0.0.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["Chance Dinkins"]
@@ -17,7 +17,7 @@ navajo = { version = "0.0.1", features = [
 	"cmac",
 	"aes",
 ] }
-navajo-gcp = { path = "../navajo-gcp" }
+navajo-gcp = { version = "0.0.1" }
 
 strum = { version = "0.24", features = ["derive", "strum_macros"] }
 clap = { version = "4.2", features = ["derive", "wrap_help"] }
