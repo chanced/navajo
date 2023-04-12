@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use super::{
     entry::Entry,
     material::{BackendKey, Material, RustCryptoKey},
-    output::{Output, RustCryptoOutput},
+    output::RustCryptoOutput,
 };
 
 pub(super) struct Context {
@@ -121,7 +121,7 @@ impl RingContext {
     fn update(&mut self, data: &[u8]) {
         self.0.update(data);
     }
-    fn finalize(self) -> Output {
+    fn finalize(self) -> output::Output {
         self.0.sign().into()
     }
 }

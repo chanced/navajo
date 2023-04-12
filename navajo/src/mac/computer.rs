@@ -81,11 +81,12 @@ impl Computer {
     fn update_chunk(&mut self, chunk: Vec<u8>) {
         if self.contexts.len() > 1 {
             #[cfg(feature = "rayon")]
-            use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
-            #[cfg(feature = "rayon")]
-            self.contexts.par_iter_mut().for_each(|ctx| {
-                ctx.update(&chunk);
-            });
+            {
+                use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator};
+                self.contexts.par_iter_mut().for_each(|ctx| {
+                    ctx.update(&chunk);
+                });
+            }
             #[cfg(not(feature = "rayon"))]
             self.contexts.iter_mut().for_each(|ctx| {
                 ctx.update(&chunk);

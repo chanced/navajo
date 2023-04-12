@@ -2,19 +2,19 @@
 
 **📌️ MAC is enabled with feature flag `"mac"`**
 
-| Primitive | Algorithm | Backend crate(s)                                                                                                       | Feature flags                  | Enabled by default |
-| :-------: | --------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------ | :----------------: |
-|   HMAC    | BLAKE3    | [blake3](https://crates.io/crates/blake3)                                                                              | `"blake3"`                     |        ❌️         |
-|   HMAC    | SHA2-256  | [_ring_](https://crates.io/crates/hma) or [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac) | `"ring"` or `"hmac"`, `"sha2"` |        ❌️         |
-|   HMAC    | SHA2-384  | [_ring_](https://crates.io/crates/hma) or [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac) | `"ring"` or `"hmac"`, `"sha2"` |        ❌️         |
-|   HMAC    | SHA2-512  | [_ring_](https://crates.io/crates/hma) or [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac) | `"ring"` or `"hmac"`, `"sha2"` |        ❌️         |
-|   HMAC    | SHA2-224  | [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac)                                           | `"hmac"`, `"sha2"`             |        ❌️         |
-|   HMAC    | SHA3-256  | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"hmac"`, `"sha3"`             |        ❌️         |
-|   HMAC    | SHA3-224  | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"hmac"`, `"sha3"`             |        ❌️         |
-|   HMAC    | SHA3-384  | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"hmac"`, `"sha3"`             |        ❌️         |
-|   HMAC    | SHA3-512  | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"hmac"`, `"sha3"`             |        ❌️         |
-|   CMAC    | AES-128   | [aes](https://crates.io/crates/aes), [cmac](https://crates.io/crates/cmac)                                             | `"cmac"`, `"aes"`              |        ❌️         |
-|   CMAC    | AES-256   | [aes](https://crates.io/crates/aes), [cmac](https://crates.io/crates/cmac)                                             | `"cmac"`, `"aes"`              |        ❌️         |
+| Primitive | Algorithm | Backend crate(s)                                                                                                       | Feature flags                    | Enabled by default |
+| :-------: | --------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------- | :----------------: |
+|   HMAC    | BLAKE3    | [blake3](https://crates.io/crates/blake3)                                                                              | `"blake3"`                       |        ❌️         |
+|   HMAC    | SHA2-256  | [_ring_](https://crates.io/crates/hma) or [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac) | `"hmac"` (+ optionally `"ring"`) |        ❌️         |
+|   HMAC    | SHA2-384  | [_ring_](https://crates.io/crates/hma) or [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac) | `"hmac"` (+ optionally `"ring"`) |        ❌️         |
+|   HMAC    | SHA2-512  | [_ring_](https://crates.io/crates/hma) or [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac) | `"hmac"` (+ optionally `"ring"`) |        ❌️         |
+|   HMAC    | SHA2-224  | [sha2](https://crates.io/crates/sha2), [hmac](https://crates.io/crates/hmac)                                           | `"hmac"` (not supported by ring) |        ❌️         |
+|   HMAC    | SHA3-256  | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"hmac"`, `"sha3"`               |        ❌️         |
+|   HMAC    | SHA3-224  | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"hmac"`, `"sha3"`               |        ❌️         |
+|   HMAC    | SHA3-384  | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"hmac"`, `"sha3"`               |        ❌️         |
+|   HMAC    | SHA3-512  | [sha3](https://crates.io/crates/sha3), [hmac](https://crates.io/crates/hmac)                                           | `"hmac"`, `"sha3"`               |        ❌️         |
+|   CMAC    | AES-128   | [aes](https://crates.io/crates/aes), [cmac](https://crates.io/crates/cmac)                                             | `"cmac"`                         |        ❌️         |
+|   CMAC    | AES-256   | [aes](https://crates.io/crates/aes), [cmac](https://crates.io/crates/cmac)                                             | `"cmac"`                         |        ❌️         |
 
 ### Basic usage
 

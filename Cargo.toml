@@ -8,6 +8,9 @@ members = [
 	"navajo-azure",
 	"xtask",
 ]
+[alias]
+xtask = "run --package xtask --"
+
 
 [patch.crates-io]
 navajo = { path = "navajo" }

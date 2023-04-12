@@ -3584,6 +3584,7 @@ checksum = "1dbabb1cbd15a1d6d12d9ed6b35cc6777d4af87ab3ba155ea37215f20beab80c"
 name = "xtask"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "xshell",
 ]
 
