@@ -1686,6 +1686,51 @@ dependencies = [
 [[package]]
 name = "navajo"
 version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2212a0ab982577d28c57b1ea91a7f5a7e27c447788740ff94baf487fb6171c7"
+dependencies = [
+ "aead",
+ "aes",
+ "aes-gcm",
+ "aes-siv",
+ "base64 0.21.0",
+ "blake3",
+ "chacha20poly1305",
+ "cmac",
+ "crypto-common",
+ "derive_builder",
+ "digest",
+ "ed25519-dalek",
+ "elliptic-curve 0.13.2",
+ "futures",
+ "generic-array",
+ "hkdf",
+ "hmac",
+ "inherent",
+ "miniz_oxide 0.7.1",
+ "p256",
+ "p384",
+ "pin-project 1.0.12",
+ "pkcs8 0.10.0",
+ "rand_core",
+ "ring",
+ "sec1 0.7.1",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sha3",
+ "signature",
+ "strum",
+ "strum_macros",
+ "subtle",
+ "typenum",
+ "url",
+ "zeroize",
+]
+
+[[package]]
+name = "navajo"
+version = "0.0.2"
 dependencies = [
  "aead",
  "aes",
@@ -1752,7 +1797,7 @@ version = "0.0.1"
 dependencies = [
  "base64 0.21.0",
  "clap",
- "navajo",
+ "navajo 0.0.1",
  "navajo-gcp",
  "serde",
  "serde_json",
@@ -1770,7 +1815,7 @@ dependencies = [
  "crc32c",
  "gcloud-sdk",
  "kms-aead",
- "navajo",
+ "navajo 0.0.1",
  "once_cell",
  "prost",
  "prost-types",
