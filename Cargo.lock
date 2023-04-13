@@ -1748,7 +1748,7 @@ version = "0.0.0"
 
 [[package]]
 name = "navajo-cli"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "base64 0.21.0",
  "clap",
@@ -1763,7 +1763,7 @@ dependencies = [
 
 [[package]]
 name = "navajo-gcp"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "async-trait",
  "base64 0.21.0",
