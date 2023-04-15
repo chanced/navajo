@@ -167,19 +167,19 @@ impl<'de> Deserialize<'de> for SigningKey {
         #[derive(Deserialize)]
         struct SerializedKey {
             key_pair: KeyPair,
-            algorithm: Algorithm,
+            alg: Algorithm,
             pub_id: String,
             #[serde(default)]
             metadata: Arc<Metadata>,
         }
         let SerializedKey {
             key_pair,
-            algorithm,
+            alg,
             pub_id,
             metadata,
         } = Deserialize::deserialize(deserializer)?;
 
-        Self::from_material(algorithm, pub_id, key_pair, metadata).map_err(serde::de::Error::custom)
+        Self::from_material(alg, pub_id, key_pair, metadata).map_err(serde::de::Error::custom)
     }
 }
 

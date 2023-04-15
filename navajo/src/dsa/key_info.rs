@@ -6,7 +6,7 @@ use alloc::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct DsaKeyInfo {
     pub id: u32,
     pub pub_id: String,
@@ -16,6 +16,7 @@ pub struct DsaKeyInfo {
     pub algorithm: Algorithm,
     pub metadata: Option<Arc<Metadata>>,
 }
+
 impl DsaKeyInfo {
     pub(crate) fn new(key: &Key<super::signing_key::SigningKey>) -> Self {
         Self {

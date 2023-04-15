@@ -13,6 +13,12 @@ pub struct AeadKeyInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Arc<Metadata>>,
 }
+impl PartialEq for AeadKeyInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id && self.algorithm == other.algorithm && self.status == other.status
+    }
+}
+impl Eq for AeadKeyInfo {}
 
 impl AeadKeyInfo {
     pub(super) fn new(key: &Key<super::Material>) -> Self {

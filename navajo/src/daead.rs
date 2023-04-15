@@ -8,10 +8,13 @@ pub use algorithm::Algorithm;
 pub(crate) use material::Material;
 
 use crate::{
-    error::{DisableKeyError, EncryptDeterministicallyError, KeyNotFoundError, RemoveKeyError},
+    error::{
+        DisableKeyError, EncryptDeterministicallyError, KeyNotFoundError, OpenError,
+        RemoveKeyError, SealError,
+    },
     key::Key,
     keyring::Keyring,
-    Aad, Buffer, KeyInfo, Metadata, Origin, Rng, Status, SystemRng,
+    Aad, Buffer, Envelope, KeyInfo, Metadata, Origin, Primitive, Rng, Status, SystemRng,
 };
 use alloc::{sync::Arc, vec::Vec};
 use zeroize::ZeroizeOnDrop;
@@ -22,6 +25,139 @@ pub struct Daead {
 }
 
 impl Daead {
+    /// Opens a [`Daead`] keyring from the given `data` and validates the
+    /// authenticity with `aad` by means of the [`Envelope`] `envelope`.
+    ///
+    /// # Errors
+    /// Errors if the keyring could not be opened by the or the authenticity
+    /// could not be verified by the [`Envelope`] using futures.
+    ///
+    /// # Example
+    /// ```rust
+    /// use navajo::Aad;
+    /// use navajo::daead::{ Daead, Algorithm };
+    /// use navajo::envelope::InMemory;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let daead = Daead::new(Algorithm::Aes256Siv, None);
+    ///     let primary_key = daead.primary_key();
+    ///     // in a real application, you would use a real key management service.
+    ///     // InMemory is only suitable for testing.
+    ///     let in_mem = InMemory::default();
+    ///     let data = Daead::seal(Aad::empty(), &daead, &in_mem).await.unwrap();
+    ///     let daead = Daead::open(Aad::empty(), data, &in_mem).await.unwrap();
+    ///     assert_eq!(daead.primary_key(), primary_key);
+    /// }
+    /// ```
+    pub async fn open<A, D, E>(aad: Aad<A>, data: D, envelope: &E) -> Result<Self, OpenError>
+    where
+        E: 'static + Envelope,
+        D: 'static + AsRef<[u8]> + Send + Sync,
+        A: 'static + AsRef<[u8]> + Send + Sync,
+    {
+        let primitive = Primitive::open(aad, data, envelope).await?;
+        primitive
+            .daead()
+            .ok_or(OpenError("primitive is not Daead".into()))
+    }
+
+    /// Opens a [`Daead`] keyring from the given `data` and validates the
+    /// authenticity with `aad` by means of the [`Envelope`] using
+    /// blocking APIs.
+    ///
+    /// # Errors
+    /// Errors if the keyring could not be opened by the or the authenticity
+    /// could not be verified by the [`Envelope`].
+    ///
+    /// # Example
+    /// ```rust
+    /// use navajo::Aad;
+    /// use navajo::daead::{ Daead, Algorithm };
+    /// use navajo::envelope::InMemory;
+    ///
+    /// let daead = Daead::new(Algorithm::Aes256Siv, None);
+    /// let primary_key = daead.primary_key();
+    /// // in a real application, you would use a real key management service.
+    /// // InMemory is only suitable for testing.
+    /// let in_mem = InMemory::default();
+    /// let data = Daead::seal_sync(Aad(&b"associated data"), &daead, &in_mem).unwrap();
+    /// let daead = Daead::open_sync(Aad(&b"associated data"), &data, &in_mem).unwrap();
+    /// assert_eq!(daead.primary_key(), primary_key);
+    /// ```
+    pub fn open_sync<A, E, C>(aad: Aad<A>, ciphertext: C, envelope: &E) -> Result<Self, OpenError>
+    where
+        A: AsRef<[u8]>,
+        C: AsRef<[u8]>,
+        E: 'static + crate::envelope::sync::Envelope,
+    {
+        let primitive = Primitive::open_sync(aad, ciphertext, envelope)?;
+        if let Some(daead) = primitive.daead() {
+            Ok(daead)
+        } else {
+            Err(OpenError("primitive is not a daead".into()))
+        }
+    }
+    /// Seals an [`Daead`] keyring and tags it with `aad` for future
+    /// authenticationby means of the [`Envelope`].
+    ///
+    /// # Errors
+    /// Errors if the keyring could not be sealed by the [`Envelope`].
+    ///
+    /// # Example
+    /// ```rust
+    /// use navajo::Aad;
+    /// use navajo::daead::{ Daead, Algorithm };
+    /// use navajo::envelope::InMemory;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let daead = Daead::new(Algorithm::Aes256Siv, None);
+    ///     let primary_key = daead.primary_key();
+    ///     // in a real application, you would use a real key management service.
+    ///     // InMemory is only suitable for testing.
+    ///     let in_mem = InMemory::default();
+    ///     let data = Daead::seal(Aad::empty(), &daead, &in_mem).await.unwrap();
+    ///     let daead = Daead::open(Aad::empty(), data, &in_mem).await.unwrap();
+    ///     assert_eq!(daead.primary_key(), primary_key);
+    /// }
+    /// ```
+    pub async fn seal<A, E>(aad: Aad<A>, daead: &Self, envelope: &E) -> Result<Vec<u8>, SealError>
+    where
+        A: 'static + AsRef<[u8]> + Send + Sync,
+        E: Envelope + 'static,
+    {
+        Primitive::Daead(daead.clone()).seal(aad, envelope).await
+    }
+    /// Seals a [`Daead`] keyring and tags it with `aad` for future
+    /// authenticationby means of the [`Envelope`].
+    ///
+    /// # Errors
+    /// Errors if the keyring could not be sealed by the [`Envelope`].
+    ///
+    /// # Example
+    /// ```rust
+    /// use navajo::Aad;
+    /// use navajo::daead::{ Daead, Algorithm };
+    /// use navajo::envelope::InMemory;
+    ///
+    /// let daead = Daead::new(Algorithm::Aes256Siv, None);
+    /// let primary_key = daead.primary_key();
+    /// // in a real application, you would use a real key management service.
+    /// // InMemory is only suitable for testing.
+    /// let in_mem = InMemory::default();
+    /// let ciphertext = Daead::seal_sync(Aad::empty(), &daead, &in_mem).unwrap();
+    /// let daead = Daead::open_sync(Aad::empty(), ciphertext, &in_mem).unwrap();
+    /// assert_eq!(daead.primary_key(), primary_key);
+    /// ```
+    pub fn seal_sync<A, E>(aad: Aad<A>, daead: &Self, envelope: &E) -> Result<Vec<u8>, SealError>
+    where
+        A: AsRef<[u8]>,
+        E: 'static + crate::envelope::sync::Envelope,
+    {
+        Primitive::Daead(daead.clone()).seal_sync(aad, envelope)
+    }
+
     pub fn new(algorithm: Algorithm, metadata: Option<Metadata>) -> Self {
         Self::create(&SystemRng, algorithm, metadata)
     }
@@ -173,6 +309,11 @@ impl Daead {
         self.keyring.update_key_metadata(key_id, metadata)?;
         let key = self.keyring.get(key_id)?;
         Ok(key.info())
+    }
+
+    /// Returns [`KeyInfo<Algorithm>`] for the primary key.
+    pub fn primary_key(&self) -> KeyInfo<Algorithm> {
+        self.keyring.primary().into()
     }
 }
 

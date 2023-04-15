@@ -6,12 +6,13 @@ use alloc::{
 
 use crate::{
     error::{
-        DisableKeyError, DuplicatePubIdError, KeyNotFoundError, MalformedError, RemoveKeyError,
+        DisableKeyError, DuplicatePubIdError, KeyNotFoundError, MalformedError, OpenError,
+        RemoveKeyError, SealError,
     },
     jose::{Claims, VerifiedJws},
     key::Key,
     keyring::Keyring,
-    KeyInfo, Metadata, Origin, Rng, Status, SystemRng, Verifier,
+    Aad, Envelope, KeyInfo, Metadata, Origin, Primitive, Rng, Status, SystemRng, Verifier,
 };
 
 #[cfg(not(feature = "std"))]
@@ -26,6 +27,139 @@ pub struct Signer {
 }
 
 impl Signer {
+    /// Opens a [`Signer`] keyring from the given `data` and validates the
+    /// authenticity with `aad` by means of the [`Envelope`] `envelope`.
+    ///
+    /// # Errors
+    /// Errors if the keyring could not be opened by the or the authenticity
+    /// could not be verified by the [`Envelope`] using futures.
+    ///
+    /// # Example
+    /// ```rust
+    /// use navajo::Aad;
+    /// use navajo::dsa::{ Signer, Algorithm };
+    /// use navajo::envelope::InMemory;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let signer = Signer::new(Algorithm::Ed25519, None /* Option<String> */, None /* Option<navajo::Metadata> */);
+    ///     let primary_key = signer.primary_key();
+    ///     // in a real application, you would use a real key management service.
+    ///     // InMemory is only suitable for testing.
+    ///     let in_mem = InMemory::default();
+    ///     let data = Signer::seal(Aad::empty(), &signer, &in_mem).await.unwrap();
+    ///     let signer = Signer::open(Aad::empty(), data, &in_mem).await.unwrap();
+    ///     assert_eq!(signer.primary_key(), primary_key);
+    /// }
+    /// ```
+    pub async fn open<A, D, E>(aad: Aad<A>, data: D, envelope: &E) -> Result<Self, OpenError>
+    where
+        E: 'static + Envelope,
+        D: 'static + AsRef<[u8]> + Send + Sync,
+        A: 'static + AsRef<[u8]> + Send + Sync,
+    {
+        let primitive = Primitive::open(aad, data, envelope).await?;
+        primitive
+            .signer()
+            .ok_or(OpenError("primitive is not Signer".into()))
+    }
+
+    /// Opens a [`Signer`] keyring from the given `data` and validates the
+    /// authenticity with `aad` by means of the [`Envelope`] using
+    /// blocking APIs.
+    ///
+    /// # Errors
+    /// Errors if the keyring could not be opened by the or the authenticity
+    /// could not be verified by the [`Envelope`].
+    ///
+    /// # Example
+    /// ```rust
+    /// use navajo::Aad;
+    /// use navajo::dsa::{ Signer, Algorithm };
+    /// use navajo::envelope::InMemory;
+    ///
+    /// let signer = Signer::new(Algorithm::Ed25519, None /* Option<String> */, None /* Option<navajo::Metadata> */);
+    /// let primary_key = signer.primary_key();
+    /// // in a real application, you would use a real key management service.
+    /// // InMemory is only suitable for testing.
+    /// let in_mem = InMemory::default();
+    /// let data = Signer::seal_sync(Aad(&b"associated data"), &signer, &in_mem).unwrap();
+    /// let signer = Signer::open_sync(Aad(&b"associated data"), &data, &in_mem).unwrap();
+    /// assert_eq!(signer.primary_key(), primary_key);
+    /// ```
+    pub fn open_sync<A, E, C>(aad: Aad<A>, ciphertext: C, envelope: &E) -> Result<Self, OpenError>
+    where
+        A: AsRef<[u8]>,
+        C: AsRef<[u8]>,
+        E: 'static + crate::envelope::sync::Envelope,
+    {
+        let primitive = Primitive::open_sync(aad, ciphertext, envelope)?;
+        if let Some(signer) = primitive.signer() {
+            Ok(signer)
+        } else {
+            Err(OpenError("primitive is not a signer".into()))
+        }
+    }
+    /// Seals an [`Signer`] keyring and tags it with `aad` for future
+    /// authenticationby means of the [`Envelope`].
+    ///
+    /// # Errors
+    /// Errors if the keyring could not be sealed by the [`Envelope`].
+    ///
+    /// # Example
+    /// ```rust
+    /// use navajo::Aad;
+    /// use navajo::dsa::{ Signer, Algorithm };
+    /// use navajo::envelope::InMemory;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let signer = Signer::new(Algorithm::Ed25519, None /* Option<String> */, None /* Option<navajo::Metadata> */);
+    ///     let primary_key = signer.primary_key();
+    ///     // in a real application, you would use a real key management service.
+    ///     // InMemory is only suitable for testing.
+    ///     let in_mem = InMemory::default();
+    ///     let data = Signer::seal(Aad::empty(), &signer, &in_mem).await.unwrap();
+    ///     let signer = Signer::open(Aad::empty(), data, &in_mem).await.unwrap();
+    ///     assert_eq!(signer.primary_key(), primary_key);
+    /// }
+    /// ```
+    pub async fn seal<A, E>(aad: Aad<A>, signer: &Self, envelope: &E) -> Result<Vec<u8>, SealError>
+    where
+        A: 'static + AsRef<[u8]> + Send + Sync,
+        E: Envelope + 'static,
+    {
+        Primitive::Dsa(signer.clone()).seal(aad, envelope).await
+    }
+    /// Seals a [`Signer`] keyring and tags it with `aad` for future
+    /// authenticationby means of the [`Envelope`].
+    ///
+    /// # Errors
+    /// Errors if the keyring could not be sealed by the [`Envelope`].
+    ///
+    /// # Example
+    /// ```rust
+    /// use navajo::Aad;
+    /// use navajo::dsa::{ Signer, Algorithm };
+    /// use navajo::envelope::InMemory;
+    ///
+    /// let signer = Signer::new(Algorithm::Ed25519, None /* Option<String> */, None /* Option<navajo::Metadata> */);
+    /// let primary_key = signer.primary_key();
+    /// // in a real application, you would use a real key management service.
+    /// // InMemory is only suitable for testing.
+    /// let in_mem = InMemory::default();
+    /// let ciphertext = Signer::seal_sync(Aad::empty(), &signer, &in_mem).unwrap();
+    /// let signer = Signer::open_sync(Aad::empty(), ciphertext, &in_mem).unwrap();
+    /// assert_eq!(signer.primary_key(), primary_key);
+    /// ```
+    pub fn seal_sync<A, E>(aad: Aad<A>, signer: &Self, envelope: &E) -> Result<Vec<u8>, SealError>
+    where
+        A: AsRef<[u8]>,
+        E: 'static + crate::envelope::sync::Envelope,
+    {
+        Primitive::Dsa(signer.clone()).seal_sync(aad, envelope)
+    }
+
     pub fn new(algorithm: Algorithm, pub_id: Option<String>, meta: Option<Metadata>) -> Self {
         Self::generate(&SystemRng, algorithm, pub_id, meta)
     }
