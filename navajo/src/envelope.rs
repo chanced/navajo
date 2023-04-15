@@ -230,7 +230,7 @@ mod tests {
         let m_keys = m.keys();
 
         let envelope = PlaintextJson;
-        let result = Mac::seal(&m, Aad::empty(), &envelope).await.unwrap();
+        let result = Mac::seal(Aad::empty(), &m, &envelope).await.unwrap();
         let value = serde_json::from_slice::<serde_json::Value>(&result);
         assert!(value.is_ok());
         let value = value.unwrap();

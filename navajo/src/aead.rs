@@ -15,11 +15,11 @@ mod stream;
 mod try_stream;
 use crate::{
     envelope,
-    error::{EncryptError, KeyNotFoundError, RemoveKeyError},
+    error::{EncryptError, KeyNotFoundError, OpenError, RemoveKeyError, SealError},
     key::Key,
     keyring::Keyring,
     rand::Rng,
-    Buffer, Envelope, Metadata, Origin, Status, SystemRng,
+    Buffer, Envelope, Metadata, Origin, Primitive, Status, SystemRng,
 };
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
@@ -57,6 +57,139 @@ pub struct Aead {
     keyring: Keyring<Material>,
 }
 impl Aead {
+    /// Opens an [`Aead`] keyring from the given `data` and validates the
+    /// authenticity with `aad` by means of the [`Envelope`] `envelope`.
+    ///
+    /// # Errors
+    /// Errors if the keyring could not be opened by the or the authenticity
+    /// could not be verified by the [`Envelope`] using futures.
+    ///
+    /// # Example
+    /// ```rust
+    /// use navajo::Aad;
+    /// use navajo::aead::{ Aead, Algorithm };
+    /// use navajo::envelope::InMemory;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let aead = Aead::new(Algorithm::ChaCha20Poly1305, None);
+    ///     let primary_key = aead.primary_key();
+    ///     // in a real application, you would use a real key management service.
+    ///     // InMemory is only suitable for testing.
+    ///     let in_mem = InMemory::default();
+    ///     let data = Aead::seal(Aad::empty(), &aead, &in_mem).await.unwrap();
+    ///     let aead = Aead::open(Aad::empty(), data, &in_mem).await.unwrap();
+    ///     assert_eq!(aead.primary_key(), primary_key);
+    /// }
+    /// ```
+    pub async fn open<A, D, E>(aad: Aad<A>, data: D, envelope: &E) -> Result<Self, OpenError>
+    where
+        E: 'static + Envelope,
+        D: 'static + AsRef<[u8]> + Send + Sync,
+        A: 'static + AsRef<[u8]> + Send + Sync,
+    {
+        let primitive = Primitive::open(aad, data, envelope).await?;
+        primitive
+            .aead()
+            .ok_or(OpenError("primitive is not Aead".into()))
+    }
+
+    /// Opens an [`Aead`] keyring from the given `data` and validates the
+    /// authenticity with `aad` by means of the [`Envelope`] using
+    /// blocking APIs.
+    ///
+    /// # Errors
+    /// Errors if the keyring could not be opened by the or the authenticity
+    /// could not be verified by the [`Envelope`].
+    ///
+    /// # Example
+    /// ```rust
+    /// use navajo::Aad;
+    /// use navajo::aead::{ Aead, Algorithm };
+    /// use navajo::envelope::InMemory;
+    ///
+    /// let aead = Aead::new(Algorithm::Aes256Gcm, None);
+    /// let primary_key = aead.primary_key();
+    /// // in a real application, you would use a real key management service.
+    /// // InMemory is only suitable for testing.
+    /// let in_mem = InMemory::default();
+    /// let data = Aead::seal_sync(Aad(&b"associated data"), &aead, &in_mem).unwrap();
+    /// let aead = Aead::open_sync(Aad(&b"associated data"), &data, &in_mem).unwrap();
+    /// assert_eq!(aead.primary_key(), primary_key);
+    /// ```
+    pub fn open_sync<A, E, C>(aad: Aad<A>, ciphertext: C, envelope: &E) -> Result<Self, OpenError>
+    where
+        A: AsRef<[u8]>,
+        C: AsRef<[u8]>,
+        E: 'static + crate::envelope::sync::Envelope,
+    {
+        let primitive = Primitive::open_sync(aad, ciphertext, envelope)?;
+        if let Some(aead) = primitive.aead() {
+            Ok(aead)
+        } else {
+            Err(OpenError("primitive is not a aead".into()))
+        }
+    }
+    /// Seals an [`Aead`] keyring and tags it with `aad` for future
+    /// authenticationby means of the [`Envelope`].
+    ///
+    /// # Errors
+    /// Errors if the keyring could not be sealed by the [`Envelope`].
+    ///
+    /// # Example
+    /// ```rust
+    /// use navajo::Aad;
+    /// use navajo::aead::{ Aead, Algorithm };
+    /// use navajo::envelope::InMemory;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let aead = Aead::new(Algorithm::Aes256Gcm, None);
+    ///     let primary_key = aead.primary_key();
+    ///     // in a real application, you would use a real key management service.
+    ///     // InMemory is only suitable for testing.
+    ///     let in_mem = InMemory::default();
+    ///     let data = Aead::seal(Aad::empty(), &aead, &in_mem).await.unwrap();
+    ///     let aead = Aead::open(Aad::empty(), data, &in_mem).await.unwrap();
+    ///     assert_eq!(aead.primary_key(), primary_key);
+    /// }
+    /// ```
+    pub async fn seal<A, E>(aad: Aad<A>, aead: &Self, envelope: &E) -> Result<Vec<u8>, SealError>
+    where
+        A: 'static + AsRef<[u8]> + Send + Sync,
+        E: Envelope + 'static,
+    {
+        Primitive::Aead(aead.clone()).seal(aad, envelope).await
+    }
+    /// Seals a [`Aead`] keyring and tags it with `aad` for future
+    /// authenticationby means of the [`Envelope`].
+    ///
+    /// # Errors
+    /// Errors if the keyring could not be sealed by the [`Envelope`].
+    ///
+    /// # Example
+    /// ```rust
+    /// use navajo::Aad;
+    /// use navajo::aead::{ Aead, Algorithm };
+    /// use navajo::envelope::InMemory;
+    ///
+    /// let aead = Aead::new(Algorithm::Aes256Gcm, None);
+    /// let primary_key = aead.primary_key();
+    /// // in a real application, you would use a real key management service.
+    /// // InMemory is only suitable for testing.
+    /// let in_mem = InMemory::default();
+    /// let ciphertext = Aead::seal_sync(Aad::empty(), &aead, &in_mem).unwrap();
+    /// let aead = Aead::open_sync(Aad::empty(), ciphertext, &in_mem).unwrap();
+    /// assert_eq!(aead.primary_key(), primary_key);
+    /// ```
+    pub fn seal_sync<A, E>(aad: Aad<A>, aead: &Self, envelope: &E) -> Result<Vec<u8>, SealError>
+    where
+        A: AsRef<[u8]>,
+        E: 'static + crate::envelope::sync::Envelope,
+    {
+        Primitive::Aead(aead.clone()).seal_sync(aad, envelope)
+    }
+
     /// Creates a new AEAD keyring with a single key of the given algorithm with
     /// the provided metadata.
     pub fn new(algorithm: Algorithm, metadata: Option<Metadata>) -> Self {

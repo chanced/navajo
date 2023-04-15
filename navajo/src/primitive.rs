@@ -195,7 +195,7 @@ impl Primitive {
         }
     }
     #[cfg(feature = "dsa")]
-    pub fn signature(self) -> Option<crate::Signer> {
+    pub fn signer(self) -> Option<crate::Signer> {
         match self {
             Primitive::Dsa(sig) => Some(sig),
             _ => None,

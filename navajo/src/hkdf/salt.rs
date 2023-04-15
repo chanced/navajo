@@ -1,4 +1,4 @@
-use alloc::{sync::Arc, vec};
+use alloc::vec;
 
 use crate::Rng;
 

@@ -78,7 +78,7 @@ impl Mac {
     ///     // in a real application, you would use a real key management service.
     ///     // InMemory is only suitable for testing.
     ///     let in_mem = InMemory::default();
-    ///     let data = Mac::seal(&mac, Aad::empty(), &in_mem).await.unwrap();
+    ///     let data = Mac::seal(Aad::empty(), &mac, &in_mem).await.unwrap();
     ///     let mac = Mac::open(Aad::empty(), data, &in_mem).await.unwrap();
     ///     assert_eq!(mac.primary_key(), primary_key);
     /// }
@@ -116,7 +116,7 @@ impl Mac {
     /// // in a real application, you would use a real key management service.
     /// // InMemory is only suitable for testing.
     /// let in_mem = InMemory::default();
-    /// let data = Mac::seal_sync(&mac, Aad(&b"associated data"), &in_mem).unwrap();
+    /// let data = Mac::seal_sync(Aad(&b"associated data"), &mac, &in_mem).unwrap();
     /// let mac = Mac::open_sync(Aad(&b"associated data"), &data, &in_mem).unwrap();
     /// assert_eq!(mac.primary_key(), primary_key);
     /// ```
@@ -152,12 +152,12 @@ impl Mac {
     ///     // in a real application, you would use a real key management service.
     ///     // InMemory is only suitable for testing.
     ///     let in_mem = InMemory::default();
-    ///     let data = Mac::seal(&mac, Aad::empty(), &in_mem).await.unwrap();
+    ///     let data = Mac::seal(Aad::empty(), &mac, &in_mem).await.unwrap();
     ///     let mac = Mac::open(Aad::empty(), data, &in_mem).await.unwrap();
     ///     assert_eq!(mac.primary_key(), primary_key);
     /// }
     /// ```
-    pub async fn seal<A, E>(mac: &Self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
+    pub async fn seal<A, E>(aad: Aad<A>, mac: &Self, envelope: &E) -> Result<Vec<u8>, SealError>
     where
         A: 'static + AsRef<[u8]> + Send + Sync,
         E: Envelope + 'static,
@@ -181,11 +181,11 @@ impl Mac {
     /// // in a real application, you would use a real key management service.
     /// // InMemory is only suitable for testing.
     /// let in_mem = InMemory::default();
-    /// let ciphertext = Mac::seal_sync(&mac, Aad::empty(), &in_mem).unwrap();
+    /// let ciphertext = Mac::seal_sync(Aad::empty(), &mac, &in_mem).unwrap();
     /// let mac = Mac::open_sync(Aad::empty(), ciphertext, &in_mem).unwrap();
     /// assert_eq!(mac.primary_key(), primary_key);
     /// ```
-    pub fn seal_sync<A, E>(mac: &Self, aad: Aad<A>, envelope: &E) -> Result<Vec<u8>, SealError>
+    pub fn seal_sync<A, E>(aad: Aad<A>, mac: &Self, envelope: &E) -> Result<Vec<u8>, SealError>
     where
         A: AsRef<[u8]>,
         E: 'static + crate::envelope::sync::Envelope,
@@ -673,7 +673,7 @@ mod tests {
         // in a real application, you would use a real key management service.
         // InMemory is only suitable for testing.
         let in_mem = InMemory::default();
-        let ciphertext = Mac::seal_sync(&mac, Aad::empty(), &in_mem).unwrap();
+        let ciphertext = Mac::seal_sync(Aad::empty(), &mac, &in_mem).unwrap();
         let mac = Mac::open_sync(Aad::empty(), ciphertext, &in_mem).unwrap();
         assert_eq!(mac.primary_key(), primary_key);
     }
@@ -687,7 +687,7 @@ mod tests {
         // InMemory is only suitable for testing.
         let in_mem = InMemory::default();
 
-        let data = Mac::seal(&mac, Aad::empty(), &in_mem).await.unwrap();
+        let data = Mac::seal(Aad::empty(), &mac, &in_mem).await.unwrap();
 
         let mac = Mac::open(Aad::empty(), data, &in_mem).await.unwrap();
         assert_eq!(mac.primary_key(), primary_key);
