@@ -20,8 +20,8 @@ pub struct Cli {
 impl Cli {
     pub async fn run(
         self,
-        stdin: impl AsyncRead + Unpin,
-        stdout: impl AsyncWrite + Unpin,
+        stdin: impl 'static + AsyncRead + Unpin,
+        stdout: impl 'static + AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.command.run(stdin, stdout).await
     }
@@ -86,8 +86,8 @@ pub enum Command {
 impl Command {
     pub async fn run(
         self,
-        stdin: impl AsyncRead + Unpin,
-        stdout: impl AsyncWrite + Unpin,
+        stdin: impl 'static + AsyncRead + Unpin,
+        stdout: impl 'static + AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         match self {
             Command::New(cmd) => cmd.run(stdin, stdout).await,
@@ -123,8 +123,8 @@ pub struct New {
 impl New {
     pub async fn run(
         self,
-        _stdin: impl AsyncRead + Unpin,
-        stdout: impl AsyncWrite + Unpin,
+        _stdin: impl 'static + AsyncRead + Unpin,
+        stdout: impl 'static + AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let New {
             algorithm,
@@ -176,8 +176,8 @@ pub struct Inspect {
 impl Inspect {
     pub async fn run(
         self,
-        stdin: impl AsyncRead + Unpin,
-        stdout: impl AsyncWrite + Unpin,
+        stdin: impl 'static + AsyncRead + Unpin,
+        stdout: impl 'static + AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let Inspect { io, envelope } = self;
         let (input, mut output) = io.get(stdin, stdout).await?;
@@ -222,8 +222,8 @@ pub struct AddKey {
 impl AddKey {
     pub async fn run(
         self,
-        stdin: impl AsyncRead + Unpin,
-        stdout: impl AsyncWrite + Unpin,
+        stdin: impl 'static + AsyncRead + Unpin,
+        stdout: impl 'static + AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let AddKey {
             io,
@@ -267,8 +267,8 @@ pub struct PromoteKey {
 impl PromoteKey {
     pub async fn run(
         self,
-        stdin: impl AsyncRead + Unpin,
-        stdout: impl AsyncWrite + Unpin,
+        stdin: impl 'static + AsyncRead + Unpin,
+        stdout: impl 'static + AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let PromoteKey {
             io,
@@ -308,8 +308,8 @@ pub struct EnableKey {
 impl EnableKey {
     pub async fn run(
         self,
-        stdin: impl AsyncRead + Unpin,
-        stdout: impl AsyncWrite + Unpin,
+        stdin: impl 'static + AsyncRead + Unpin,
+        stdout: impl 'static + AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let EnableKey {
             io,
@@ -349,8 +349,8 @@ pub struct DisableKey {
 impl DisableKey {
     pub async fn run(
         self,
-        stdin: impl AsyncRead + Unpin,
-        stdout: impl AsyncWrite + Unpin,
+        stdin: impl 'static + AsyncRead + Unpin,
+        stdout: impl 'static + AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let DisableKey {
             io,
@@ -391,8 +391,8 @@ pub struct DeleteKey {
 impl DeleteKey {
     pub async fn run(
         self,
-        stdin: impl AsyncRead + Unpin,
-        stdout: impl AsyncWrite + Unpin,
+        stdin: impl 'static + AsyncRead + Unpin,
+        stdout: impl 'static + AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let DeleteKey {
             io,
@@ -446,8 +446,8 @@ pub struct Migrate {
 impl Migrate {
     pub async fn run(
         self,
-        stdin: impl AsyncRead + Unpin,
-        stdout: impl AsyncWrite + Unpin,
+        stdin: impl 'static + AsyncRead + Unpin,
+        stdout: impl 'static + AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let Migrate {
             envelope,
@@ -493,8 +493,8 @@ pub struct CreatePublic {
 impl CreatePublic {
     pub async fn run(
         self,
-        stdin: impl AsyncRead + Unpin,
-        stdout: impl AsyncWrite + Unpin,
+        stdin: impl 'static + AsyncRead + Unpin,
+        stdout: impl 'static + AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let CreatePublic { io, envelope } = self;
         let (input, mut output) = io.get(stdin, stdout).await?;
@@ -535,8 +535,8 @@ pub struct SetKeyMetadata {
 impl SetKeyMetadata {
     pub async fn run(
         self,
-        stdin: impl AsyncRead + Unpin,
-        stdout: impl AsyncWrite + Unpin,
+        stdin: impl 'static + AsyncRead + Unpin,
+        stdout: impl 'static + AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let SetKeyMetadata {
             io,
@@ -585,7 +585,7 @@ pub struct Input {
 impl Input {
     pub async fn get(
         self,
-        stdin: impl AsyncRead + Unpin,
+        stdin: impl 'static + AsyncRead + Unpin,
     ) -> std::io::Result<Box<dyn AsyncRead + Unpin>> {
         if let Some(input_path) = self.input {
             Ok(Box::new(tokio::fs::File::open(input_path).await?))
@@ -605,7 +605,7 @@ pub struct Output {
 impl Output {
     pub async fn get(
         self,
-        stdout: impl AsyncWrite + Unpin,
+        stdout: impl 'static + AsyncWrite + Unpin,
     ) -> std::io::Result<Box<dyn AsyncWrite + Unpin>> {
         if let Some(output_path) = self.output {
             Ok(Box::new(tokio::fs::File::create(output_path).await?))
@@ -631,8 +631,8 @@ pub struct IoArgs {
 impl IoArgs {
     pub async fn get(
         self,
-        stdin: impl AsyncRead + Unpin,
-        stdout: impl AsyncWrite + Unpin,
+        stdin: impl 'static + AsyncRead + Unpin,
+        stdout: impl 'static + AsyncWrite + Unpin,
     ) -> std::io::Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>)> {
         Ok((self.input.get(stdin).await?, self.output.get(stdout).await?))
     }
@@ -707,6 +707,8 @@ impl IntegrationArgs {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
     use strum::IntoEnumIterator;
 
     use super::*;
@@ -729,10 +731,12 @@ mod tests {
             };
             let cli = Cli {
                 command: Command::New(new),
-            }
-            .run(r, &mut w)
-            .await
-            .unwrap();
+            };
+            let r_cursor = Cursor::new(r);
+
+            let w_cursor = Cursor::new(&mut w);
+
+            cli.run(r_cursor, w_cursor).await.unwrap();
         }
     }
 
