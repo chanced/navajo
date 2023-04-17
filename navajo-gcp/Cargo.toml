@@ -1,6 +1,6 @@
 [package]
 name = "navajo-gcp"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["Chance Dinkins"]
@@ -8,7 +8,7 @@ description = "Navajo GCP KMS integration"
 
 [dependencies]
 kms-aead = { version = "0.12", features = ["gcp-kms-encryption"] }
-navajo = "0.0.1"
+navajo = "0.0.2"
 tokio = { version = "1.26", features = ["full"] }
 secret-vault-value = { version = "0.3" }
 async-trait = "0.1"

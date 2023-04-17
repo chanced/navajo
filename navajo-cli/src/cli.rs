@@ -1,6 +1,7 @@
 use std::{borrow::BorrowMut, path::PathBuf};
 
 use crate::{algorithm::Algorithm, envelope::Envelope};
+use anyhow::bail;
 use clap::{Parser, Subcommand};
 use navajo::{
     secret_store::SecretStore, sensitive, Aad, Aead, Daead, Kind, Mac, Primitive, Signer,
@@ -19,8 +20,8 @@ pub struct Cli {
 impl Cli {
     pub async fn run(
         self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
+        stdin: impl AsyncRead + Unpin,
+        stdout: impl AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.command.run(stdin, stdout).await
     }
@@ -85,8 +86,8 @@ pub enum Command {
 impl Command {
     pub async fn run(
         self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
+        stdin: impl AsyncRead + Unpin,
+        stdout: impl AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         match self {
             Command::New(cmd) => cmd.run(stdin, stdout).await,
@@ -112,7 +113,7 @@ pub struct New {
     #[command(flatten)]
     pub output: Output,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub integration: IntegrationArgs,
     #[arg(value_name = "PUB_ID", long = "public-id", short = 'p')]
     pub pub_id: Option<String>,
     #[arg(value_name = "PLAINTEXT", long = "plaintext")]
@@ -122,18 +123,18 @@ pub struct New {
 impl New {
     pub async fn run(
         self,
-        _stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
+        _stdin: impl AsyncRead + Unpin,
+        stdout: impl AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let New {
             algorithm,
-            envelope: env_args,
+            integration: env_args,
             output,
             metadata,
             pub_id,
             plaintext,
         } = self;
-        if env_args.key_uri.is_none() && !plaintext {
+        if env_args.envelope_key_uri.is_none() && !plaintext {
             return Err("Either --plaintext or --kms-key-uri must be provided".into());
         }
 
@@ -175,8 +176,8 @@ pub struct Inspect {
 impl Inspect {
     pub async fn run(
         self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
+        stdin: impl AsyncRead + Unpin,
+        stdout: impl AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let Inspect { io, envelope } = self;
         let (input, mut output) = io.get(stdin, stdout).await?;
@@ -221,8 +222,8 @@ pub struct AddKey {
 impl AddKey {
     pub async fn run(
         self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
+        stdin: impl AsyncRead + Unpin,
+        stdout: impl AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let AddKey {
             io,
@@ -266,8 +267,8 @@ pub struct PromoteKey {
 impl PromoteKey {
     pub async fn run(
         self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
+        stdin: impl AsyncRead + Unpin,
+        stdout: impl AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let PromoteKey {
             io,
@@ -307,8 +308,8 @@ pub struct EnableKey {
 impl EnableKey {
     pub async fn run(
         self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
+        stdin: impl AsyncRead + Unpin,
+        stdout: impl AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let EnableKey {
             io,
@@ -348,8 +349,8 @@ pub struct DisableKey {
 impl DisableKey {
     pub async fn run(
         self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
+        stdin: impl AsyncRead + Unpin,
+        stdout: impl AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let DisableKey {
             io,
@@ -390,8 +391,8 @@ pub struct DeleteKey {
 impl DeleteKey {
     pub async fn run(
         self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
+        stdin: impl AsyncRead + Unpin,
+        stdout: impl AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let DeleteKey {
             io,
@@ -445,8 +446,8 @@ pub struct Migrate {
 impl Migrate {
     pub async fn run(
         self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
+        stdin: impl AsyncRead + Unpin,
+        stdout: impl AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let Migrate {
             envelope,
@@ -462,10 +463,10 @@ impl Migrate {
 
         let updated_args = IntegrationArgs {
             aad_secret_store_uri: new_secret_uri,
-            key_uri: new_key_uri,
+            envelope_key_uri: new_key_uri,
         };
 
-        let new_envelope = if updated_args.key_uri.is_none() && !plaintext {
+        let new_envelope = if updated_args.envelope_key_uri.is_none() && !plaintext {
             envelope
         } else {
             updated_args.get_envelope()?
@@ -492,8 +493,8 @@ pub struct CreatePublic {
 impl CreatePublic {
     pub async fn run(
         self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
+        stdin: impl AsyncRead + Unpin,
+        stdout: impl AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let CreatePublic { io, envelope } = self;
         let (input, mut output) = io.get(stdin, stdout).await?;
@@ -534,8 +535,8 @@ pub struct SetKeyMetadata {
 impl SetKeyMetadata {
     pub async fn run(
         self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
+        stdin: impl AsyncRead + Unpin,
+        stdout: impl AsyncWrite + Unpin,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let SetKeyMetadata {
             io,
@@ -584,7 +585,7 @@ pub struct Input {
 impl Input {
     pub async fn get(
         self,
-        stdin: impl 'static + AsyncRead + Unpin,
+        stdin: impl AsyncRead + Unpin,
     ) -> std::io::Result<Box<dyn AsyncRead + Unpin>> {
         if let Some(input_path) = self.input {
             Ok(Box::new(tokio::fs::File::open(input_path).await?))
@@ -604,7 +605,7 @@ pub struct Output {
 impl Output {
     pub async fn get(
         self,
-        stdout: impl 'static + AsyncWrite + Unpin,
+        stdout: impl AsyncWrite + Unpin,
     ) -> std::io::Result<Box<dyn AsyncWrite + Unpin>> {
         if let Some(output_path) = self.output {
             Ok(Box::new(tokio::fs::File::create(output_path).await?))
@@ -630,8 +631,8 @@ pub struct IoArgs {
 impl IoArgs {
     pub async fn get(
         self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
+        stdin: impl AsyncRead + Unpin,
+        stdout: impl AsyncWrite + Unpin,
     ) -> std::io::Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>)> {
         Ok((self.input.get(stdin).await?, self.output.get(stdout).await?))
     }
@@ -639,19 +640,27 @@ impl IoArgs {
 
 #[derive(Debug, Parser)]
 pub struct IntegrationArgs {
-    #[arg(value_name = "KMS_KEY_URI", long = "kms-key-uri", short = 'k')]
+    #[arg(
+        value_name = "ENVELOPE_URI",
+        long = "envelope",
+        short = 'e',
+        alias = "envelope-uri",
+        alias = "envelope-key-uri"
+    )]
     /// The URI for the crypto key from a KMS to use as envelope encryption if
     /// the keyring is to be encrypted.
     ///
     /// The value should be in the form <gcp|aws|azure|vault>://<key-path>.
     ///
     ///
-    /// - GCP:   gcp://projects/<project-id>/locations/<location>/keyRings/<keyring-id>/cryptoKeys/<key-id>
+    /// - GCP:             gcp://projects/<project-id>/locations/<location>/keyRings/<keyring-id>/cryptoKeys/<key-id>
     ///
-    /// - AWS:   aws://arn:aws:kms:<region>:<account-id>:key/<key-id>
+    /// - AWS:             aws://arn:aws:kms:<region>:<account-id>:key/<key-id>
+    ///
+    /// - JSON Plaintext:  json://<path-to-json-file>
     ///
     ///
-    pub key_uri: Option<Url>,
+    pub envelope_key_uri: Option<Url>,
 
     /// The URI for the Secret Store to use for additional authenticated data
     /// (AAD). The URI is of the form <gcp|aws|azure|vault>://<key-path>.
@@ -659,30 +668,22 @@ pub struct IntegrationArgs {
     /// For example, a path of:
     /// gcp://projects/my-project/secrets/my-secret/versions/1 would use the
     /// first version of the secret "my-secret" on GCP.
-    #[arg(value_name = "AAD_SECRET_URI", long = "aad-secret-uri", short = 's')]
+    #[arg(
+        value_name = "AAD_SECRET_URI",
+        alias = "secret",
+        alias = "secret-uri",
+        long = "aad-secret-uri",
+        short = 's'
+    )]
     pub aad_secret_store_uri: Option<Url>,
 }
 
 impl IntegrationArgs {
-    pub fn get_envelope(&self) -> Result<Envelope, Box<dyn std::error::Error>> {
-        let uri = self.key_uri.as_ref();
-        if uri.is_none() {
-            return Ok(Envelope::Cleartext(navajo::PlaintextJson));
-        }
-        let uri = uri.unwrap();
-        let uri_str = uri
-            .to_string()
-            .replace(&(uri.scheme().to_string() + "://"), "");
-
-        match uri.scheme().to_lowercase().as_str() {
-            "gcp" => Ok(Envelope::Gcp(navajo_gcp::Kms::new().key(uri_str))),
-            "aws" => Err("AWS KMS is not yet implemented".into()),
-            "azure" => Err("Azure KMS is not yet implemented".into()),
-            "vault" => Err("Vault KMS is not yet implemented".into()),
-            _ => Err(format!("unknown KMS scheme: {}", uri.scheme()).into()),
-        }
+    pub fn get_envelope(&self) -> anyhow::Result<Envelope> {
+        todo!()
     }
-    pub async fn get_aad(&self) -> Result<Aad<sensitive::Bytes>, Box<dyn std::error::Error>> {
+
+    pub async fn get_aad(&self) -> anyhow::Result<Aad<sensitive::Bytes>> {
         if let Some(uri) = self.aad_secret_store_uri.as_ref() {
             let path = uri
                 .to_string()
@@ -693,10 +694,10 @@ impl IntegrationArgs {
                     let secret = client.get_secret(&path).await?;
                     Ok(Aad(secret))
                 }
-                "aws" => Err("AWS Secret Manager is not yet implemented".into()),
-                "azure" => Err("Azure Key Vault is not yet implemented".into()),
-                "vault" => Err("Vault is not yet implemented".into()),
-                _ => Err(format!("unknown Secret Store scheme: {}", uri.scheme()).into()),
+                "aws" => bail!("AWS Secret Manager is not yet implemented"),
+                "azure" => bail!("Azure Key Vault is not yet implemented"),
+                "vault" => bail!("Vault is not yet implemented"),
+                _ => bail!("unknown Secret Store scheme: {}", uri.scheme()),
             }
         } else {
             Ok(Aad(sensitive::Bytes::default()))
@@ -706,6 +707,34 @@ impl IntegrationArgs {
 
 #[cfg(test)]
 mod tests {
+    use strum::IntoEnumIterator;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_new_plaintext() {
+        for alg in Algorithm::iter() {
+            let mut w = vec![];
+            let mut r = vec![];
+            let new = New {
+                algorithm: alg,
+                integration: IntegrationArgs {
+                    envelope_key_uri: None,
+                    aad_secret_store_uri: None,
+                },
+                metadata: Metadata { metadata: None },
+                output: Output { output: None },
+                plaintext: true,
+                pub_id: None,
+            };
+            let cli = Cli {
+                command: Command::New(new),
+            }
+            .run(r, &mut w)
+            .await
+            .unwrap();
+        }
+    }
 
     #[tokio::test]
     async fn test_migrate() {

@@ -121,9 +121,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.69"
+version = "1.0.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "224afbd727c3d6e4b90103ece64b8d1b67fbb1973b1046c2281eed3f3803f800"
+checksum = "7de8ce5e0f9f8d88245311066a578d72b7af3e7088f32783804676302df237e4"
 
 [[package]]
 name = "arrayref"
@@ -1685,51 +1685,6 @@ dependencies = [
 
 [[package]]
 name = "navajo"
-version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2212a0ab982577d28c57b1ea91a7f5a7e27c447788740ff94baf487fb6171c7"
-dependencies = [
- "aead",
- "aes",
- "aes-gcm",
- "aes-siv",
- "base64 0.21.0",
- "blake3",
- "chacha20poly1305",
- "cmac",
- "crypto-common",
- "derive_builder",
- "digest",
- "ed25519-dalek",
- "elliptic-curve 0.13.2",
- "futures",
- "generic-array",
- "hkdf",
- "hmac",
- "inherent",
- "miniz_oxide 0.7.1",
- "p256",
- "p384",
- "pin-project 1.0.12",
- "pkcs8 0.10.0",
- "rand_core",
- "ring",
- "sec1 0.7.1",
- "serde",
- "serde_json",
- "sha2",
- "sha3",
- "signature",
- "strum",
- "strum_macros",
- "subtle",
- "typenum",
- "url",
- "zeroize",
-]
-
-[[package]]
-name = "navajo"
 version = "0.0.2"
 dependencies = [
  "aead",
@@ -1795,9 +1750,10 @@ version = "0.0.0"
 name = "navajo-cli"
 version = "0.0.1"
 dependencies = [
+ "anyhow",
  "base64 0.21.0",
  "clap",
- "navajo 0.0.1",
+ "navajo",
  "navajo-gcp",
  "serde",
  "serde_json",
@@ -1808,14 +1764,14 @@ dependencies = [
 
 [[package]]
 name = "navajo-gcp"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "async-trait",
  "base64 0.21.0",
  "crc32c",
  "gcloud-sdk",
  "kms-aead",
- "navajo 0.0.1",
+ "navajo",
  "once_cell",
  "prost",
  "prost-types",

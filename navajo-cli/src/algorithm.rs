@@ -4,7 +4,7 @@ use clap::ValueEnum;
 
 use navajo::Kind;
 
-#[derive(Clone, Debug, PartialEq, Eq, ValueEnum, strum::Display)]
+#[derive(Clone, Debug, PartialEq, Eq, ValueEnum, strum::Display, strum::EnumIter)]
 pub enum Algorithm {
     // ------------------------------------------
     // AEAD
