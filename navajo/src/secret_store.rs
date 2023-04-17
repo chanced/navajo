@@ -7,7 +7,7 @@ use crate::{error::Error, sensitive};
 
 pub trait SecretStore {
     type Error: Error + Send + Sync;
-    fn get_secret<N: ToString>(
+    fn get<N: ToString>(
         &self,
         name: N,
     ) -> Pin<Box<dyn Future<Output = Result<sensitive::Bytes, Self::Error>> + Send + '_>>;

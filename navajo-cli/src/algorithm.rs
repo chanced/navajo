@@ -1,5 +1,6 @@
 #![allow(non_camel_case_types)]
 
+use anyhow::bail;
 use clap::ValueEnum;
 
 use navajo::Kind;
@@ -282,7 +283,7 @@ impl Algorithm {
     }
 }
 impl TryFrom<Algorithm> for navajo::aead::Algorithm {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(value: Algorithm) -> Result<Self, Self::Error> {
         match value {
@@ -290,35 +291,35 @@ impl TryFrom<Algorithm> for navajo::aead::Algorithm {
             Algorithm::Aes_256_Gcm => Ok(navajo::aead::Algorithm::Aes256Gcm),
             Algorithm::Chacha20Poly1305 => Ok(navajo::aead::Algorithm::ChaCha20Poly1305),
             Algorithm::Xchacha20Poly1305 => Ok(navajo::aead::Algorithm::XChaCha20Poly1305),
-            _ => Err(format!("Algorithm {value} is not AEAD")),
+            _ => bail!("Algorithm {value} is not AEAD"),
         }
     }
 }
 impl TryFrom<Algorithm> for navajo::daead::Algorithm {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(value: Algorithm) -> Result<Self, Self::Error> {
         match value {
             Algorithm::AesSiv => Ok(navajo::daead::Algorithm::Aes256Siv),
-            _ => Err(format!("Algorithm {value} is not DAEAD")),
+            _ => bail!("Algorithm {value} is not DAEAD"),
         }
     }
 }
 impl TryFrom<Algorithm> for navajo::dsa::Algorithm {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(value: Algorithm) -> Result<Self, Self::Error> {
         match value {
             Algorithm::Es256 => Ok(navajo::dsa::Algorithm::Es256),
             Algorithm::Es384 => Ok(navajo::dsa::Algorithm::Es384),
             Algorithm::Ed25519 => Ok(navajo::dsa::Algorithm::Ed25519),
-            _ => Err(format!("Algorithm {value} is not Signature")),
+            _ => bail!("Algorithm {value} is not Signature"),
         }
     }
 }
 
 impl TryFrom<Algorithm> for navajo::mac::Algorithm {
-    type Error = String;
+    type Error = anyhow::Error;
     fn try_from(value: Algorithm) -> Result<Self, Self::Error> {
         match value {
             Algorithm::Blake3 => Ok(navajo::mac::Algorithm::Blake3),
@@ -332,7 +333,7 @@ impl TryFrom<Algorithm> for navajo::mac::Algorithm {
             Algorithm::Aes_128 => Ok(navajo::mac::Algorithm::Aes128),
             Algorithm::Aes_192 => Ok(navajo::mac::Algorithm::Aes192),
             Algorithm::Aes_256 => Ok(navajo::mac::Algorithm::Aes256),
-            _ => Err(format!("Algorithm {value} is not MAC")),
+            _ => bail!("Algorithm {value} is not MAC"),
         }
     }
 }

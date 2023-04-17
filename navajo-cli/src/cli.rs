@@ -1,12 +1,13 @@
-use std::{borrow::BorrowMut, path::PathBuf};
-
-use crate::{algorithm::Algorithm, envelope::Envelope};
-use anyhow::bail;
-use clap::{Parser, Subcommand};
-use navajo::{
-    secret_store::SecretStore, sensitive, Aad, Aead, Daead, Kind, Mac, Primitive, Signer,
+use std::{
+    borrow::BorrowMut,
+    io::{Read, Write},
+    path::PathBuf,
 };
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+
+use crate::{algorithm::Algorithm, envelope::Envelope, Aad, Encoding};
+use anyhow::{bail, Result};
+use clap::{Parser, Subcommand};
+use navajo::{sensitive, Aead, Daead, Kind, Mac, Primitive, Signer};
 use url::Url;
 
 #[derive(Debug, Parser)]
@@ -18,12 +19,8 @@ pub struct Cli {
 }
 
 impl Cli {
-    pub async fn run<'a>(
-        self,
-        stdin: impl 'a + AsyncRead + Unpin,
-        stdout: impl 'a + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.command.run(stdin, stdout).await
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
+        self.command.run(stdin, stdout)
     }
 }
 
@@ -44,30 +41,31 @@ pub enum Command {
     )]
     Inpsect(Inspect),
 
+    /// Migrates a keyring to a new envelope, changes the envelope's AAD, or both.
     #[command(alias = "m")]
-    /// Updates the AAD secret URI and/or change the KMS key URI.
     Migrate(Migrate),
 
-    #[command(alias = "create_public")]
     /// Generates a public JWKS from a private, asymmetric keyring.
+    #[command(alias = "create_public")]
     CreatePublic(CreatePublic),
 
-    #[command(alias = "add_key", alias = "add", alias = "a")]
     /// Adds a new key to a keyring.
+    #[command(alias = "add_key", alias = "add", alias = "a")]
     AddKey(AddKey),
 
-    #[command(alias = "promote_key", alias = "promote", alias = "p")]
     /// Promotes a key to primary in a keyring.
+    #[command(alias = "promote_key", alias = "promote", alias = "p")]
     PromoteKey(PromoteKey),
 
-    #[command(alias = "enable_key", alias = "enable", alias = "e")]
     /// Enables a disabled key in a keyring.
+    #[command(alias = "enable_key", alias = "enable", alias = "e")]
     EnableKey(EnableKey),
 
-    #[command(alias = "disable_key", alias = "disable", alias = "d")]
     /// Disables a key in a keyring. Disabling a key effectively removes
     /// the key from the keyring, but leaves it in a recoverable state.
+    #[command(alias = "disable_key", alias = "disable", alias = "d")]
     DisableKey(DisableKey),
+
     /// Deletes a key from a keyring.
     #[command(
         alias = "delete_key",
@@ -84,22 +82,18 @@ pub enum Command {
 }
 
 impl Command {
-    pub async fn run<'a>(
-        self,
-        stdin: impl 'a + AsyncRead + Unpin,
-        stdout: impl 'a + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         match self {
-            Command::New(cmd) => cmd.run(stdin, stdout).await,
-            Command::Inpsect(cmd) => cmd.run(stdin, stdout).await,
-            Command::Migrate(cmd) => cmd.run(stdin, stdout).await,
-            Command::CreatePublic(cmd) => cmd.run(stdin, stdout).await,
-            Command::AddKey(cmd) => cmd.run(stdin, stdout).await,
-            Command::PromoteKey(cmd) => cmd.run(stdin, stdout).await,
-            Command::EnableKey(cmd) => cmd.run(stdin, stdout).await,
-            Command::DisableKey(cmd) => cmd.run(stdin, stdout).await,
-            Command::DeleteKey(cmd) => cmd.run(stdin, stdout).await,
-            Command::SetKeyMetadata(cmd) => cmd.run(stdin, stdout).await,
+            Command::New(cmd) => cmd.run(stdin, stdout),
+            Command::Inpsect(cmd) => cmd.run(stdin, stdout),
+            Command::Migrate(cmd) => cmd.run(stdin, stdout),
+            Command::CreatePublic(cmd) => cmd.run(stdin, stdout),
+            Command::AddKey(cmd) => cmd.run(stdin, stdout),
+            Command::PromoteKey(cmd) => cmd.run(stdin, stdout),
+            Command::EnableKey(cmd) => cmd.run(stdin, stdout),
+            Command::DisableKey(cmd) => cmd.run(stdin, stdout),
+            Command::DeleteKey(cmd) => cmd.run(stdin, stdout),
+            Command::SetKeyMetadata(cmd) => cmd.run(stdin, stdout),
         }
     }
 }
@@ -113,19 +107,21 @@ pub struct New {
     #[command(flatten)]
     pub output: Output,
     #[command(flatten)]
-    pub integration: IntegrationArgs,
+    pub integration: EnvelopeArgs,
+    /// For asymetric keys, the public ID of the key to use.
+    ///
+    /// If not provided, the generated 7-8 digit numeric ID of the key will be
+    /// used.
     #[arg(value_name = "PUB_ID", long = "public-id", short = 'p')]
     pub pub_id: Option<String>,
+
+    /// Disables envelope encryption, outputting the keyring as plaintext JSON.
     #[arg(value_name = "PLAINTEXT", long = "plaintext")]
     pub plaintext: bool,
 }
 
 impl New {
-    pub async fn run<'a>(
-        self,
-        _stdin: impl 'a + AsyncRead + Unpin,
-        stdout: impl 'a + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, _stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let New {
             algorithm,
             integration: env_args,
@@ -134,13 +130,13 @@ impl New {
             pub_id,
             plaintext,
         } = self;
-        if env_args.envelope_key_uri.is_none() && !plaintext {
-            return Err("Either --plaintext or --kms-key-uri must be provided".into());
+        if env_args.envelope_uri.is_none() && !plaintext {
+            bail!("Either --plaintext or --kms-key-uri must be provided");
         }
 
-        let output = output.get(stdout).await?;
+        let output = output.get(stdout)?;
         let envelope = env_args.get_envelope()?;
-        let aad = env_args.get_aad().await?;
+        let aad = env_args.get_aad()?;
         let metadata = metadata.try_into()?;
 
         let primitive = match algorithm.kind() {
@@ -149,7 +145,7 @@ impl New {
             Kind::Mac => Primitive::Mac(Mac::new(algorithm.try_into()?, metadata)),
             Kind::Signature => Primitive::Dsa(Signer::new(algorithm.try_into()?, pub_id, metadata)),
         };
-        envelope.seal_and_write(output, aad, primitive).await
+        envelope.seal_and_write(output, aad, primitive)
     }
 }
 
@@ -170,20 +166,16 @@ pub struct Inspect {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub envelope: EnvelopeArgs,
 }
 
 impl Inspect {
-    pub async fn run<'a>(
-        self,
-        stdin: impl 'a + AsyncRead + Unpin,
-        stdout: impl 'a + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let Inspect { io, envelope } = self;
-        let (input, mut output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
+        let (input, mut output) = io.get(stdin, stdout)?;
+        let aad = envelope.get_aad()?;
         let envelope = envelope.get_envelope()?;
-        let primitive = envelope.open(aad, input).await?;
+        let primitive = envelope.open(aad, input)?;
         let json = match primitive {
             Primitive::Aead(aead) => serde_json::to_vec_pretty(&aead.keys()),
             Primitive::Daead(daead) => serde_json::to_vec_pretty(&daead.keys()),
@@ -191,9 +183,9 @@ impl Inspect {
             Primitive::Dsa(sig) => serde_json::to_vec_pretty(&sig.keys()),
         }?;
 
-        output.write_all(&json).await?;
-        output.write_all(b"\n").await?;
-        output.flush().await?;
+        output.write_all(&json)?;
+        output.write_all(b"\n")?;
+        output.flush()?;
         Ok(())
     }
 }
@@ -203,7 +195,7 @@ pub struct AddKey {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub envelope: EnvelopeArgs,
     /// Specifies the algorithm to use for the key.
     ///     
     /// Errors if the algorithm is not of the same primitive (AEAD, DAEAD,
@@ -220,11 +212,7 @@ pub struct AddKey {
 }
 
 impl AddKey {
-    pub async fn run<'a>(
-        self,
-        stdin: impl 'a + AsyncRead + Unpin,
-        stdout: impl 'a + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let AddKey {
             io,
             envelope,
@@ -232,11 +220,11 @@ impl AddKey {
             metadata,
             pub_id,
         } = self;
-        let (input, output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
+        let (input, output) = io.get(stdin, stdout)?;
+        let aad = envelope.get_aad()?;
         let envelope = envelope.get_envelope()?;
         let metadata = metadata.try_into()?;
-        let mut primitive = envelope.open(aad.clone(), input).await?;
+        let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive {
             Primitive::Aead(ref mut aead) => {
                 aead.add(algorithm.try_into()?, metadata);
@@ -251,7 +239,7 @@ impl AddKey {
                 sig.add(algorithm.try_into()?, pub_id, metadata)?;
             }
         }
-        envelope.seal_and_write(output, aad, primitive).await
+        envelope.seal_and_write(output, aad, primitive)
     }
 }
 
@@ -260,25 +248,21 @@ pub struct PromoteKey {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub envelope: EnvelopeArgs,
     /// The ID of the key to operate on.
     pub key_id: u32,
 }
 impl PromoteKey {
-    pub async fn run<'a>(
-        self,
-        stdin: impl 'a + AsyncRead + Unpin,
-        stdout: impl 'a + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let PromoteKey {
             io,
             envelope,
             key_id,
         } = self;
-        let (input, output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
+        let (input, output) = io.get(stdin, stdout)?;
+        let aad = envelope.get_aad()?;
         let envelope = envelope.get_envelope()?;
-        let mut primitive = envelope.open(aad.clone(), input).await?;
+        let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
                 aead.promote(key_id)?;
@@ -293,7 +277,7 @@ impl PromoteKey {
                 sig.promote(key_id)?;
             }
         }
-        envelope.seal_and_write(output, aad, primitive).await
+        envelope.seal_and_write(output, aad, primitive)
     }
 }
 #[derive(Debug, Parser)]
@@ -301,25 +285,21 @@ pub struct EnableKey {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub envelope: EnvelopeArgs,
     /// The ID of the key to operate on.
     pub key_id: u32,
 }
 impl EnableKey {
-    pub async fn run<'a>(
-        self,
-        stdin: impl 'a + AsyncRead + Unpin,
-        stdout: impl 'a + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let EnableKey {
             io,
             envelope,
             key_id,
         } = self;
-        let (input, output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
+        let (input, output) = io.get(stdin, stdout)?;
+        let aad = envelope.get_aad()?;
         let envelope = envelope.get_envelope()?;
-        let mut primitive = envelope.open(aad.clone(), input).await?;
+        let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
                 aead.enable(key_id)?;
@@ -334,7 +314,7 @@ impl EnableKey {
                 sig.enable(key_id)?;
             }
         }
-        envelope.seal_and_write(output, aad, primitive).await
+        envelope.seal_and_write(output, aad, primitive)
     }
 }
 #[derive(Debug, Parser)]
@@ -342,25 +322,21 @@ pub struct DisableKey {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub envelope: EnvelopeArgs,
     /// The ID of the key to operate on.
     pub key_id: u32,
 }
 impl DisableKey {
-    pub async fn run<'a>(
-        self,
-        stdin: impl 'a + AsyncRead + Unpin,
-        stdout: impl 'a + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let DisableKey {
             io,
             envelope,
             key_id,
         } = self;
-        let (input, output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
+        let (input, output) = io.get(stdin, stdout)?;
+        let aad = envelope.get_aad()?;
         let envelope = envelope.get_envelope()?;
-        let mut primitive = envelope.open(aad.clone(), input).await?;
+        let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
                 aead.disable(key_id)?;
@@ -375,7 +351,7 @@ impl DisableKey {
                 sig.disable(key_id)?;
             }
         }
-        envelope.seal_and_write(output, aad, primitive).await
+        envelope.seal_and_write(output, aad, primitive)
     }
 }
 
@@ -384,25 +360,21 @@ pub struct DeleteKey {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub envelope: EnvelopeArgs,
     /// The ID of the key to operate on.
     pub key_id: u32,
 }
 impl DeleteKey {
-    pub async fn run<'a>(
-        self,
-        stdin: impl 'a + AsyncRead + Unpin,
-        stdout: impl 'a + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let DeleteKey {
             io,
             envelope,
             key_id,
         } = self;
-        let (input, output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
+        let (input, output) = io.get(stdin, stdout)?;
+        let aad = envelope.get_aad()?;
         let envelope = envelope.get_envelope()?;
-        let mut primitive = envelope.open(aad.clone(), input).await?;
+        let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
                 aead.delete(key_id)?;
@@ -417,7 +389,7 @@ impl DeleteKey {
                 sig.delete(key_id)?;
             }
         }
-        envelope.seal_and_write(output, aad, primitive).await
+        envelope.seal_and_write(output, aad, primitive)
     }
 }
 
@@ -425,18 +397,27 @@ impl DeleteKey {
 pub struct Migrate {
     #[command(flatten)]
     io: IoArgs,
+
     #[command(flatten)]
-    envelope: IntegrationArgs,
-    #[arg(value_name = "NEW_ENVELOPE", long = "new-master-key-uri", short = 'n')]
+    integration: EnvelopeArgs,
+
     /// The new URI to a crypto key in a KMS to use as envelope encryption for
     /// the keyring.
     ///
     /// If not specified, the keyring will be re-encrypted with the same key (if any).
+    #[arg(value_name = "NEW_ENVELOPE", long = "new-envelope")]
     pub new_key_uri: Option<Url>,
+
     /// The new URI to a secret in a cloud secret manager to be used as
     /// additional authenticated data for the keyring.
-    #[arg(value_name = "NEW_SECRET_URI", long = "new-secret-uri", short = 'a')]
-    pub new_secret_uri: Option<Url>,
+    #[arg(value_name = "NEW_ENVELOPE_AAD", long = "new-envelope-aad")]
+    pub new_envelope_aad: Option<Aad>,
+
+    #[arg(
+        value_name = "NEW_ENVELOPE_AAD_ENCODING",
+        long = "new-envelope-aad-encoding"
+    )]
+    pub new_envelope_aad_encoding: Option<Encoding>,
 
     /// Disables encryption, outputting the keyring as plaintext JSON.
     #[arg(value_name = "PLAINTEXT", long = "plaintext")]
@@ -444,41 +425,37 @@ pub struct Migrate {
 }
 
 impl Migrate {
-    pub async fn run<'a>(
-        self,
-        stdin: impl 'a + AsyncRead + Unpin,
-        stdout: impl 'a + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let Migrate {
-            envelope,
+            integration,
             io,
             new_key_uri,
-            new_secret_uri,
+            new_envelope_aad,
             plaintext,
+            new_envelope_aad_encoding,
         } = self;
-        let (input, output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
-        let envelope = envelope.get_envelope()?;
-        let primitive = envelope.open(aad.clone(), input).await?;
+        let (input, output) = io.get(stdin, stdout)?;
+        let aad = integration.get_aad()?;
+        let envelope = integration.get_envelope()?;
+        let primitive = envelope.open(aad.clone(), input)?;
 
-        let updated_args = IntegrationArgs {
-            aad_secret_store_uri: new_secret_uri,
-            envelope_key_uri: new_key_uri,
+        let updated_args = EnvelopeArgs {
+            envelope_aad: new_envelope_aad,
+            envelope_uri: new_key_uri,
+            envelope_aad_encoding: new_envelope_aad_encoding,
         };
 
-        let new_envelope = if updated_args.envelope_key_uri.is_none() && !plaintext {
+        let new_envelope = if updated_args.envelope_uri.is_none() && !plaintext {
             envelope
         } else {
             updated_args.get_envelope()?
         };
-        let new_aad = if updated_args.aad_secret_store_uri.is_none() && !plaintext {
+        let new_aad = if updated_args.envelope_aad.is_none() && !plaintext {
             aad
         } else {
-            updated_args.get_aad().await?
+            updated_args.get_aad()?
         };
-        new_envelope
-            .seal_and_write(output, new_aad, primitive)
-            .await
+        new_envelope.seal_and_write(output, new_aad, primitive)
     }
 }
 
@@ -487,28 +464,27 @@ pub struct CreatePublic {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub integration: EnvelopeArgs,
 }
 
 impl CreatePublic {
-    pub async fn run<'a>(
-        self,
-        stdin: impl 'a + AsyncRead + Unpin,
-        stdout: impl 'a + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let CreatePublic { io, envelope } = self;
-        let (input, mut output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
+        let CreatePublic {
+            io,
+            integration: envelope,
+        } = self;
+        let (input, mut output) = io.get(stdin, stdout)?;
+        let aad = envelope.get_aad()?;
         let envelope = envelope.get_envelope()?;
-        let primitive = envelope.open(aad.clone(), input).await?;
+        let primitive = envelope.open(aad, input)?;
         if let Primitive::Dsa(sig) = primitive {
             let public = sig.verifier();
             let jwks = serde_json::to_vec_pretty(&public)?;
-            output.write_all(&jwks).await?;
-            output.write_all(b"\n").await?;
-            output.flush().await?;
+            output.write_all(&jwks)?;
+            output.write_all(b"\n")?;
+            output.flush()?;
         } else {
-            return Err("only signature keyrings support public keysets".into());
+            bail!("only signature keyrings support public keysets");
         }
         Ok(())
     }
@@ -519,7 +495,7 @@ pub struct SetKeyMetadata {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub integration: EnvelopeArgs,
     /// The ID of the key to operate on.
     pub key_id: u32,
     /// The new metadata for the key. To clear the metadata, use --clear
@@ -533,20 +509,16 @@ pub struct SetKeyMetadata {
     pub clear_metadata: bool,
 }
 impl SetKeyMetadata {
-    pub async fn run<'a>(
-        self,
-        stdin: impl 'a + AsyncRead + Unpin,
-        stdout: impl 'a + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let SetKeyMetadata {
             io,
-            envelope,
+            integration: envelope,
             key_id,
             metadata,
             clear_metadata,
         } = self;
-        let (input, output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
+        let (input, output) = io.get(stdin, stdout)?;
+        let aad = envelope.get_aad()?;
         let envelope = envelope.get_envelope()?;
 
         let meta: Option<navajo::Metadata> = if clear_metadata {
@@ -555,7 +527,7 @@ impl SetKeyMetadata {
             metadata.try_into()?
         };
 
-        let mut primitive = envelope.open(aad.clone(), input).await?;
+        let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
                 aead.set_key_metadata(key_id, meta)?;
@@ -570,7 +542,7 @@ impl SetKeyMetadata {
                 sig.set_key_metadata(key_id, meta)?;
             }
         }
-        envelope.seal_and_write(output, aad, primitive).await
+        envelope.seal_and_write(output, aad, primitive)
     }
 }
 
@@ -583,12 +555,9 @@ pub struct Input {
     pub input: Option<PathBuf>,
 }
 impl Input {
-    pub async fn get<'a>(
-        self,
-        stdin: impl 'a + AsyncRead + Unpin,
-    ) -> std::io::Result<Box<dyn 'a + AsyncRead + Unpin>> {
+    pub fn get<'a>(self, stdin: impl 'a + Read) -> std::io::Result<Box<dyn 'a + Read>> {
         if let Some(input_path) = self.input {
-            Ok(Box::new(tokio::fs::File::open(input_path).await?))
+            Ok(Box::new(std::fs::File::open(input_path)?))
         } else {
             Ok(Box::new(stdin))
         }
@@ -603,12 +572,9 @@ pub struct Output {
     pub output: Option<PathBuf>,
 }
 impl Output {
-    pub async fn get<'a>(
-        self,
-        stdout: impl 'a + AsyncWrite + Unpin,
-    ) -> std::io::Result<Box<dyn 'a + AsyncWrite + Unpin>> {
+    pub fn get<'a>(self, stdout: impl 'a + Write) -> std::io::Result<Box<dyn 'a + Write>> {
         if let Some(output_path) = self.output {
-            Ok(Box::new(tokio::fs::File::create(output_path).await?))
+            Ok(Box::new(std::fs::File::create(output_path)?))
         } else {
             Ok(Box::new(stdout))
         }
@@ -629,23 +595,22 @@ pub struct IoArgs {
     pub output: Output,
 }
 impl IoArgs {
-    pub async fn get<'a>(
+    pub fn get<'a>(
         self,
-        stdin: impl 'a + AsyncRead + Unpin,
-        stdout: impl 'a + AsyncWrite + Unpin,
-    ) -> std::io::Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>)> {
-        Ok((self.input.get(stdin).await?, self.output.get(stdout).await?))
+        stdin: impl 'a + Read,
+        stdout: impl 'a + Write,
+    ) -> std::io::Result<(Box<dyn 'a + Read>, Box<dyn 'a + Write>)> {
+        Ok((self.input.get(stdin)?, self.output.get(stdout)?))
     }
 }
 
 #[derive(Debug, Parser)]
-pub struct IntegrationArgs {
+pub struct EnvelopeArgs {
     #[arg(
         value_name = "ENVELOPE_URI",
         long = "envelope",
         short = 'e',
-        alias = "envelope-uri",
-        alias = "envelope-key-uri"
+        alias = "envelope-uri"
     )]
     /// The URI for the crypto key from a KMS to use as envelope encryption if
     /// the keyring is to be encrypted.
@@ -660,69 +625,70 @@ pub struct IntegrationArgs {
     /// - JSON Plaintext:  json://<path-to-json-file>
     ///
     ///
-    pub envelope_key_uri: Option<Url>,
+    pub envelope_uri: Option<Url>,
 
-    /// The URI for the Secret Store to use for additional authenticated data
-    /// (AAD). The URI is of the form <gcp|aws|azure|vault>://<key-path>.
+    /// Additional authenticated data(AAD), if any, used to authenticate the
+    /// keyring. The value can either be a URI in the form
+    /// <gcp|aws|azure|vault>://<key-path> or a possibly encoded (base64 or hex)
+    /// string.
     ///
-    /// For example, a path of:
+    /// For URIs, the path should be the secret's URI on a supported secret
+    /// manager. For example, a path of:
     /// gcp://projects/my-project/secrets/my-secret/versions/1 would use the
     /// first version of the secret "my-secret" on GCP.
+    ///
+    /// For both secrets hosted on a secret manager and strings, the the `envelope-aad-encoding`
+    /// determines if and how the value is decoded.
     #[arg(
-        value_name = "AAD_SECRET_URI",
-        alias = "secret",
-        alias = "secret-uri",
-        long = "aad-secret-uri",
+        value_name = "ENVELOPE_AAD",
+        alias = "env-aad",
+        long = "envelope-aad",
         short = 's'
     )]
-    pub aad_secret_store_uri: Option<Url>,
+    pub envelope_aad: Option<Aad>,
+
+    /// The encoding of the envelope AAD value, if any. If not specified, the
+    /// value is treated as a string.
+    #[arg(
+        value_name = "ENVELOPE_AAD_ENCODING",
+        long = "envelope-aad-encoding",
+        short = 'd'
+    )]
+    pub envelope_aad_encoding: Option<Encoding>,
 }
 
-impl IntegrationArgs {
-    pub fn get_envelope(&self) -> anyhow::Result<Envelope> {
-        todo!()
+impl EnvelopeArgs {
+    pub fn get_envelope(&self) -> Result<Envelope> {
+        todo!("...")
     }
 
-    pub async fn get_aad(&self) -> anyhow::Result<Aad<sensitive::Bytes>> {
-        if let Some(uri) = self.aad_secret_store_uri.as_ref() {
-            let path = uri
-                .to_string()
-                .replace(&(uri.scheme().to_string() + "://"), "");
-            match uri.scheme().to_lowercase().as_str() {
-                "gcp" => {
-                    let client = navajo_gcp::SecretManager::new();
-                    let secret = client.get_secret(&path).await?;
-                    Ok(Aad(secret))
-                }
-                "aws" => bail!("AWS Secret Manager is not yet implemented"),
-                "azure" => bail!("Azure Key Vault is not yet implemented"),
-                "vault" => bail!("Vault is not yet implemented"),
-                _ => bail!("unknown Secret Store scheme: {}", uri.scheme()),
-            }
+    pub fn get_aad(&self) -> Result<navajo::Aad<sensitive::Bytes>> {
+        if let Some(aad) = &self.envelope_aad {
+            aad.value()
         } else {
-            Ok(Aad(sensitive::Bytes::default()))
+            Ok(navajo::Aad(sensitive::Bytes::default()))
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
 
     use strum::IntoEnumIterator;
 
     use super::*;
 
-    #[tokio::test]
-    async fn test_new_plaintext() {
+    #[test]
+    fn test_new_plaintext() {
         for alg in Algorithm::iter() {
             let mut w = vec![];
-
+            let r: Vec<u8> = vec![];
             let new = New {
                 algorithm: alg,
-                integration: IntegrationArgs {
-                    envelope_key_uri: None,
-                    aad_secret_store_uri: None,
+                integration: EnvelopeArgs {
+                    envelope_uri: None,
+                    envelope_aad: None,
+                    envelope_aad_encoding: None,
                 },
                 metadata: Metadata { metadata: None },
                 output: Output { output: None },
@@ -732,16 +698,12 @@ mod tests {
             let cli = Cli {
                 command: Command::New(new),
             };
-            let r_cursor = Cursor::new(r);
-            let mut r = vec![];
-            let w_cursor = Cursor::new(&mut w);
-
-            cli.run(r_cursor, w_cursor).await.unwrap();
+            cli.run(r.as_slice(), &mut w).unwrap();
         }
     }
 
-    #[tokio::test]
-    async fn test_migrate() {
+    #[test]
+    fn test_migrate() {
         // let mut w = vec![];
         // let r = vec![];
         // Cli {
@@ -757,7 +719,7 @@ mod tests {
         //     }),
         // }
         // .run(r.as_slice(), &mut w)
-        // .await
+        //
         // .unwrap()
     }
 }

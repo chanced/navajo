@@ -7,22 +7,23 @@ authors = ["Chance Dinkins"]
 description = "Navajo GCP KMS integration"
 
 [dependencies]
-kms-aead = { version = "0.12", features = ["gcp-kms-encryption"] }
-navajo = "0.0.2"
+kms-aead = { version = "0.15", features = ["gcp-kms-encryption"] }
+navajo = "0.0.3"
 tokio = { version = "1.26", features = ["full"] }
 secret-vault-value = { version = "0.3" }
 async-trait = "0.1"
-gcloud-sdk = { version = "0.19", features = [
+gcloud-sdk = { version = "0.20", features = [
 	"google-cloud-kms-v1",
 	"google-cloud-secretmanager-v1",
 ] }
-tonic = { version = "0.8", features = ["tls"] }
+tonic = { version = "0.9", features = ["tls"] }
 prost = "0.11"
 prost-types = "0.11"
 url = "2.3"
 base64 = "0.21"
 crc32c = "0.6"
 once_cell = "1.17"
+inherent = "1"
 
 # google-api-proto = { version = "1", features = [
 # 	"google-cloud-secretmanager-v1",

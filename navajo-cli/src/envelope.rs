@@ -1,8 +1,10 @@
-use std::{io::Read, str::FromStr};
+use std::{
+    io::{Read, Write},
+    str::FromStr,
+};
 
 use anyhow::{anyhow, bail, Context};
 use navajo::{Aad, Aead, Primitive};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[derive(Clone, Debug)]
 pub enum Envelope {
@@ -12,7 +14,7 @@ pub enum Envelope {
     ///
     /// `--envelope=json://path/to/file.json`
     Json(Aead),
-    Gcp(navajo_gcp::CryptoKey),
+    Gcp(navajo_gcp::sync::CryptoKey),
 }
 impl FromStr for Envelope {
     type Err = anyhow::Error;
@@ -24,7 +26,7 @@ impl FromStr for Envelope {
             .replacen(&(uri.scheme().to_string() + "://"), "", 1);
 
         match uri.scheme().to_lowercase().as_str() {
-            "gcp" => Ok(Envelope::Gcp(navajo_gcp::Kms::new().key(uri_str))),
+            "gcp" => Ok(Envelope::Gcp(navajo_gcp::sync::Kms::new().key(uri_str))),
             "plaintext" => Self::open_plaintext(uri_str),
             "aws" => bail!("AWS KMS is not yet implemented"),
             "azure" => bail!("Azure KMS is not yet implemented"),
@@ -53,39 +55,39 @@ impl Envelope {
         Ok(Envelope::Json(envelope))
     }
 
-    pub async fn open<A>(
+    pub fn open<'a, A>(
         &self,
         aad: Aad<A>,
-        mut read: Box<dyn tokio::io::AsyncRead + Unpin>,
+        mut read: Box<dyn 'a + Read>,
     ) -> anyhow::Result<Primitive>
     where
-        A: 'static + AsRef<[u8]> + Send + Sync,
+        A: 'a + AsRef<[u8]>,
     {
         let mut data = Vec::new();
-        read.read_to_end(&mut data).await?;
+        read.read_to_end(&mut data)?;
         match self {
-            Envelope::Plaintext(envelope) => Ok(Primitive::open(aad, data, envelope).await?),
-            Envelope::Gcp(envelope) => Ok(Primitive::open(aad, data, envelope).await?),
+            Envelope::Plaintext(envelope) => Ok(Primitive::open_sync(aad, data, envelope)?),
+            Envelope::Gcp(envelope) => Ok(Primitive::open_sync(aad, data, envelope)?),
             Envelope::Json(_) => todo!(),
         }
     }
-    pub async fn seal_and_write<A>(
+    pub fn seal_and_write<'a, A>(
         &self,
-        mut write: Box<dyn tokio::io::AsyncWrite + Unpin>,
+        mut write: Box<dyn 'a + Write>,
         aad: Aad<A>,
         primitive: Primitive,
-    ) -> Result<(), Box<dyn std::error::Error>>
+    ) -> anyhow::Result<()>
     where
-        A: 'static + AsRef<[u8]> + Send + Sync,
+        A: 'static + AsRef<[u8]>,
     {
         let sealed = match self {
-            Envelope::Plaintext(envelope) => primitive.seal(aad, envelope).await?,
-            Envelope::Gcp(envelope) => primitive.seal(aad, envelope).await?,
-            Envelope::Json(envelope) => primitive.seal(aad, envelope).await?,
+            Envelope::Plaintext(envelope) => primitive.seal_sync(aad, envelope)?,
+            Envelope::Gcp(envelope) => primitive.seal_sync(aad, envelope)?,
+            Envelope::Json(envelope) => primitive.seal_sync(aad, envelope)?,
         };
-        write.write_all(&sealed).await?;
-        write.write_all(b"\n").await?;
-        write.flush().await?;
+        write.write_all(&sealed)?;
+        write.write_all(b"\n")?;
+        write.flush()?;
         Ok(())
     }
 }

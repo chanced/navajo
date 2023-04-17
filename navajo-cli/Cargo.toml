@@ -10,7 +10,7 @@ description = "Navajo CLI"
 name = "navajo"
 
 [dependencies]
-navajo = { version = "0.0.2", features = [
+navajo = { version = "0.0.3", features = [
 	"std",
 	"blake3",
 	"sha3",
@@ -27,3 +27,5 @@ serde = { version = "1.0" }
 serde_json = { version = "1.0" }
 base64 = "0.21"
 anyhow = "1.0"
+shellexpand = "3.0"
+hex = "0.4"

@@ -536,7 +536,7 @@ impl Envelope for Aead {
     }
 
     fn decrypt_dek<'a, A, B>(
-        &'a self,
+        &self,
         aad: Aad<A>,
         ciphertext: B,
     ) -> core::pin::Pin<
