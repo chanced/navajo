@@ -633,7 +633,10 @@ impl IoArgs {
         self,
         stdin: impl 'a + AsyncRead + Unpin,
         stdout: impl 'a + AsyncWrite + Unpin,
-    ) -> std::io::Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>)> {
+    ) -> std::io::Result<(
+        Box<dyn 'a + AsyncRead + Unpin>,
+        Box<dyn 'a + AsyncWrite + Unpin>,
+    )> {
         Ok((self.input.get(stdin).await?, self.output.get(stdout).await?))
     }
 }
