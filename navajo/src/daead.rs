@@ -268,7 +268,7 @@ impl Daead {
         let material = Material::generate(&SystemRng, algorithm);
         let id = self.keyring.next_id(&SystemRng);
         let metadata = metadata.map(Arc::new);
-        let key = Key::new(id, Status::Primary, Origin::Navajo, material, metadata);
+        let key = Key::new(id, Status::Secondary, Origin::Navajo, material, metadata);
         self.keyring.add(key);
         self.keyring.last().into()
     }

@@ -61,14 +61,14 @@ pub enum Algorithm {
     // ------------------------------------------
     // DAEAD
     // ------------------------------------------
-    /// DAEAD - AES-SIV
+    /// DAEAD - AES-256-SIV
     #[clap(
-        alias = "AES-SIV",
-        alias = "AES_SIV",
-        alias = "aes-siv",
-        alias = "aes_siv"
+        alias = "AES-256-SIV",
+        alias = "AES_256_SIV",
+        alias = "aes-256-siv",
+        alias = "aes_256_siv"
     )]
-    #[strum(serialize = "AES-SIV")]
+    #[strum(serialize = "AES256-SIV")]
     AesSiv,
 
     // ------------------------------------------

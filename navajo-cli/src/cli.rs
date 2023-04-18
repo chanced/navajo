@@ -165,7 +165,7 @@ pub struct New {
     #[command(flatten)]
     pub output: Output,
     #[command(flatten)]
-    pub envelope: EnvelopeArgs,
+    pub env_args: EnvelopeArgs,
     /// For asymetric keys, the public ID of the key to use.
     ///
     /// If not provided, the generated 7-8 digit numeric ID of the key will be
@@ -182,7 +182,7 @@ impl New {
     pub fn run<'a>(self, _stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let New {
             algorithm,
-            envelope: env_args,
+            env_args,
             output,
             metadata,
             pub_id,
@@ -601,7 +601,7 @@ impl SetKeyMetadata {
     }
 }
 
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, Default)]
 pub struct Input {
     /// The input file to read the keyring from.
     ///
@@ -635,7 +635,7 @@ impl Output {
         }
     }
 }
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Default)]
 pub struct IoArgs {
     #[command(flatten)]
     /// The input file to read the keyring from.
@@ -748,22 +748,179 @@ mod tests {
 
     #[test]
     fn test_new_plaintext() {
-        for alg in Algorithm::iter() {
+        for algorithm in Algorithm::iter() {
             let mut w = vec![];
             let r: Vec<u8> = vec![];
             let new = New {
-                algorithm: alg,
-                envelope: Default::default(),
+                algorithm: algorithm.clone(),
+                env_args: Default::default(),
                 metadata: Default::default(),
                 output: Default::default(),
                 plaintext: true,
                 pub_id: None,
             };
             run_cmd(new, r.as_slice(), &mut w).unwrap();
-            println!("{}", String::from_utf8_lossy(&w));
+            let result: serde_json::Value = serde_json::from_slice(&w).unwrap();
+            assert!(result.is_object(), "result is not an object");
+            let result = result.as_object().unwrap();
+            assert!(result.contains_key("keys"), "result does not contain keys");
+            let keys = result.get("keys").unwrap();
+            assert!(keys.is_array(), "keys is not an array");
+            let keys = keys.as_array().unwrap();
+            assert_eq!(keys.len(), 1, "keys is not of length 1");
+            let key = keys.get(0).unwrap();
+            assert!(key.is_object(), "key is not an object");
+            let key = key.as_object().unwrap();
+            assert!(key.contains_key("id"), "key does not contain id");
+            let id = key.get("id").unwrap();
+            assert!(id.is_number(), "id is not a number");
+            let id = id.as_i64().unwrap();
+            assert!(id > 0, "id is not greater than 0");
+            assert!(id < u32::MAX as i64 + 1, "id exceeds u32::MAX");
+            assert!(key.contains_key("alg"), "key does not contain alg");
+            let alg = key.get("alg").unwrap();
+            assert!(alg.is_string(), "alg is not a string");
+            let alg = alg.as_str().unwrap();
+            assert_eq!(
+                alg.to_lowercase(),
+                algorithm.to_string().to_lowercase(),
+                "alg is not the same as the algorithm"
+            );
+            assert!(key.contains_key("status"), "key does not contain status");
+            let status = key.get("status").unwrap();
+            assert!(status.is_string(), "status is not a string");
+            let status = status.as_str().unwrap();
+            assert_eq!(status, "Primary", "status is not Primary");
+
+            println!("{:?}", result)
         }
     }
 
+    #[test]
+    fn test_add_key_plaintext() {
+        for algorithm in Algorithm::iter() {
+            let mut w = vec![];
+            let r: Vec<u8> = vec![];
+            let new = New {
+                algorithm: algorithm.clone(),
+                env_args: Default::default(),
+                metadata: Default::default(),
+                output: Default::default(),
+                plaintext: true,
+                pub_id: None,
+            };
+            run_cmd(new, r.as_slice(), &mut w).unwrap();
+
+            let r = w;
+            let mut w = vec![];
+
+            let add = AddKey {
+                algorithm: algorithm.clone(),
+                envelope_args: Default::default(),
+                metadata: Default::default(),
+                io: Default::default(),
+                pub_id: None,
+            };
+            run_cmd(add, r.as_slice(), &mut w).unwrap();
+            let result: serde_json::Value = serde_json::from_slice(&w).unwrap();
+            assert!(result.is_object(), "result is not an object");
+            let result = result.as_object().unwrap();
+            assert!(result.contains_key("keys"), "result does not contain keys");
+            let keys = result.get("keys").unwrap();
+            assert!(keys.is_array(), "keys is not an array");
+            let keys = keys.as_array().unwrap();
+            assert_eq!(keys.len(), 2, "keys is not of length 1");
+            let key = keys.get(1).unwrap();
+            assert!(key.is_object(), "key is not an object");
+            let key = key.as_object().unwrap();
+            assert!(key.contains_key("id"), "key does not contain id");
+            let id = key.get("id").unwrap();
+            assert!(id.is_number(), "id is not a number");
+            let id = id.as_i64().unwrap();
+            assert!(id > 0, "id is not greater than 0");
+            assert!(id < u32::MAX as i64 + 1, "id exceeds u32::MAX");
+            assert!(key.contains_key("alg"), "key does not contain alg");
+            let alg = key.get("alg").unwrap();
+            assert!(alg.is_string(), "alg is not a string");
+            let alg = alg.as_str().unwrap();
+            assert_eq!(
+                alg.to_lowercase(),
+                algorithm.to_string().to_lowercase(),
+                "alg is not the same as the algorithm"
+            );
+            assert!(key.contains_key("status"), "key does not contain status");
+            let status = key.get("status").unwrap();
+            assert!(status.is_string(), "status is not a string");
+            let status = status.as_str().unwrap();
+            assert_eq!(status, "Secondary", "status is not Secondary for {alg}");
+        }
+    }
+    #[test]
+    fn test_promote_key_plaintext() {
+        for algorithm in Algorithm::iter() {
+            let mut w = vec![];
+            let r: Vec<u8> = vec![];
+            let new = New {
+                algorithm: algorithm.clone(),
+                env_args: Default::default(),
+                metadata: Default::default(),
+                output: Default::default(),
+                plaintext: true,
+                pub_id: None,
+            };
+            run_cmd(new, r.as_slice(), &mut w).unwrap();
+
+            let r = w;
+            let mut w = vec![];
+
+            let add = AddKey {
+                algorithm: algorithm.clone(),
+                envelope_args: Default::default(),
+                metadata: Default::default(),
+                io: Default::default(),
+                pub_id: None,
+            };
+            run_cmd(add, r.as_slice(), &mut w).unwrap();
+            let result: serde_json::Value = serde_json::from_slice(&w).unwrap();
+            assert!(result.is_object(), "result is not an object");
+            let result = result.as_object().unwrap();
+            assert!(result.contains_key("keys"), "result does not contain keys");
+            let keys = result.get("keys").unwrap();
+            assert!(keys.is_array(), "keys is not an array");
+            let keys = keys.as_array().unwrap();
+            assert_eq!(keys.len(), 2, "keys is not of length 1");
+            let key = keys.get(1).unwrap();
+            assert!(key.is_object(), "key is not an object");
+            let key = key.as_object().unwrap();
+            assert!(key.contains_key("id"), "key does not contain id");
+            let id = key.get("id").unwrap();
+            assert!(id.is_number(), "id is not a number");
+            let id = id.as_i64().unwrap();
+            assert!(id > 0, "id is not greater than 0");
+            assert!(id < u32::MAX as i64 + 1, "id exceeds u32::MAX");
+            assert!(key.contains_key("alg"), "key does not contain alg");
+            let alg = key.get("alg").unwrap();
+            assert!(alg.is_string(), "alg is not a string");
+            let alg = alg.as_str().unwrap();
+            assert_eq!(
+                alg.to_lowercase(),
+                algorithm.to_string().to_lowercase(),
+                "alg is not the same as the algorithm"
+            );
+
+            let r = w;
+            let mut w = vec![];
+            let promote = PromoteKey {
+                key_id: id as u32,
+                io: Default::default(),
+                envelope_args: Default::default(),
+            };
+            run_cmd(promote, r.as_slice(), &mut w).unwrap();
+
+            let result: serde_json::Value = serde_json::from_slice(&w).unwrap();
+            println!("{:?}", result)
+        }
+    }
     #[test]
     fn test_migrate() {
         // let mut w = vec![];
