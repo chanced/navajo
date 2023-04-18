@@ -830,17 +830,30 @@ mod tests {
             assert!(keys.is_array(), "keys is not an array");
             let keys = keys.as_array().unwrap();
             assert_eq!(keys.len(), 2, "keys is not of length 1");
-            let key = keys.get(1).unwrap();
-            assert!(key.is_object(), "key is not an object");
-            let key = key.as_object().unwrap();
-            assert!(key.contains_key("id"), "key does not contain id");
-            let id = key.get("id").unwrap();
+
+            let existing_key = keys.get(0).unwrap();
+            assert!(existing_key.is_object(), "key is not an object");
+            let existing_key = existing_key.as_object().unwrap();
+            assert!(
+                existing_key.contains_key("status"),
+                "key does not contain status"
+            );
+            let status = existing_key.get("status").unwrap();
+            assert!(status.is_string(), "status is not a string");
+            let status = status.as_str().unwrap();
+            assert_eq!(status, "Primary", "status is not Primary");
+
+            let new_key = keys.get(1).unwrap();
+            assert!(new_key.is_object(), "key is not an object");
+            let new_key = new_key.as_object().unwrap();
+            assert!(new_key.contains_key("id"), "key does not contain id");
+            let id = new_key.get("id").unwrap();
             assert!(id.is_number(), "id is not a number");
             let id = id.as_i64().unwrap();
             assert!(id > 0, "id is not greater than 0");
             assert!(id < u32::MAX as i64 + 1, "id exceeds u32::MAX");
-            assert!(key.contains_key("alg"), "key does not contain alg");
-            let alg = key.get("alg").unwrap();
+            assert!(new_key.contains_key("alg"), "key does not contain alg");
+            let alg = new_key.get("alg").unwrap();
             assert!(alg.is_string(), "alg is not a string");
             let alg = alg.as_str().unwrap();
             assert_eq!(
@@ -848,8 +861,11 @@ mod tests {
                 algorithm.to_string().to_lowercase(),
                 "alg is not the same as the algorithm"
             );
-            assert!(key.contains_key("status"), "key does not contain status");
-            let status = key.get("status").unwrap();
+            assert!(
+                new_key.contains_key("status"),
+                "key does not contain status"
+            );
+            let status = new_key.get("status").unwrap();
             assert!(status.is_string(), "status is not a string");
             let status = status.as_str().unwrap();
             assert_eq!(status, "Secondary", "status is not Secondary for {alg}");
@@ -881,6 +897,7 @@ mod tests {
                 pub_id: None,
             };
             run_cmd(add, r.as_slice(), &mut w).unwrap();
+
             let result: serde_json::Value = serde_json::from_slice(&w).unwrap();
             assert!(result.is_object(), "result is not an object");
             let result = result.as_object().unwrap();
@@ -889,17 +906,20 @@ mod tests {
             assert!(keys.is_array(), "keys is not an array");
             let keys = keys.as_array().unwrap();
             assert_eq!(keys.len(), 2, "keys is not of length 1");
-            let key = keys.get(1).unwrap();
-            assert!(key.is_object(), "key is not an object");
-            let key = key.as_object().unwrap();
-            assert!(key.contains_key("id"), "key does not contain id");
-            let id = key.get("id").unwrap();
-            assert!(id.is_number(), "id is not a number");
-            let id = id.as_i64().unwrap();
-            assert!(id > 0, "id is not greater than 0");
-            assert!(id < u32::MAX as i64 + 1, "id exceeds u32::MAX");
-            assert!(key.contains_key("alg"), "key does not contain alg");
-            let alg = key.get("alg").unwrap();
+
+            let new_key = keys.get(1).unwrap();
+            assert!(new_key.is_object(), "key is not an object");
+            let new_key = new_key.as_object().unwrap();
+            assert!(
+                new_key.contains_key("status"),
+                "key does not contain status"
+            );
+
+            let status = new_key.get("status").unwrap();
+            assert!(status.is_string(), "status is not a string");
+            let status = status.as_str().unwrap();
+
+            let alg = new_key.get("alg").unwrap();
             assert!(alg.is_string(), "alg is not a string");
             let alg = alg.as_str().unwrap();
             assert_eq!(
@@ -907,6 +927,13 @@ mod tests {
                 algorithm.to_string().to_lowercase(),
                 "alg is not the same as the algorithm"
             );
+            assert_eq!(status, "Secondary", "status is not Secondary for {alg}");
+
+            let id = new_key.get("id").unwrap();
+            assert!(id.is_number(), "id is not a number");
+            let id = id.as_i64().unwrap();
+            assert!(id > 0, "id is not greater than 0");
+            assert!(id < u32::MAX as i64 + 1, "id exceeds u32::MAX");
 
             let r = w;
             let mut w = vec![];
@@ -918,7 +945,6 @@ mod tests {
             run_cmd(promote, r.as_slice(), &mut w).unwrap();
 
             let result: serde_json::Value = serde_json::from_slice(&w).unwrap();
-            println!("{:?}", result)
         }
     }
     #[test]
