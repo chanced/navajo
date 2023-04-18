@@ -12,6 +12,12 @@ Hashicorp's Vault are planned.
 cargo install navajo-cli
 ```
 
+## Usage
+
+```bash
+navajo <COMMAND>
+```
+
 ## Commands
 
 | Command            | Description                                                                                                                                              |

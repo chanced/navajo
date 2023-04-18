@@ -4,7 +4,11 @@ use std::{
     path::PathBuf,
 };
 
-use crate::{algorithm::Algorithm, envelope::Envelope, Aad, Encoding};
+use crate::{
+    algorithm::Algorithm,
+    envelope::{self, Envelope},
+    Aad, Encoding,
+};
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
 use navajo::{sensitive, Aead, Daead, Kind, Mac, Primitive, Signer};
@@ -23,11 +27,15 @@ impl Cli {
         self.command.run(stdin, stdout)
     }
 }
+impl From<Command> for Cli {
+    fn from(command: Command) -> Self {
+        Self { command }
+    }
+}
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Creates a new keyring, optionally encrypting it using a key
-    /// from a KMS as an envelope.
+    /// Creates a new keyring, optionally encrypting it using an envelope.
     #[command(alias = "n")]
     New(New),
 
@@ -41,14 +49,6 @@ pub enum Command {
     )]
     Inpsect(Inspect),
 
-    /// Migrates a keyring to a new envelope, changes the envelope's AAD, or both.
-    #[command(alias = "m")]
-    Migrate(Migrate),
-
-    /// Generates a public JWKS from a private, asymmetric keyring.
-    #[command(alias = "create_public")]
-    CreatePublic(CreatePublic),
-
     /// Adds a new key to a keyring.
     #[command(alias = "add_key", alias = "add", alias = "a")]
     AddKey(AddKey),
@@ -61,8 +61,7 @@ pub enum Command {
     #[command(alias = "enable_key", alias = "enable", alias = "e")]
     EnableKey(EnableKey),
 
-    /// Disables a key in a keyring. Disabling a key effectively removes
-    /// the key from the keyring, but leaves it in a recoverable state.
+    /// Disables a key in a keyring.
     #[command(alias = "disable_key", alias = "disable", alias = "d")]
     DisableKey(DisableKey),
 
@@ -79,6 +78,14 @@ pub enum Command {
     /// Sets metadata of a key in a keyring.
     #[command(alias = "set_key_metadata", alias = "metadata")]
     SetKeyMetadata(SetKeyMetadata),
+
+    /// Migrates a keyring to a new envelope, changes the envelope's AAD, or both.
+    #[command(alias = "m")]
+    Migrate(Migrate),
+
+    /// Generates a public JWKS from a private, asymmetric keyring.
+    #[command(alias = "create_public")]
+    CreatePublic(CreatePublic),
 }
 
 impl Command {
@@ -98,6 +105,57 @@ impl Command {
     }
 }
 
+impl From<New> for Command {
+    fn from(cmd: New) -> Self {
+        Command::New(cmd)
+    }
+}
+impl From<Inspect> for Command {
+    fn from(cmd: Inspect) -> Self {
+        Command::Inpsect(cmd)
+    }
+}
+impl From<Migrate> for Command {
+    fn from(cmd: Migrate) -> Self {
+        Command::Migrate(cmd)
+    }
+}
+impl From<CreatePublic> for Command {
+    fn from(cmd: CreatePublic) -> Self {
+        Command::CreatePublic(cmd)
+    }
+}
+impl From<AddKey> for Command {
+    fn from(cmd: AddKey) -> Self {
+        Command::AddKey(cmd)
+    }
+}
+impl From<PromoteKey> for Command {
+    fn from(cmd: PromoteKey) -> Self {
+        Command::PromoteKey(cmd)
+    }
+}
+impl From<EnableKey> for Command {
+    fn from(cmd: EnableKey) -> Self {
+        Command::EnableKey(cmd)
+    }
+}
+impl From<DisableKey> for Command {
+    fn from(cmd: DisableKey) -> Self {
+        Command::DisableKey(cmd)
+    }
+}
+impl From<DeleteKey> for Command {
+    fn from(cmd: DeleteKey) -> Self {
+        Command::DeleteKey(cmd)
+    }
+}
+impl From<SetKeyMetadata> for Command {
+    fn from(cmd: SetKeyMetadata) -> Self {
+        Command::SetKeyMetadata(cmd)
+    }
+}
+
 #[derive(Debug, Parser)]
 pub struct New {
     /// Specifies the algorithm to use for the first key in the keyring.
@@ -107,7 +165,7 @@ pub struct New {
     #[command(flatten)]
     pub output: Output,
     #[command(flatten)]
-    pub integration: EnvelopeArgs,
+    pub envelope: EnvelopeArgs,
     /// For asymetric keys, the public ID of the key to use.
     ///
     /// If not provided, the generated 7-8 digit numeric ID of the key will be
@@ -124,19 +182,19 @@ impl New {
     pub fn run<'a>(self, _stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let New {
             algorithm,
-            integration: env_args,
+            envelope: env_args,
             output,
             metadata,
             pub_id,
             plaintext,
         } = self;
-        if env_args.envelope_uri.is_none() && !plaintext {
-            bail!("Either --plaintext or --kms-key-uri must be provided");
+        if env_args.envelope.is_none() && !plaintext {
+            bail!("Either --plaintext or --envelope must be provided");
         }
 
         let output = output.get(stdout)?;
-        let envelope = env_args.get_envelope()?;
-        let aad = env_args.get_aad()?;
+        let envelope = env_args.get_envelope(Some(plaintext))?;
+        let aad = env_args.get_aad();
         let metadata = metadata.try_into()?;
 
         let primitive = match algorithm.kind() {
@@ -149,7 +207,7 @@ impl New {
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Default)]
 pub struct Metadata {
     /// Metadata for a given key in the form of JSON object.
     pub metadata: Option<String>,
@@ -166,15 +224,15 @@ pub struct Inspect {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: EnvelopeArgs,
+    pub envelope_args: EnvelopeArgs,
 }
 
 impl Inspect {
     pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
-        let Inspect { io, envelope } = self;
+        let Inspect { io, envelope_args } = self;
         let (input, mut output) = io.get(stdin, stdout)?;
-        let aad = envelope.get_aad()?;
-        let envelope = envelope.get_envelope()?;
+        let envelope = envelope_args.get_envelope(None)?;
+        let aad = envelope_args.get_aad();
         let primitive = envelope.open(aad, input)?;
         let json = match primitive {
             Primitive::Aead(aead) => serde_json::to_vec_pretty(&aead.keys()),
@@ -195,7 +253,7 @@ pub struct AddKey {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: EnvelopeArgs,
+    pub envelope_args: EnvelopeArgs,
     /// Specifies the algorithm to use for the key.
     ///     
     /// Errors if the algorithm is not of the same primitive (AEAD, DAEAD,
@@ -215,14 +273,14 @@ impl AddKey {
     pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let AddKey {
             io,
-            envelope,
+            envelope_args,
             algorithm,
             metadata,
             pub_id,
         } = self;
         let (input, output) = io.get(stdin, stdout)?;
-        let aad = envelope.get_aad()?;
-        let envelope = envelope.get_envelope()?;
+        let aad = envelope_args.get_aad();
+        let envelope = envelope_args.get_envelope(None)?;
         let metadata = metadata.try_into()?;
         let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive {
@@ -248,7 +306,7 @@ pub struct PromoteKey {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: EnvelopeArgs,
+    pub envelope_args: EnvelopeArgs,
     /// The ID of the key to operate on.
     pub key_id: u32,
 }
@@ -256,12 +314,12 @@ impl PromoteKey {
     pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let PromoteKey {
             io,
-            envelope,
+            envelope_args,
             key_id,
         } = self;
         let (input, output) = io.get(stdin, stdout)?;
-        let aad = envelope.get_aad()?;
-        let envelope = envelope.get_envelope()?;
+        let aad = envelope_args.get_aad();
+        let envelope = envelope_args.get_envelope(None)?;
         let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
@@ -285,7 +343,7 @@ pub struct EnableKey {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: EnvelopeArgs,
+    pub envelope_args: EnvelopeArgs,
     /// The ID of the key to operate on.
     pub key_id: u32,
 }
@@ -293,12 +351,12 @@ impl EnableKey {
     pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let EnableKey {
             io,
-            envelope,
+            envelope_args,
             key_id,
         } = self;
         let (input, output) = io.get(stdin, stdout)?;
-        let aad = envelope.get_aad()?;
-        let envelope = envelope.get_envelope()?;
+        let aad = envelope_args.get_aad();
+        let envelope = envelope_args.get_envelope(None)?;
         let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
@@ -322,7 +380,7 @@ pub struct DisableKey {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: EnvelopeArgs,
+    pub envelope_args: EnvelopeArgs,
     /// The ID of the key to operate on.
     pub key_id: u32,
 }
@@ -330,12 +388,12 @@ impl DisableKey {
     pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let DisableKey {
             io,
-            envelope,
+            envelope_args,
             key_id,
         } = self;
         let (input, output) = io.get(stdin, stdout)?;
-        let aad = envelope.get_aad()?;
-        let envelope = envelope.get_envelope()?;
+        let aad = envelope_args.get_aad();
+        let envelope = envelope_args.get_envelope(None)?;
         let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
@@ -360,7 +418,7 @@ pub struct DeleteKey {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: EnvelopeArgs,
+    pub envelope_args: EnvelopeArgs,
     /// The ID of the key to operate on.
     pub key_id: u32,
 }
@@ -368,12 +426,12 @@ impl DeleteKey {
     pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let DeleteKey {
             io,
-            envelope,
+            envelope_args,
             key_id,
         } = self;
         let (input, output) = io.get(stdin, stdout)?;
-        let aad = envelope.get_aad()?;
-        let envelope = envelope.get_envelope()?;
+        let aad = envelope_args.get_aad();
+        let envelope = envelope_args.get_envelope(None)?;
         let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
@@ -399,14 +457,14 @@ pub struct Migrate {
     io: IoArgs,
 
     #[command(flatten)]
-    integration: EnvelopeArgs,
+    envelope_args: EnvelopeArgs,
 
     /// The new URI to a crypto key in a KMS to use as envelope encryption for
     /// the keyring.
     ///
     /// If not specified, the keyring will be re-encrypted with the same key (if any).
     #[arg(value_name = "NEW_ENVELOPE", long = "new-envelope")]
-    pub new_key_uri: Option<Url>,
+    pub new_envelope: Option<Envelope>,
 
     /// The new URI to a secret in a cloud secret manager to be used as
     /// additional authenticated data for the keyring.
@@ -419,7 +477,7 @@ pub struct Migrate {
     )]
     pub new_envelope_aad_encoding: Option<Encoding>,
 
-    /// Disables encryption, outputting the keyring as plaintext JSON.
+    /// If set, the keyring will have encryption disabled and will be output to plaintext JSON.
     #[arg(value_name = "PLAINTEXT", long = "plaintext")]
     pub plaintext: bool,
 }
@@ -427,33 +485,33 @@ pub struct Migrate {
 impl Migrate {
     pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let Migrate {
-            integration,
+            envelope_args,
             io,
-            new_key_uri,
+            new_envelope: new_key_uri,
             new_envelope_aad,
             plaintext,
             new_envelope_aad_encoding,
         } = self;
         let (input, output) = io.get(stdin, stdout)?;
-        let aad = integration.get_aad()?;
-        let envelope = integration.get_envelope()?;
-        let primitive = envelope.open(aad.clone(), input)?;
+        let aad = envelope_args.get_aad();
+        let current_envelope = envelope_args.get_envelope(None)?;
+        let primitive = current_envelope.open(aad.clone(), input)?;
 
         let updated_args = EnvelopeArgs {
             envelope_aad: new_envelope_aad,
-            envelope_uri: new_key_uri,
+            envelope: new_key_uri,
             envelope_aad_encoding: new_envelope_aad_encoding,
         };
 
-        let new_envelope = if updated_args.envelope_uri.is_none() && !plaintext {
-            envelope
+        let new_envelope = if updated_args.envelope.is_none() && !plaintext {
+            current_envelope
         } else {
-            updated_args.get_envelope()?
+            updated_args.get_envelope(Some(plaintext))?
         };
         let new_aad = if updated_args.envelope_aad.is_none() && !plaintext {
             aad
         } else {
-            updated_args.get_aad()?
+            updated_args.get_aad()
         };
         new_envelope.seal_and_write(output, new_aad, primitive)
     }
@@ -464,18 +522,15 @@ pub struct CreatePublic {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub integration: EnvelopeArgs,
+    pub envelope_args: EnvelopeArgs,
 }
 
 impl CreatePublic {
     pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
-        let CreatePublic {
-            io,
-            integration: envelope,
-        } = self;
+        let CreatePublic { io, envelope_args } = self;
         let (input, mut output) = io.get(stdin, stdout)?;
-        let aad = envelope.get_aad()?;
-        let envelope = envelope.get_envelope()?;
+        let aad = envelope_args.get_aad();
+        let envelope = envelope_args.get_envelope(None)?;
         let primitive = envelope.open(aad, input)?;
         if let Primitive::Dsa(sig) = primitive {
             let public = sig.verifier();
@@ -495,7 +550,7 @@ pub struct SetKeyMetadata {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub integration: EnvelopeArgs,
+    pub envelope_args: EnvelopeArgs,
     /// The ID of the key to operate on.
     pub key_id: u32,
     /// The new metadata for the key. To clear the metadata, use --clear
@@ -512,14 +567,14 @@ impl SetKeyMetadata {
     pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let SetKeyMetadata {
             io,
-            integration: envelope,
+            envelope_args,
             key_id,
             metadata,
             clear_metadata,
         } = self;
         let (input, output) = io.get(stdin, stdout)?;
-        let aad = envelope.get_aad()?;
-        let envelope = envelope.get_envelope()?;
+        let aad = envelope_args.get_aad();
+        let envelope = envelope_args.get_envelope(None)?;
 
         let meta: Option<navajo::Metadata> = if clear_metadata {
             None
@@ -563,7 +618,7 @@ impl Input {
         }
     }
 }
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, Default)]
 pub struct Output {
     /// The output file to write the keyring to.
     ///
@@ -604,7 +659,7 @@ impl IoArgs {
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Default)]
 pub struct EnvelopeArgs {
     #[arg(
         value_name = "ENVELOPE_URI",
@@ -625,7 +680,7 @@ pub struct EnvelopeArgs {
     /// - JSON Plaintext:  json://<path-to-json-file>
     ///
     ///
-    pub envelope_uri: Option<Url>,
+    pub envelope: Option<Envelope>,
 
     /// Additional authenticated data(AAD), if any, used to authenticate the
     /// keyring. The value can either be a URI in the form
@@ -656,17 +711,21 @@ pub struct EnvelopeArgs {
     )]
     pub envelope_aad_encoding: Option<Encoding>,
 }
-
 impl EnvelopeArgs {
-    pub fn get_envelope(&self) -> Result<Envelope> {
-        todo!("...")
+    pub fn get_aad(&self) -> navajo::Aad<sensitive::Bytes> {
+        match &self.envelope_aad {
+            Some(aad) => aad.0.clone(),
+            None => navajo::Aad(sensitive::Bytes::default()),
+        }
     }
-
-    pub fn get_aad(&self) -> Result<navajo::Aad<sensitive::Bytes>> {
-        if let Some(aad) = &self.envelope_aad {
-            aad.value()
-        } else {
-            Ok(navajo::Aad(sensitive::Bytes::default()))
+    pub fn get_envelope(&self, plaintext: Option<bool>) -> Result<Envelope> {
+        match &self.envelope {
+            Some(envelope) => Ok(envelope.clone()),
+            None => match plaintext {
+                Some(true) => Ok(Envelope::Plaintext(navajo::PlaintextJson)),
+                Some(false) => bail!("Either --plaintext or --envelope must be provided"),
+                None => Ok(Envelope::Plaintext(navajo::PlaintextJson)),
+            },
         }
     }
 }
@@ -674,9 +733,18 @@ impl EnvelopeArgs {
 #[cfg(test)]
 mod tests {
 
-    use strum::IntoEnumIterator;
-
     use super::*;
+    use anyhow::Result;
+    use strum::IntoEnumIterator;
+    fn run_cmd<'a>(
+        cmd: impl Into<Command>,
+        input: impl 'a + Read,
+        output: impl 'a + Write,
+    ) -> Result<()> {
+        let command = cmd.into();
+        let cli = Cli { command };
+        cli.run(input, output)
+    }
 
     #[test]
     fn test_new_plaintext() {
@@ -685,20 +753,14 @@ mod tests {
             let r: Vec<u8> = vec![];
             let new = New {
                 algorithm: alg,
-                integration: EnvelopeArgs {
-                    envelope_uri: None,
-                    envelope_aad: None,
-                    envelope_aad_encoding: None,
-                },
-                metadata: Metadata { metadata: None },
-                output: Output { output: None },
+                envelope: Default::default(),
+                metadata: Default::default(),
+                output: Default::default(),
                 plaintext: true,
                 pub_id: None,
             };
-            let cli = Cli {
-                command: Command::New(new),
-            };
-            cli.run(r.as_slice(), &mut w).unwrap();
+            run_cmd(new, r.as_slice(), &mut w).unwrap();
+            println!("{}", String::from_utf8_lossy(&w));
         }
     }
 

@@ -3,8 +3,8 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::{anyhow, bail, Context};
-use navajo::{Aad, Aead, Primitive};
+use anyhow::{anyhow, bail, Context, Result};
+use navajo::{envelope, Aad, Aead, Primitive};
 
 #[derive(Clone, Debug)]
 pub enum Envelope {
@@ -18,7 +18,7 @@ pub enum Envelope {
 }
 impl FromStr for Envelope {
     type Err = anyhow::Error;
-    fn from_str(key: &str) -> Result<Self, Self::Err> {
+    fn from_str(key: &str) -> anyhow::Result<Self> {
         let uri = url::Url::parse(key).context("failed to parse envelope key")?;
 
         let uri_str = uri
@@ -35,7 +35,18 @@ impl FromStr for Envelope {
         }
     }
 }
+
 impl Envelope {
+    pub fn get(envelope: Option<Envelope>, plaintext: bool) -> Result<Envelope> {
+        if let Some(envelope) = envelope {
+            return Ok(envelope);
+        }
+        if plaintext {
+            return Ok(Envelope::Plaintext(navajo::PlaintextJson));
+        }
+        bail!("Either --plaintext or --envelope must be provided");
+    }
+
     pub fn open_plaintext(path: String) -> anyhow::Result<Self> {
         let mut file =
             std::fs::File::open(path).context("failed to open plaintext json envelope file")?;
@@ -55,14 +66,11 @@ impl Envelope {
         Ok(Envelope::Json(envelope))
     }
 
-    pub fn open<'a, A>(
+    pub fn open<'a>(
         &self,
-        aad: Aad<A>,
+        aad: navajo::Aad<navajo::sensitive::Bytes>,
         mut read: Box<dyn 'a + Read>,
-    ) -> anyhow::Result<Primitive>
-    where
-        A: 'a + AsRef<[u8]>,
-    {
+    ) -> anyhow::Result<Primitive> {
         let mut data = Vec::new();
         read.read_to_end(&mut data)?;
         match self {

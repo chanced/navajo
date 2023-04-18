@@ -7,12 +7,16 @@ use clap::ValueEnum;
 #[strum(serialize_all = "lowercase")]
 /// The encoding of a value
 pub enum Encoding {
-    /// Base64 encoding with ether padding or no padding
+    /// Base64 encoding which defaults to padding but can decode without padding
     Base64,
-    /// Base64 URL encoding with ether padding or no padding
-    Base64url,
+    /// Base64 URL encoding which defaults to no padding but can decode with padding
+    Base64Url,
     /// Hex encoding
     Hex,
+}
+
+impl Encoding {
+    pub fn decode<T>(value: T) where T: AsRef<T> {}
 }
 
 impl FromStr for Encoding {
@@ -26,7 +30,7 @@ impl FromStr for Encoding {
             .collect::<String>()
         {
             "base64" => Ok(Self::Base64),
-            "base64url" => Ok(Self::Base64url),
+            "base64url" => Ok(Self::Base64Url),
             _ => bail!("unknown encoding: {}", s),
         }
     }
@@ -39,6 +43,6 @@ mod tests {
     #[test]
     fn parsing() {
         println!("{}", Encoding::Base64);
-        println!("{}", Encoding::Base64url);
+        println!("{}", Encoding::Base64Url);
     }
 }
