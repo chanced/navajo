@@ -886,6 +886,37 @@ mod tests {
             };
             run_cmd(new, r.as_slice(), &mut w).unwrap();
 
+            let result: serde_json::Value = serde_json::from_slice(&w).unwrap();
+            assert!(result.is_object(), "result is not an object");
+            let result = result.as_object().unwrap();
+            assert!(result.contains_key("keys"), "result does not contain keys");
+            let keys = result.get("keys").unwrap();
+            assert!(keys.is_array(), "keys is not an array");
+            let keys = keys.as_array().unwrap();
+            assert_eq!(keys.len(), 1, "keys is not of length 1");
+
+            let existing_key = keys.get(0).unwrap();
+            assert!(existing_key.is_object(), "key is not an object");
+            let existing_key = existing_key.as_object().unwrap();
+            assert!(
+                existing_key.contains_key("status"),
+                "key does not contain status"
+            );
+            let existing_status = existing_key.get("status").unwrap();
+            assert!(existing_status.is_string(), "status is not a string");
+            let existing_status = existing_status.as_str().unwrap();
+            assert_eq!(
+                existing_status, "Primary",
+                "status is not Primary before adding a new key"
+            );
+
+            let existing_key_id = existing_key.get("id").unwrap();
+            assert!(existing_key_id.is_number(), "id is not a number");
+            let existing_key_id = existing_key_id.as_i64().unwrap();
+            assert!(existing_key_id > 0, "id is not greater than 0");
+            assert!(existing_key_id < u32::MAX as i64 + 1, "id exceeds u32::MAX");
+            let existing_key_id = existing_key_id as u32;
+
             let r = w;
             let mut w = vec![];
 
@@ -905,7 +936,7 @@ mod tests {
             let keys = result.get("keys").unwrap();
             assert!(keys.is_array(), "keys is not an array");
             let keys = keys.as_array().unwrap();
-            assert_eq!(keys.len(), 2, "keys is not of length 1");
+            assert_eq!(keys.len(), 2, "keys is not of length 2");
 
             let new_key = keys.get(1).unwrap();
             assert!(new_key.is_object(), "key is not an object");
@@ -931,20 +962,60 @@ mod tests {
 
             let id = new_key.get("id").unwrap();
             assert!(id.is_number(), "id is not a number");
-            let id = id.as_i64().unwrap();
-            assert!(id > 0, "id is not greater than 0");
-            assert!(id < u32::MAX as i64 + 1, "id exceeds u32::MAX");
+            let new_key_id = id.as_i64().unwrap();
+            assert!(new_key_id > 0, "id is not greater than 0");
+            assert!(new_key_id < u32::MAX as i64 + 1, "id exceeds u32::MAX");
+            let new_key_id = new_key_id as u32;
+
+            assert_ne!(
+                new_key_id, existing_key_id,
+                "id is the same as the existing key"
+            );
 
             let r = w;
             let mut w = vec![];
             let promote = PromoteKey {
-                key_id: id as u32,
+                key_id: new_key_id,
                 io: Default::default(),
                 envelope_args: Default::default(),
             };
             run_cmd(promote, r.as_slice(), &mut w).unwrap();
 
             let result: serde_json::Value = serde_json::from_slice(&w).unwrap();
+            assert!(result.is_object(), "result is not an object");
+            let result = result.as_object().unwrap();
+            assert!(result.contains_key("keys"), "result does not contain keys");
+            let keys = result.get("keys").unwrap();
+            assert!(keys.is_array(), "keys is not an array");
+            let keys = keys.as_array().unwrap();
+            assert_eq!(keys.len(), 2, "keys is not of length 2");
+            let existing_key = keys.get(0).unwrap();
+            assert!(existing_key.is_object(), "key is not an object");
+            let existing_key = existing_key.as_object().unwrap();
+            assert!(
+                existing_key.contains_key("status"),
+                "key does not contain status"
+            );
+            let existing_status = existing_key.get("status").unwrap();
+            assert!(existing_status.is_string(), "status is not a string");
+            let status = existing_status.as_str().unwrap();
+            assert_eq!(
+                status, "Secondary",
+                "existing key status is not Secondary after promotion of new key"
+            );
+
+            let new_key = keys.get(1).unwrap();
+            assert!(new_key.is_object(), "key is not an object");
+            let new_key = new_key.as_object().unwrap();
+            assert!(
+                new_key.contains_key("status"),
+                "key does not contain status"
+            );
+
+            let status = new_key.get("status").unwrap();
+            assert!(status.is_string(), "status is not a string");
+            let status = status.as_str().unwrap();
+            assert_eq!(status, "Primary", "status is not Primary");
         }
     }
     #[test]
