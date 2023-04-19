@@ -26,6 +26,7 @@ use super::Algorithm;
 
 #[derive(Clone, ZeroizeOnDrop, Serialize)]
 pub(crate) struct SigningKey {
+    #[serde(rename = "value")]
     key_pair: KeyPair,
     #[zeroize(skip)]
     #[serde(rename = "alg")]
@@ -166,14 +167,14 @@ impl<'de> Deserialize<'de> for SigningKey {
     {
         #[derive(Deserialize)]
         struct SerializedKey {
-            key_pair: KeyPair,
+            value: KeyPair,
             alg: Algorithm,
             pub_id: String,
             #[serde(default)]
             metadata: Arc<Metadata>,
         }
         let SerializedKey {
-            key_pair,
+            value: key_pair,
             alg,
             pub_id,
             metadata,

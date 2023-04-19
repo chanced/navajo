@@ -1780,7 +1780,6 @@ dependencies = [
  "serde_json",
  "shellexpand",
  "strum",
- "tokio",
  "url",
 ]
 

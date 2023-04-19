@@ -4,8 +4,10 @@ use anyhow::bail;
 use clap::ValueEnum;
 
 use navajo::Kind;
+use serde::Deserialize;
 
-#[derive(Clone, Debug, PartialEq, Eq, ValueEnum, strum::Display, strum::EnumIter)]
+#[derive(Clone, Debug, PartialEq, Eq, ValueEnum, strum::Display, strum::EnumIter, Deserialize)]
+#[serde(try_from = "&str")]
 pub enum Algorithm {
     // ------------------------------------------
     // AEAD
@@ -256,6 +258,21 @@ pub enum Algorithm {
     #[strum(serialize = "Ed25519")]
     Ed25519,
 }
+impl TryFrom<String> for Algorithm {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Algorithm::from_str(&value, true)
+    }
+}
+impl TryFrom<&str> for Algorithm {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Algorithm::from_str(value, true)
+    }
+}
+
 impl Algorithm {
     pub fn kind(&self) -> Kind {
         match self {

@@ -732,9 +732,15 @@ impl EnvelopeArgs {
 
 #[cfg(test)]
 mod tests {
+    #[derive(Deserialize, Clone)]
+    struct Key {
+        id: u32,
+        alg: Algorithm,
+    }
 
     use super::*;
     use anyhow::Result;
+    use serde::{Deserialize, Serialize};
     use strum::IntoEnumIterator;
     fn run_cmd<'a>(
         cmd: impl Into<Command>,
@@ -746,6 +752,21 @@ mod tests {
         cli.run(input, output)
     }
 
+    fn assert_keys(result: &serde_json::Value, expected: usize) -> Vec<serde_json::Value> {
+        assert!(result.is_object(), "result is not an object");
+        let result = result.as_object().unwrap();
+        assert!(result.contains_key("keys"), "result does not contain keys");
+        let keys = result.get("keys").unwrap();
+        assert!(keys.is_array(), "keys is not an array");
+        let keys = keys.as_array().unwrap();
+        assert_eq!(
+            keys.len(),
+            expected,
+            "expected {expected} keys, found {}",
+            keys.len()
+        );
+        keys.clone()
+    }
     #[test]
     fn test_new_plaintext() {
         for algorithm in Algorithm::iter() {
@@ -761,13 +782,7 @@ mod tests {
             };
             run_cmd(new, r.as_slice(), &mut w).unwrap();
             let result: serde_json::Value = serde_json::from_slice(&w).unwrap();
-            assert!(result.is_object(), "result is not an object");
-            let result = result.as_object().unwrap();
-            assert!(result.contains_key("keys"), "result does not contain keys");
-            let keys = result.get("keys").unwrap();
-            assert!(keys.is_array(), "keys is not an array");
-            let keys = keys.as_array().unwrap();
-            assert_eq!(keys.len(), 1, "keys is not of length 1");
+            let keys = assert_keys(&result, 1);
             let key = keys.get(0).unwrap();
             assert!(key.is_object(), "key is not an object");
             let key = key.as_object().unwrap();
