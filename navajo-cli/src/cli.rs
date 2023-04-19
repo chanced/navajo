@@ -201,7 +201,7 @@ impl New {
             Kind::Aead => Primitive::Aead(Aead::new(algorithm.try_into()?, metadata)),
             Kind::Daead => Primitive::Daead(Daead::new(algorithm.try_into()?, metadata)),
             Kind::Mac => Primitive::Mac(Mac::new(algorithm.try_into()?, metadata)),
-            Kind::Signature => Primitive::Dsa(Signer::new(algorithm.try_into()?, pub_id, metadata)),
+            Kind::Dsa => Primitive::Dsa(Signer::new(algorithm.try_into()?, pub_id, metadata)),
         };
         envelope.seal_and_write(output, aad, primitive)
     }
@@ -732,15 +732,30 @@ impl EnvelopeArgs {
 
 #[cfg(test)]
 mod tests {
-    #[derive(Deserialize, Clone)]
+    #[derive(Deserialize, Clone, Debug)]
     struct Key {
         id: u32,
         alg: Algorithm,
+        origin: navajo::Origin,
+        status: Status,
+        value: serde_json::Value,
+        #[serde(default)]
+        pub_id: Option<String>,
+        #[serde(default)]
+        metadata: Option<navajo::Metadata>,
+    }
+    #[derive(Deserialize, Debug)]
+    struct Keyring {
+        keys: Vec<Key>,
+        kind: navajo::Kind,
+        version: u8,
     }
 
     use super::*;
     use anyhow::Result;
-    use serde::{Deserialize, Serialize};
+    use navajo::Status;
+    use serde::Deserialize;
+    use serde_json::json;
     use strum::IntoEnumIterator;
     fn run_cmd<'a>(
         cmd: impl Into<Command>,
@@ -752,62 +767,58 @@ mod tests {
         cli.run(input, output)
     }
 
-    fn assert_keys(result: &serde_json::Value, expected: usize) -> Vec<serde_json::Value> {
-        assert!(result.is_object(), "result is not an object");
-        let result = result.as_object().unwrap();
-        assert!(result.contains_key("keys"), "result does not contain keys");
-        let keys = result.get("keys").unwrap();
-        assert!(keys.is_array(), "keys is not an array");
-        let keys = keys.as_array().unwrap();
-        assert_eq!(
-            keys.len(),
-            expected,
-            "expected {expected} keys, found {}",
-            keys.len()
-        );
-        keys.clone()
-    }
     #[test]
     fn test_new_plaintext() {
         for algorithm in Algorithm::iter() {
             let mut w = vec![];
             let r: Vec<u8> = vec![];
+            let meta = json!({"example": "value"});
+            let metadata = Some(serde_json::to_string(&meta).unwrap());
             let new = New {
                 algorithm: algorithm.clone(),
                 env_args: Default::default(),
-                metadata: Default::default(),
+                metadata: Metadata { metadata },
                 output: Default::default(),
                 plaintext: true,
                 pub_id: None,
             };
             run_cmd(new, r.as_slice(), &mut w).unwrap();
-            let result: serde_json::Value = serde_json::from_slice(&w).unwrap();
-            let keys = assert_keys(&result, 1);
-            let key = keys.get(0).unwrap();
-            assert!(key.is_object(), "key is not an object");
-            let key = key.as_object().unwrap();
-            assert!(key.contains_key("id"), "key does not contain id");
-            let id = key.get("id").unwrap();
-            assert!(id.is_number(), "id is not a number");
-            let id = id.as_i64().unwrap();
-            assert!(id > 0, "id is not greater than 0");
-            assert!(id < u32::MAX as i64 + 1, "id exceeds u32::MAX");
-            assert!(key.contains_key("alg"), "key does not contain alg");
-            let alg = key.get("alg").unwrap();
-            assert!(alg.is_string(), "alg is not a string");
-            let alg = alg.as_str().unwrap();
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
             assert_eq!(
-                alg.to_lowercase(),
-                algorithm.to_string().to_lowercase(),
-                "alg is not the same as the algorithm"
+                keyring.keys.len(),
+                1,
+                "expected 1 key, found {}",
+                keyring.keys.len()
             );
-            assert!(key.contains_key("status"), "key does not contain status");
-            let status = key.get("status").unwrap();
-            assert!(status.is_string(), "status is not a string");
-            let status = status.as_str().unwrap();
-            assert_eq!(status, "Primary", "status is not Primary");
+            let key = &keyring.keys[0];
+            assert!(key.id > 0, "id is not greater than 0");
 
-            println!("{:?}", result)
+            assert_eq!(
+                key.alg, algorithm,
+                "expected algorithm {algorithm}, found {}",
+                key.alg,
+            );
+
+            assert_eq!(key.status, Status::Primary);
+            assert_eq!(keyring.version, 0);
+            assert_eq!(key.origin, navajo::Origin::Navajo);
+            assert_eq!(keyring.kind, algorithm.kind());
+
+            if let Some(pub_id) = &key.pub_id {
+                assert_eq!(pub_id, &key.id.to_string());
+            }
+            if keyring.kind.is_dsa() {
+                assert!(key.value.is_array());
+                let value = key.value.as_array().unwrap();
+                assert_eq!(value.len(), 2);
+            } else {
+                assert!(key.value.is_string());
+            }
+            let mut expected_meta = navajo::Metadata::new();
+            expected_meta
+                .insert("example".into(), "value".into())
+                .unwrap();
+            assert_eq!(key.metadata.clone().unwrap(), expected_meta);
         }
     }
 
@@ -826,6 +837,10 @@ mod tests {
             };
             run_cmd(new, r.as_slice(), &mut w).unwrap();
 
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            let first_key = keyring.keys[0].clone();
+            assert_eq!(first_key.status, Status::Primary);
+            assert!(first_key.id > 0, "id is not greater than 0");
             let r = w;
             let mut w = vec![];
 
@@ -836,54 +851,23 @@ mod tests {
                 io: Default::default(),
                 pub_id: None,
             };
+
             run_cmd(add, r.as_slice(), &mut w).unwrap();
-            let result: serde_json::Value = serde_json::from_slice(&w).unwrap();
-            assert!(result.is_object(), "result is not an object");
-            let result = result.as_object().unwrap();
-            assert!(result.contains_key("keys"), "result does not contain keys");
-            let keys = result.get("keys").unwrap();
-            assert!(keys.is_array(), "keys is not an array");
-            let keys = keys.as_array().unwrap();
-            assert_eq!(keys.len(), 2, "keys is not of length 1");
 
-            let existing_key = keys.get(0).unwrap();
-            assert!(existing_key.is_object(), "key is not an object");
-            let existing_key = existing_key.as_object().unwrap();
-            assert!(
-                existing_key.contains_key("status"),
-                "key does not contain status"
-            );
-            let status = existing_key.get("status").unwrap();
-            assert!(status.is_string(), "status is not a string");
-            let status = status.as_str().unwrap();
-            assert_eq!(status, "Primary", "status is not Primary");
-
-            let new_key = keys.get(1).unwrap();
-            assert!(new_key.is_object(), "key is not an object");
-            let new_key = new_key.as_object().unwrap();
-            assert!(new_key.contains_key("id"), "key does not contain id");
-            let id = new_key.get("id").unwrap();
-            assert!(id.is_number(), "id is not a number");
-            let id = id.as_i64().unwrap();
-            assert!(id > 0, "id is not greater than 0");
-            assert!(id < u32::MAX as i64 + 1, "id exceeds u32::MAX");
-            assert!(new_key.contains_key("alg"), "key does not contain alg");
-            let alg = new_key.get("alg").unwrap();
-            assert!(alg.is_string(), "alg is not a string");
-            let alg = alg.as_str().unwrap();
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            assert_eq!(keyring.version, 0);
             assert_eq!(
-                alg.to_lowercase(),
-                algorithm.to_string().to_lowercase(),
-                "alg is not the same as the algorithm"
+                keyring.keys.len(),
+                2,
+                "expected 2 keys, found {}",
+                keyring.keys.len()
             );
-            assert!(
-                new_key.contains_key("status"),
-                "key does not contain status"
-            );
-            let status = new_key.get("status").unwrap();
-            assert!(status.is_string(), "status is not a string");
-            let status = status.as_str().unwrap();
-            assert_eq!(status, "Secondary", "status is not Secondary for {alg}");
+            let second_key = keyring.keys[1].clone();
+            assert_ne!(second_key.id, first_key.id);
+            assert_eq!(keyring.keys[0].status, Status::Primary);
+            assert_eq!(second_key.status, Status::Secondary);
+            assert!(second_key.id > 0, "id is not greater than 0");
+            assert_eq!(second_key.alg, algorithm);
         }
     }
     #[test]
@@ -901,36 +885,10 @@ mod tests {
             };
             run_cmd(new, r.as_slice(), &mut w).unwrap();
 
-            let result: serde_json::Value = serde_json::from_slice(&w).unwrap();
-            assert!(result.is_object(), "result is not an object");
-            let result = result.as_object().unwrap();
-            assert!(result.contains_key("keys"), "result does not contain keys");
-            let keys = result.get("keys").unwrap();
-            assert!(keys.is_array(), "keys is not an array");
-            let keys = keys.as_array().unwrap();
-            assert_eq!(keys.len(), 1, "keys is not of length 1");
-
-            let existing_key = keys.get(0).unwrap();
-            assert!(existing_key.is_object(), "key is not an object");
-            let existing_key = existing_key.as_object().unwrap();
-            assert!(
-                existing_key.contains_key("status"),
-                "key does not contain status"
-            );
-            let existing_status = existing_key.get("status").unwrap();
-            assert!(existing_status.is_string(), "status is not a string");
-            let existing_status = existing_status.as_str().unwrap();
-            assert_eq!(
-                existing_status, "Primary",
-                "status is not Primary before adding a new key"
-            );
-
-            let existing_key_id = existing_key.get("id").unwrap();
-            assert!(existing_key_id.is_number(), "id is not a number");
-            let existing_key_id = existing_key_id.as_i64().unwrap();
-            assert!(existing_key_id > 0, "id is not greater than 0");
-            assert!(existing_key_id < u32::MAX as i64 + 1, "id exceeds u32::MAX");
-            let existing_key_id = existing_key_id as u32;
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            let first_key = keyring.keys[0].clone();
+            assert_eq!(first_key.status, Status::Primary);
+            assert!(first_key.id > 0, "id is not greater than 0");
 
             let r = w;
             let mut w = vec![];
@@ -944,93 +902,44 @@ mod tests {
             };
             run_cmd(add, r.as_slice(), &mut w).unwrap();
 
-            let result: serde_json::Value = serde_json::from_slice(&w).unwrap();
-            assert!(result.is_object(), "result is not an object");
-            let result = result.as_object().unwrap();
-            assert!(result.contains_key("keys"), "result does not contain keys");
-            let keys = result.get("keys").unwrap();
-            assert!(keys.is_array(), "keys is not an array");
-            let keys = keys.as_array().unwrap();
-            assert_eq!(keys.len(), 2, "keys is not of length 2");
-
-            let new_key = keys.get(1).unwrap();
-            assert!(new_key.is_object(), "key is not an object");
-            let new_key = new_key.as_object().unwrap();
-            assert!(
-                new_key.contains_key("status"),
-                "key does not contain status"
-            );
-
-            let status = new_key.get("status").unwrap();
-            assert!(status.is_string(), "status is not a string");
-            let status = status.as_str().unwrap();
-
-            let alg = new_key.get("alg").unwrap();
-            assert!(alg.is_string(), "alg is not a string");
-            let alg = alg.as_str().unwrap();
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            assert_eq!(keyring.version, 0);
             assert_eq!(
-                alg.to_lowercase(),
-                algorithm.to_string().to_lowercase(),
-                "alg is not the same as the algorithm"
+                keyring.keys.len(),
+                2,
+                "expected 2 keys, found {}",
+                keyring.keys.len()
             );
-            assert_eq!(status, "Secondary", "status is not Secondary for {alg}");
-
-            let id = new_key.get("id").unwrap();
-            assert!(id.is_number(), "id is not a number");
-            let new_key_id = id.as_i64().unwrap();
-            assert!(new_key_id > 0, "id is not greater than 0");
-            assert!(new_key_id < u32::MAX as i64 + 1, "id exceeds u32::MAX");
-            let new_key_id = new_key_id as u32;
-
-            assert_ne!(
-                new_key_id, existing_key_id,
-                "id is the same as the existing key"
-            );
+            let second_key = keyring.keys[1].clone();
+            assert_ne!(second_key.id, first_key.id);
+            assert_eq!(keyring.keys[0].status, Status::Primary);
+            assert_eq!(second_key.status, Status::Secondary);
+            assert!(second_key.id > 0, "id is not greater than 0");
+            assert_eq!(second_key.alg, algorithm);
 
             let r = w;
             let mut w = vec![];
             let promote = PromoteKey {
-                key_id: new_key_id,
+                key_id: second_key.id,
                 io: Default::default(),
                 envelope_args: Default::default(),
             };
             run_cmd(promote, r.as_slice(), &mut w).unwrap();
-
-            let result: serde_json::Value = serde_json::from_slice(&w).unwrap();
-            assert!(result.is_object(), "result is not an object");
-            let result = result.as_object().unwrap();
-            assert!(result.contains_key("keys"), "result does not contain keys");
-            let keys = result.get("keys").unwrap();
-            assert!(keys.is_array(), "keys is not an array");
-            let keys = keys.as_array().unwrap();
-            assert_eq!(keys.len(), 2, "keys is not of length 2");
-            let existing_key = keys.get(0).unwrap();
-            assert!(existing_key.is_object(), "key is not an object");
-            let existing_key = existing_key.as_object().unwrap();
-            assert!(
-                existing_key.contains_key("status"),
-                "key does not contain status"
-            );
-            let existing_status = existing_key.get("status").unwrap();
-            assert!(existing_status.is_string(), "status is not a string");
-            let status = existing_status.as_str().unwrap();
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            assert_eq!(keyring.version, 0);
             assert_eq!(
-                status, "Secondary",
-                "existing key status is not Secondary after promotion of new key"
+                keyring.keys.len(),
+                2,
+                "expected 2 keys, found {}",
+                keyring.keys.len()
             );
 
-            let new_key = keys.get(1).unwrap();
-            assert!(new_key.is_object(), "key is not an object");
-            let new_key = new_key.as_object().unwrap();
-            assert!(
-                new_key.contains_key("status"),
-                "key does not contain status"
-            );
-
-            let status = new_key.get("status").unwrap();
-            assert!(status.is_string(), "status is not a string");
-            let status = status.as_str().unwrap();
-            assert_eq!(status, "Primary", "status is not Primary");
+            let second_key = keyring.keys[1].clone();
+            assert_ne!(second_key.id, first_key.id);
+            assert_eq!(keyring.keys[0].status, Status::Secondary);
+            assert_eq!(second_key.status, Status::Primary);
+            assert!(second_key.id > 0, "id is not greater than 0");
+            assert_eq!(second_key.alg, algorithm);
         }
     }
     #[test]

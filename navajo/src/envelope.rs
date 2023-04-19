@@ -89,8 +89,8 @@ impl Envelope for InMemory {
     type EncryptError = chacha20poly1305::Error;
     type DecryptError = chacha20poly1305::Error;
 
-    fn encrypt_dek<'a, A, P>(
-        &'a self,
+    fn encrypt_dek<A, P>(
+        &self,
         aad: Aad<A>,
         plaintext: P,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::EncryptError>> + Send + '_>>
@@ -101,8 +101,8 @@ impl Envelope for InMemory {
         Box::pin(async move { envelope::sync::Envelope::encrypt_dek(self, aad, plaintext) })
     }
 
-    fn decrypt_dek<'a, A, C>(
-        &'a self,
+    fn decrypt_dek<A, C>(
+        &self,
         aad: Aad<A>,
         ciphertext: C,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::DecryptError>> + Send + '_>>
@@ -165,8 +165,8 @@ impl Envelope for PlaintextJson {
     type EncryptError = serde_json::Error;
     type DecryptError = serde_json::Error;
 
-    fn encrypt_dek<'a, A, P>(
-        &'a self,
+    fn encrypt_dek<A, P>(
+        &self,
         _aad: Aad<A>,
         _plaintext: P,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::EncryptError>> + Send + '_>>
@@ -177,8 +177,8 @@ impl Envelope for PlaintextJson {
         Box::pin(async move { Ok(vec![]) })
     }
 
-    fn decrypt_dek<'a, A, C>(
-        &'a self,
+    fn decrypt_dek<A, C>(
+        &self,
         _aad: Aad<A>,
         _plaintext: C,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Self::DecryptError>> + Send + '_>>
@@ -209,7 +209,7 @@ impl envelope::sync::Envelope for PlaintextJson {
         Ok(vec![])
     }
 }
-pub(crate) fn is_plaintext<'a, T: Any + 'a>(envelope: &'a T) -> bool {
+pub(crate) fn is_plaintext<'a, T: Any>(envelope: &T) -> bool {
     let envelope = envelope as &dyn Any;
     envelope.downcast_ref::<PlaintextJson>().is_some()
 }

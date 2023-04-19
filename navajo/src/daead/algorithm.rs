@@ -17,6 +17,8 @@ use strum::{Display, EnumIter, IntoStaticStr};
 #[serde(rename_all = "SCREAMING-KEBAB-CASE")]
 #[strum(serialize_all = "SCREAMING-KEBAB-CASE")]
 pub enum Algorithm {
+    #[strum(serialize = "AES-256-SIV")]
+    #[serde(rename = "AES-256-SIV")]
     Aes256Siv,
 }
 

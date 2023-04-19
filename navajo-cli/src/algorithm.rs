@@ -295,7 +295,7 @@ impl Algorithm {
             | Algorithm::Aes_192
             | Algorithm::Aes_256 => Kind::Mac,
 
-            Algorithm::Es256 | Algorithm::Es384 | Algorithm::Ed25519 => Kind::Signature,
+            Algorithm::Es256 | Algorithm::Es384 | Algorithm::Ed25519 => Kind::Dsa,
         }
     }
 }

@@ -207,7 +207,7 @@ impl KeyMaterial for SigningKey {
     }
 
     fn kind() -> crate::primitive::Kind {
-        Kind::Signature
+        Kind::Dsa
     }
 }
 

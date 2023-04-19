@@ -521,8 +521,8 @@ impl Envelope for Aead {
     type EncryptError = crate::error::EncryptError;
     type DecryptError = crate::error::DecryptError;
 
-    fn encrypt_dek<'a, A, P>(
-        &'a self,
+    fn encrypt_dek<A, P>(
+        &self,
         aad: Aad<A>,
         plaintext: P,
     ) -> core::pin::Pin<
@@ -535,7 +535,7 @@ impl Envelope for Aead {
         Box::pin(async move { self.encrypt(aad, plaintext) })
     }
 
-    fn decrypt_dek<'a, A, B>(
+    fn decrypt_dek<A, B>(
         &self,
         aad: Aad<A>,
         ciphertext: B,

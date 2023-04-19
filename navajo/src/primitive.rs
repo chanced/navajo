@@ -61,8 +61,8 @@ impl Primitive {
 
     pub async fn open<A, C, E>(aad: Aad<A>, ciphertext: C, envelope: &E) -> Result<Self, OpenError>
     where
-        A: 'static + AsRef<[u8]> + Send + Sync,
-        C: 'static + AsRef<[u8]> + Send + Sync,
+        A: AsRef<[u8]> + Send + Sync,
+        C: AsRef<[u8]> + Send + Sync,
         E: 'static + Envelope,
     {
         let ciphertext = ciphertext.as_ref();
@@ -148,7 +148,7 @@ impl Primitive {
                     Err("mac feature is not enabled".into())
                 }
             }
-            Kind::Signature => {
+            Kind::Dsa => {
                 #[cfg(feature = "dsa")]
                 {
                     let keyring: Keyring<crate::dsa::Material> = serde_json::from_value(value)?;
@@ -170,7 +170,7 @@ impl Primitive {
             #[cfg(feature = "mac")]
             Primitive::Mac(_) => Kind::Mac,
             #[cfg(feature = "dsa")]
-            Primitive::Dsa(_) => Kind::Signature,
+            Primitive::Dsa(_) => Kind::Dsa,
         }
     }
     #[cfg(feature = "aead")]
@@ -239,7 +239,7 @@ impl Primitive {
                     Err("mac feature is not enabled".into())
                 }
             }
-            Kind::Signature => {
+            Kind::Dsa => {
                 #[cfg(feature = "dsa")]
                 {
                     let keyring: Keyring<crate::dsa::Material> = serde_json::from_value(data.keys)?;

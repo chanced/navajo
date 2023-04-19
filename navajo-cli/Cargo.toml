@@ -23,7 +23,7 @@ strum = { version = "0.24", features = ["derive", "strum_macros"] }
 clap = { version = "4.2", features = ["derive", "wrap_help"] }
 url = "2.3"
 serde = { version = "1.0" }
-serde_json = { version = "1.0" }
+serde_json = { version = "1.0", features = ["std", "alloc", "raw_value"] }
 base64 = "0.21"
 anyhow = "1.0"
 shellexpand = "3.0"
