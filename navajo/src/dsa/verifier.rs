@@ -12,7 +12,7 @@ use alloc::{
 };
 use serde::{Deserialize, Serialize};
 
-use super::{verifying_key::VerifyingKey, Algorithm};
+use super::{verifying_key::VerifyingKey};
 
 #[cfg(feature = "std")]
 type Map<K, V> = std::collections::HashMap<K, V>;

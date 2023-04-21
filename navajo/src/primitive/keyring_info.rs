@@ -102,50 +102,78 @@ impl<'de> Deserialize<'de> for KeyringInfo {
         let generic: crate::KeyringInfo<serde_json::Value> =
             Deserialize::deserialize(deserializer)?;
         match generic.kind {
-            #[cfg(feature = "aead")]
-            crate::Kind::Aead => Ok(Self::Aead(crate::KeyringInfo {
-                version: generic.version,
-                keys: generic
-                    .keys
-                    .into_iter()
-                    .map(serde_json::from_value)
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(serde::de::Error::custom)?,
-                kind: generic.kind,
-            })),
-            #[cfg(feature = "daead")]
-            crate::Kind::Daead => Ok(Self::Daead(crate::KeyringInfo {
-                version: generic.version,
-                keys: generic
-                    .keys
-                    .into_iter()
-                    .map(serde_json::from_value)
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(serde::de::Error::custom)?,
-                kind: generic.kind,
-            })),
-            #[cfg(feature = "mac")]
-            crate::Kind::Mac => Ok(Self::Mac(crate::KeyringInfo {
-                version: generic.version,
-                keys: generic
-                    .keys
-                    .into_iter()
-                    .map(serde_json::from_value)
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(serde::de::Error::custom)?,
-                kind: generic.kind,
-            })),
-            #[cfg(feature = "dsa")]
-            crate::Kind::Dsa => Ok(Self::Dsa(crate::KeyringInfo {
-                version: generic.version,
-                keys: generic
-                    .keys
-                    .into_iter()
-                    .map(serde_json::from_value)
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(serde::de::Error::custom)?,
-                kind: generic.kind,
-            })),
+            crate::Kind::Aead => {
+                #[cfg(not(feature = "aead"))]
+                return Err(serde::de::Error::custom(
+                    "found AEAD primitive Kind but the \"aead\" daead feature is not enabled",
+                ));
+                #[cfg(feature = "aead")]
+                Ok(Self::Aead(crate::KeyringInfo {
+                    version: generic.version,
+                    keys: generic
+                        .keys
+                        .into_iter()
+                        .map(serde_json::from_value)
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(serde::de::Error::custom)?,
+                    kind: generic.kind,
+                }))
+            }
+            crate::Kind::Daead => {
+                #[cfg(not(feature = "daead"))]
+                return Err(serde::de::Error::custom(
+                    "found DAEAD primitive Kind but the \"daead\" daead feature is not enabled",
+                ));
+
+                #[cfg(feature = "daead")]
+                Ok(Self::Daead(crate::KeyringInfo {
+                    version: generic.version,
+                    keys: generic
+                        .keys
+                        .into_iter()
+                        .map(serde_json::from_value)
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(serde::de::Error::custom)?,
+                    kind: generic.kind,
+                }))
+            }
+
+            crate::Kind::Mac => {
+                #[cfg(not(feature = "mac"))]
+                return Err(serde::de::Error::custom(
+                    "found MAC primitive Kind but the \"mac\" feature is not enabled",
+                ));
+
+                #[cfg(feature = "mac")]
+                Ok(Self::Mac(crate::KeyringInfo {
+                    version: generic.version,
+                    keys: generic
+                        .keys
+                        .into_iter()
+                        .map(serde_json::from_value)
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(serde::de::Error::custom)?,
+                    kind: generic.kind,
+                }))
+            }
+            crate::Kind::Dsa => {
+                #[cfg(not(feature = "dsa"))]
+                return Err(serde::de::Error::custom(
+                    "found DSA primitive Kind but the \"dsa\" feature is not enabled",
+                ));
+
+                #[cfg(feature = "dsa")]
+                Ok(Self::Dsa(crate::KeyringInfo {
+                    version: generic.version,
+                    keys: generic
+                        .keys
+                        .into_iter()
+                        .map(serde_json::from_value)
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(serde::de::Error::custom)?,
+                    kind: generic.kind,
+                }))
+            }
         }
     }
 }

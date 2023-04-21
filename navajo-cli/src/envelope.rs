@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Context, Result};
-use navajo::{envelope, Aad, Aead, Primitive};
+use navajo::{Aad, Aead, Primitive};
 
 #[derive(Clone, Debug)]
 pub enum Envelope {

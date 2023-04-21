@@ -209,7 +209,7 @@ impl envelope::sync::Envelope for PlaintextJson {
         Ok(vec![])
     }
 }
-pub(crate) fn is_plaintext<'a, T: Any>(envelope: &T) -> bool {
+pub(crate) fn is_plaintext<T: Any>(envelope: &T) -> bool {
     let envelope = envelope as &dyn Any;
     envelope.downcast_ref::<PlaintextJson>().is_some()
 }

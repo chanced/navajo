@@ -52,7 +52,7 @@ impl From<&KeyInfo> for u32 {
 }
 impl From<KeyInfo> for String {
     fn from(key: KeyInfo) -> Self {
-        key.pub_id.to_string()
+        key.pub_id
     }
 }
 impl From<&KeyInfo> for String {

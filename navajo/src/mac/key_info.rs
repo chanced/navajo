@@ -1,4 +1,4 @@
-use alloc::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{Key, Metadata, Origin, Status};
