@@ -459,7 +459,7 @@ mod tests {
         let second_material = Material::new(Algorithm::Waffles);
         let second_key = Key::new(
             second_id,
-            Status::Active,
+            Status::Enabled,
             Origin::Navajo,
             second_material,
             None,
@@ -468,7 +468,7 @@ mod tests {
         keyring.add(second_key);
         {
             let second = keyring.get(second_id).unwrap();
-            assert_eq!(second.status(), Status::Active);
+            assert_eq!(second.status(), Status::Enabled);
             assert_eq!(second.origin(), Origin::Navajo);
             assert_eq!(second.id(), second_id);
             keyring.promote(second.id()).unwrap();
@@ -480,7 +480,7 @@ mod tests {
         }
         {
             let first = keyring.get(first_id).unwrap();
-            assert_eq!(first.status(), Status::Active);
+            assert_eq!(first.status(), Status::Enabled);
         }
 
         assert!(keyring.remove(second_id).is_err());

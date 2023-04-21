@@ -276,7 +276,7 @@ impl Daead {
     pub fn add(&mut self, algorithm: Algorithm, metadata: Option<Metadata>) -> KeyInfo {
         let material = Material::generate(&SystemRng, algorithm);
         let id = self.keyring.next_id(&SystemRng);
-        let key = Key::new(id, Status::Active, Origin::Navajo, material, metadata);
+        let key = Key::new(id, Status::Enabled, Origin::Navajo, material, metadata);
         self.keyring.add(key);
         self.keyring.last().into()
     }

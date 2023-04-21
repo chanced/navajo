@@ -209,7 +209,7 @@ impl Signer {
 
         let signing_key = SigningKey::generate(&SystemRng, algorithm, pub_id, metadata.clone());
         let verifying_key = signing_key.verifying_key.clone();
-        let key = Key::new(id, Status::Active, Origin::Navajo, signing_key, metadata);
+        let key = Key::new(id, Status::Enabled, Origin::Navajo, signing_key, metadata);
         self.keyring.add(key.clone());
         self.verifier.add(verifying_key)?;
         Ok(key.into())

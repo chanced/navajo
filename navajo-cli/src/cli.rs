@@ -855,7 +855,7 @@ mod tests {
             let second_key = keyring.keys[1].clone();
             assert_ne!(second_key.id, first_key.id);
             assert_eq!(keyring.keys[0].status, Status::Primary);
-            assert_eq!(second_key.status, Status::Active);
+            assert_eq!(second_key.status, Status::Enabled);
             assert!(second_key.id > 0, "id is not greater than 0");
             assert_eq!(second_key.alg, algorithm);
 
@@ -929,7 +929,7 @@ mod tests {
             let second_key = keyring.keys[1].clone();
             assert_ne!(second_key.id, first_key.id);
             assert_eq!(keyring.keys[0].status, Status::Primary);
-            assert_eq!(second_key.status, Status::Active);
+            assert_eq!(second_key.status, Status::Enabled);
             assert!(second_key.id > 0, "id is not greater than 0");
             assert_eq!(second_key.alg, algorithm);
 
@@ -952,7 +952,7 @@ mod tests {
 
             let second_key = keyring.keys[1].clone();
             assert_ne!(second_key.id, first_key.id);
-            assert_eq!(keyring.keys[0].status, Status::Active);
+            assert_eq!(keyring.keys[0].status, Status::Enabled);
             assert_eq!(second_key.status, Status::Primary);
             assert!(second_key.id > 0, "id is not greater than 0");
             assert_eq!(second_key.alg, algorithm);
@@ -1115,7 +1115,7 @@ mod tests {
 
             assert_eq!(keyring.keys.len(), 2);
             assert_eq!(keyring.keys[0].status, Status::Primary);
-            assert_eq!(keyring.keys[1].status, Status::Active);
+            assert_eq!(keyring.keys[1].status, Status::Enabled);
         }
     }
     #[test]
