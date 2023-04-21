@@ -1,6 +1,5 @@
 use alloc::{
     string::{String, ToString},
-    sync::Arc,
     vec::Vec,
 };
 
@@ -12,13 +11,13 @@ use crate::{
     jose::{Claims, VerifiedJws},
     key::Key,
     keyring::Keyring,
-    Aad, Envelope, KeyInfo, Metadata, Origin, Primitive, Rng, Status, SystemRng, Verifier,
+    Aad, Envelope, Metadata, Origin, Primitive, Rng, Status, SystemRng, Verifier,
 };
 
 #[cfg(not(feature = "std"))]
 type Set<V> = alloc::collections::BTreeSet<V>;
 
-use super::{Algorithm, DsaKeyInfo, Material, Signature, SigningKey};
+use super::{Algorithm, KeyInfo, KeyringInfo, Material, Signature, SigningKey};
 
 #[derive(Clone, Debug)]
 pub struct Signer {
@@ -179,7 +178,7 @@ impl Signer {
         N: Rng,
     {
         let id = rng.u32().unwrap();
-        let metadata = metadata.map(Arc::new);
+
         let key = SigningKey::generate(
             rng,
             algorithm,
@@ -195,8 +194,8 @@ impl Signer {
         &self.keyring
     }
 
-    pub fn keys(&self) -> Vec<DsaKeyInfo> {
-        self.keyring.keys().iter().map(DsaKeyInfo::new).collect()
+    pub fn keys(&self) -> Vec<KeyInfo> {
+        self.keyring.keys().iter().map(Into::into).collect()
     }
 
     pub fn add(
@@ -204,20 +203,20 @@ impl Signer {
         algorithm: Algorithm,
         pub_id: Option<String>,
         metadata: Option<Metadata>,
-    ) -> Result<DsaKeyInfo, DuplicatePubIdError> {
+    ) -> Result<KeyInfo, DuplicatePubIdError> {
         let id = self.keyring.next_id(&SystemRng);
         let pub_id = pub_id.unwrap_or(id.to_string());
-        let metadata = metadata.map(Arc::new);
+
         let signing_key = SigningKey::generate(&SystemRng, algorithm, pub_id, metadata.clone());
         let verifying_key = signing_key.verifying_key.clone();
         let key = Key::new(id, Status::Secondary, Origin::Navajo, signing_key, metadata);
         self.keyring.add(key.clone());
         self.verifier.add(verifying_key)?;
-        Ok(DsaKeyInfo::new(&key))
+        Ok(key.into())
     }
 
-    pub fn primary_key(&self) -> DsaKeyInfo {
-        DsaKeyInfo::new(self.keyring.primary())
+    pub fn primary_key(&self) -> KeyInfo {
+        self.keyring.primary().into()
     }
     pub fn primary_key_id(&self) -> &str {
         self.keyring.primary().pub_id()
@@ -235,40 +234,46 @@ impl Signer {
         self.verifier.clone()
     }
 
-    pub fn promote(&mut self, key_id: u32) -> Result<DsaKeyInfo, KeyNotFoundError> {
-        let key = self.keyring.promote(key_id)?;
-        Ok(DsaKeyInfo::new(key))
+    pub fn promote(&mut self, key_id: u32) -> Result<KeyInfo, KeyNotFoundError> {
+        self.keyring.promote(key_id).map(Into::into)
     }
 
-    pub fn enable(&mut self, key_id: u32) -> Result<DsaKeyInfo, KeyNotFoundError> {
+    pub fn enable(&mut self, key_id: u32) -> Result<KeyInfo, KeyNotFoundError> {
         self.keyring.enable(key_id)?;
         let key = self.keyring.get(key_id)?;
-        Ok(DsaKeyInfo::new(key))
+        let _ = self.verifier.add(key.verifying_key());
+        Ok(key.into())
     }
 
-    pub fn disable(&mut self, key_id: u32) -> Result<DsaKeyInfo, DisableKeyError<Algorithm>> {
-        self.keyring.disable(key_id)?;
+    pub fn disable(&mut self, key_id: u32) -> Result<KeyInfo, DisableKeyError> {
         let key = self.keyring.get(key_id)?;
-        Ok(DsaKeyInfo::new(key))
+        let _ = self.verifier.delete(key.pub_id());
+        self.keyring.disable(key_id).map(Into::into)
     }
 
-    pub fn delete(
-        &mut self,
-        key_id: impl Into<u32>,
-    ) -> Result<KeyInfo<Algorithm>, RemoveKeyError<Algorithm>> {
+    pub fn delete(&mut self, key_id: impl Into<u32>) -> Result<KeyInfo, RemoveKeyError> {
         let key_id = key_id.into();
         let key = self.keyring.get(key_id)?;
         self.verifier.delete(key.pub_id())?;
-        self.keyring.remove(key_id).map(|k| k.info())
+        self.keyring.remove(key_id).map(Into::into)
     }
 
     pub fn set_key_metadata(
         &mut self,
         key_id: u32,
         metadata: Option<Metadata>,
-    ) -> Result<DsaKeyInfo, KeyNotFoundError> {
+    ) -> Result<KeyInfo, KeyNotFoundError> {
         self.keyring.update_key_metadata(key_id, metadata)?;
         let key = self.keyring.get(key_id)?;
-        Ok(DsaKeyInfo::new(key))
+
+        Ok(key.into())
+    }
+
+    pub fn info(&self) -> KeyringInfo {
+        KeyringInfo {
+            keys: self.keys(),
+            version: self.keyring().version,
+            kind: crate::primitive::Kind::Dsa,
+        }
     }
 }

@@ -753,7 +753,7 @@ mod tests {
 
     use super::*;
     use anyhow::Result;
-    use navajo::Status;
+    use navajo::{Origin, Status};
     use serde::Deserialize;
     use serde_json::json;
     use strum::IntoEnumIterator;
@@ -942,24 +942,47 @@ mod tests {
             assert_eq!(second_key.alg, algorithm);
         }
     }
+
     #[test]
-    fn test_migrate() {
-        // let mut w = vec![];
-        // let r = vec![];
-        // Cli {
-        //     command: Command::Migrate(Migrate {
-        //         io: IoArgs {
-        //             input: Input { input: None },
-        //             output: Output { output: None },
-        //         },
-        //         envelope: todo!(),
-        //         new_key_uri: todo!(),
-        //         new_secret_uri: todo!(),
-        //         plaintext: todo!(),
-        //     }),
-        // }
-        // .run(r.as_slice(), &mut w)
-        //
-        // .unwrap()
+    fn test_inspect() {
+        for algorithm in Algorithm::iter() {
+            let mut w = vec![];
+            let r: Vec<u8> = vec![];
+            let meta = json!({"example": "value"});
+            let metadata = Some(serde_json::to_string(&meta).unwrap());
+            let new = New {
+                algorithm: algorithm.clone(),
+                env_args: Default::default(),
+                metadata: Metadata { metadata },
+                output: Default::default(),
+                plaintext: true,
+                pub_id: None,
+            };
+
+            run_cmd(new, r.as_slice(), &mut w).unwrap();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            let key = keyring.keys.get(0).ok_or("invalid number of keys").unwrap();
+            let mut expected_meta = navajo::Metadata::new();
+            expected_meta
+                .insert("example".into(), "value".into())
+                .unwrap();
+            assert_eq!(key.metadata.clone().unwrap(), expected_meta);
+
+            let r = w;
+            let mut w = vec![];
+
+            run_cmd(
+                Inspect {
+                    io: Default::default(),
+                    envelope_args: Default::default(),
+                },
+                r.as_slice(),
+                &mut w,
+            )
+            .unwrap();
+
+            println!("{:?}", String::from_utf8_lossy(&w));
+        }
     }
 }

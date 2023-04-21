@@ -30,24 +30,26 @@ pub mod error;
 pub mod hkdf;
 
 mod id;
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
+#[cfg(feature = "primitive")]
 mod key;
 
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
+#[cfg(feature = "primitive")]
 pub(crate) use key::{Key, KeyMaterial};
 
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
-mod key_info;
+#[cfg(feature = "primitive")]
+#[cfg(feature = "primitive")]
+mod keyring_info;
 
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
-pub use key_info::KeyInfo;
+#[cfg(feature = "primitive")]
+pub use keyring_info::KeyringInfo;
 
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
+#[cfg(feature = "primitive")]
 mod keyring;
 
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
+#[cfg(feature = "primitive")]
 pub(crate) use keyring::Keyring;
 
+#[cfg(feature = "primitive")]
 #[cfg(feature = "mac")]
 pub mod mac;
 
@@ -57,9 +59,9 @@ pub use mac::Mac;
 mod origin;
 pub use origin::Origin;
 
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
-mod primitive;
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
+#[cfg(feature = "primitive")]
+pub mod primitive;
+#[cfg(feature = "primitive")]
 pub use primitive::{Kind, Primitive};
 
 pub mod rand;

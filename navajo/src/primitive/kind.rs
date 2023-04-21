@@ -3,7 +3,9 @@ use core::str::FromStr;
 use alloc::{format, string::String};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, strum::Display, strum::EnumIter,
+)]
 
 pub enum Kind {
     #[serde(rename = "AEAD")]
@@ -72,11 +74,7 @@ impl FromStr for Kind {
         }
     }
 }
-impl core::fmt::Display for Kind {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.as_str())
-    }
-}
+
 impl From<Kind> for u8 {
     fn from(pt: Kind) -> Self {
         pt.as_u8()

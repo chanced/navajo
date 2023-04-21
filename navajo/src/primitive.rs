@@ -1,4 +1,6 @@
+mod keyring_info;
 mod kind;
+pub use keyring_info::KeyringInfo;
 pub use kind::Kind;
 
 use crate::{
@@ -173,6 +175,11 @@ impl Primitive {
             Primitive::Dsa(_) => Kind::Dsa,
         }
     }
+
+    pub fn info(&self) -> KeyringInfo {
+        self.into()
+    }
+
     #[cfg(feature = "aead")]
     pub fn aead(self) -> Option<crate::Aead> {
         match self {

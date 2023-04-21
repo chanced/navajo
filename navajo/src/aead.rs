@@ -1,6 +1,6 @@
 #![doc = include_str!("./aead/README.md")]
 mod algorithm;
-mod cipher;
+mod backend;
 mod ciphertext_info;
 mod decryptor;
 mod encryptor;
@@ -13,6 +13,7 @@ mod segment;
 mod size;
 mod stream;
 mod try_stream;
+
 use crate::{
     envelope,
     error::{EncryptError, KeyNotFoundError, OpenError, RemoveKeyError, SealError},
@@ -21,9 +22,9 @@ use crate::{
     rand::Rng,
     Buffer, Envelope, Metadata, Origin, Primitive, Status, SystemRng,
 };
+use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-use alloc::{boxed::Box, sync::Arc};
 use core::mem;
 use futures::{Stream, TryStream};
 pub(crate) use material::Material;
@@ -32,11 +33,11 @@ use zeroize::ZeroizeOnDrop;
 
 pub use crate::aad::Aad;
 
+pub use self::key_info::{KeyInfo, KeyringInfo};
 pub use algorithm::Algorithm;
 pub use ciphertext_info::CiphertextInfo;
 pub use decryptor::Decryptor;
 pub use encryptor::Encryptor;
-pub use key_info::AeadKeyInfo;
 pub use method::Method;
 pub use segment::Segment;
 pub use stream::{AeadStream, DecryptStream, EncryptStream};
@@ -431,57 +432,49 @@ impl Aead {
 
     /// Returns a [`Vec`] containing [`AeadKeyInfo`] for each key in this
     /// keyring.
-    pub fn keys(&self) -> Vec<AeadKeyInfo> {
-        self.keyring.keys().iter().map(AeadKeyInfo::new).collect()
+    pub fn keys(&self) -> Vec<KeyInfo> {
+        self.keyring.keys().iter().map(Into::into).collect()
     }
 
     /// Returns [`AeadKeyInfo`] for the primary key.
-    pub fn primary_key(&self) -> AeadKeyInfo {
+    pub fn primary_key(&self) -> KeyInfo {
         self.keyring.primary().into()
     }
 
     pub fn promote(
         &mut self,
         key_id: impl Into<u32>,
-    ) -> Result<AeadKeyInfo, crate::error::KeyNotFoundError> {
-        self.keyring.promote(key_id).map(AeadKeyInfo::new)
+    ) -> Result<KeyInfo, crate::error::KeyNotFoundError> {
+        self.keyring.promote(key_id).map(Into::into)
     }
 
-    pub fn add(&mut self, algorithm: Algorithm, metadata: Option<Metadata>) -> AeadKeyInfo {
+    pub fn add(&mut self, algorithm: Algorithm, metadata: Option<Metadata>) -> KeyInfo {
         let id = self.keyring.next_id(&SystemRng);
-        let metadata = metadata.map(Arc::new);
         let material = Material::generate(&SystemRng, algorithm);
         let key = Key::new(id, Status::Secondary, Origin::Navajo, material, metadata);
-        let info = AeadKeyInfo::new(&key);
-        self.keyring.add(key);
-        info
+        self.keyring.add(key).into()
     }
     pub fn disable(
         &mut self,
         key_id: impl Into<u32>,
-    ) -> Result<AeadKeyInfo, crate::error::DisableKeyError<Algorithm>> {
-        self.keyring.disable(key_id).map(AeadKeyInfo::new)
+    ) -> Result<KeyInfo, crate::error::DisableKeyError> {
+        self.keyring.disable(key_id).map(Into::into)
     }
 
-    pub fn enable(&mut self, key_id: impl Into<u32>) -> Result<AeadKeyInfo, KeyNotFoundError> {
-        self.keyring.enable(key_id).map(AeadKeyInfo::new)
+    pub fn enable(&mut self, key_id: impl Into<u32>) -> Result<KeyInfo, KeyNotFoundError> {
+        self.keyring.enable(key_id).map(Into::into)
     }
 
-    pub fn delete(
-        &mut self,
-        key_id: impl Into<u32>,
-    ) -> Result<AeadKeyInfo, RemoveKeyError<Algorithm>> {
-        self.keyring.remove(key_id).map(|k| AeadKeyInfo::new(&k))
+    pub fn delete(&mut self, key_id: impl Into<u32>) -> Result<KeyInfo, RemoveKeyError> {
+        self.keyring.remove(key_id).map(Into::into)
     }
-
-    pub fn update_key_meta(
+    /// Sets the metadata for the key with the given ID, returning the previous [`Metadata`] if it exists.
+    pub fn set_key_metadata(
         &mut self,
         key_id: impl Into<u32>,
         meta: Option<Metadata>,
-    ) -> Result<AeadKeyInfo, KeyNotFoundError> {
-        self.keyring
-            .update_key_metadata(key_id, meta)
-            .map(AeadKeyInfo::new)
+    ) -> Result<Option<Metadata>, KeyNotFoundError> {
+        self.keyring.update_key_metadata(key_id, meta)
     }
 
     pub(crate) fn keyring(&self) -> &Keyring<Material> {
@@ -494,20 +487,16 @@ impl Aead {
     {
         let id = rng.u32().unwrap();
         let material = Material::generate(rng, algorithm);
-        let metadata = metadata.map(Arc::new);
         let key = Key::new(id, Status::Primary, Origin::Navajo, material, metadata);
         let keyring = Keyring::new(key);
         Self { keyring }
     }
-
-    pub fn set_key_metadata(
-        &mut self,
-        key_id: u32,
-        metadata: Option<Metadata>,
-    ) -> Result<AeadKeyInfo, KeyNotFoundError> {
-        self.keyring.update_key_metadata(key_id, metadata)?;
-        let key = self.keyring.get(key_id)?;
-        Ok(AeadKeyInfo::new(key))
+    pub fn info(&self) -> KeyringInfo {
+        KeyringInfo {
+            keys: self.keys(),
+            version: self.keyring().version,
+            kind: crate::primitive::Kind::Aead,
+        }
     }
 }
 

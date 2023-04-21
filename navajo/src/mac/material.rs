@@ -25,7 +25,7 @@ impl PartialEq for Material {
 impl Eq for Material {}
 
 impl Material {
-    pub(super) fn prefix(&self) -> Option<&[u8]> {
+    pub(crate) fn prefix(&self) -> Option<&[u8]> {
         self.prefix.as_deref()
     }
 
@@ -53,7 +53,7 @@ impl Key<Material> {
         super::Context::new(self)
     }
 
-    pub(super) fn header(&self) -> Vec<u8> {
+    pub(crate) fn header(&self) -> Vec<u8> {
         match self.origin() {
             crate::Origin::Navajo => self.id().to_be_bytes().to_vec(),
             crate::Origin::External => self

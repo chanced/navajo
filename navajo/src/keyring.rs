@@ -122,7 +122,7 @@ pub(crate) struct Keyring<M>
 where
     M: KeyMaterial,
 {
-    version: u8,
+    pub(crate) version: u8,
 
     keys: Keys<M>,
     #[serde(skip_serializing)]
@@ -213,14 +213,11 @@ where
         }
     }
 
-    pub(crate) fn remove(
-        &mut self,
-        id: impl Into<u32>,
-    ) -> Result<Key<M>, RemoveKeyError<M::Algorithm>> {
+    pub(crate) fn remove(&mut self, id: impl Into<u32>) -> Result<Key<M>, RemoveKeyError> {
         let id = id.into();
         let primary_key = self.primary();
         if primary_key.id() == id {
-            return Err(primary_key.info().into());
+            return Err(RemoveKeyError::IsPrimaryKey(id));
         }
         let key = self.keys.remove(id)?;
         Ok(key)
@@ -231,8 +228,9 @@ where
         self.keys.get(id).map(|(_, key)| key).ok_or(id.into())
     }
 
-    pub(crate) fn add(&mut self, key: Key<M>) {
+    pub(crate) fn add(&mut self, key: Key<M>) -> &Key<M> {
         self.keys.push(key);
+        self.last()
     }
     pub(crate) fn last(&self) -> &Key<M> {
         self.keys.last().unwrap()
@@ -242,10 +240,12 @@ where
         &mut self,
         id: impl Into<u32>,
         meta: Option<Metadata>,
-    ) -> Result<&Key<M>, KeyNotFoundError> {
+    ) -> Result<Option<Metadata>, KeyNotFoundError> {
         let mut key = self.get(id.into())?.clone();
+        let old_meta = key.metadata().cloned();
         key.update_meta(meta);
-        self.keys.update(key)
+        self.keys.update(key)?;
+        Ok(old_meta)
     }
 
     pub(crate) fn primary(&self) -> &Key<M> {
@@ -266,14 +266,11 @@ where
             .expect(PRIMARY_KEY_NOT_FOUND_MSG)
     }
 
-    pub(crate) fn disable(
-        &mut self,
-        id: impl Into<u32>,
-    ) -> Result<&Key<M>, DisableKeyError<M::Algorithm>> {
+    pub(crate) fn disable(&mut self, id: impl Into<u32>) -> Result<&Key<M>, DisableKeyError> {
         let id = id.into();
         let primary = self.primary();
         if id == primary.id() {
-            return Err(DisableKeyError::IsPrimaryKey(primary.info()));
+            return Err(DisableKeyError::IsPrimaryKey(primary.into()));
         }
         let mut key = self.get(id)?.clone();
         key.disable()?;

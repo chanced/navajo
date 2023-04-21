@@ -3,10 +3,9 @@ use alloc::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "std")]
-use std::sync::Arc;
 use zeroize::ZeroizeOnDrop;
 
-use crate::{error::DisableKeyError, primitive::Kind, KeyInfo, Metadata, Origin, Status};
+use crate::{error::DisableKeyError, primitive::Kind, Metadata, Origin, Status};
 
 pub(crate) trait KeyMaterial:
     Send + Sync + ZeroizeOnDrop + Clone + 'static + PartialEq + Eq
@@ -30,7 +29,7 @@ where
     material: M,
     #[zeroize(skip)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    metadata: Option<Arc<Metadata>>,
+    metadata: Option<Metadata>,
 }
 
 impl<M> Key<M>
@@ -42,7 +41,7 @@ where
         status: Status,
         origin: Origin,
         material: M,
-        metadata: Option<Arc<Metadata>>,
+        metadata: Option<Metadata>,
     ) -> Self {
         Self {
             id,
@@ -56,52 +55,42 @@ where
         self.id
     }
 
-    pub(crate) fn metadata(&self) -> Option<Arc<Metadata>> {
-        self.metadata.clone()
+    pub(crate) fn metadata(&self) -> Option<&Metadata> {
+        self.metadata.as_ref()
     }
-    pub(crate) fn disable(
-        &mut self,
-    ) -> Result<KeyInfo<M::Algorithm>, DisableKeyError<M::Algorithm>> {
+    pub(crate) fn take_metadata(&mut self) -> Option<Metadata> {
+        self.metadata.take()
+    }
+
+    pub(crate) fn disable(&mut self) -> Result<&Self, DisableKeyError> {
         if self.status.is_primary() {
-            Err(DisableKeyError::IsPrimaryKey(self.info()))
+            Err(DisableKeyError::IsPrimaryKey(self.id))
         } else {
             self.status = Status::Disabled;
-            Ok(self.info())
+            Ok(self)
         }
     }
 
-    pub(crate) fn promote(&mut self) -> KeyInfo<M::Algorithm> {
+    pub(crate) fn promote(&mut self) -> &Self {
         self.status = Status::Primary;
-        self.info()
+        self
     }
 
-    pub(crate) fn demote(&mut self) -> KeyInfo<M::Algorithm> {
+    pub(crate) fn demote(&mut self) -> &Self {
         self.status = Status::Secondary;
-        self.info()
+        self
     }
-    pub(crate) fn enable(&mut self) -> KeyInfo<M::Algorithm> {
+    pub(crate) fn enable(&mut self) -> &Self {
         self.status = Status::Secondary;
-        self.info()
+        self
     }
 
     pub fn key_bytes(&self) -> [u8; 4] {
         self.id.to_be_bytes()
     }
 
-    pub(crate) fn info(&self) -> KeyInfo<M::Algorithm>
-    where
-        M: KeyMaterial,
-    {
-        KeyInfo {
-            id: self.id,
-            origin: self.origin,
-            status: self.status,
-            algorithm: self.material.algorithm(),
-            metadata: self.metadata.clone(),
-        }
-    }
     pub(crate) fn update_meta(&mut self, meta: Option<Metadata>) -> &Key<M> {
-        self.metadata = meta.map(Arc::new);
+        self.metadata = meta;
         self
     }
 
@@ -141,28 +130,20 @@ where
         self.id == other.id && self.material == other.material
     }
 }
-impl<M> From<&Key<M>> for KeyInfo<M::Algorithm>
+impl<M> From<&Key<M>> for u32
 where
     M: KeyMaterial,
 {
-    fn from(k: &Key<M>) -> Self {
-        k.info()
+    fn from(value: &Key<M>) -> Self {
+        value.id
     }
 }
 impl<M> From<Key<M>> for u32
 where
     M: KeyMaterial,
 {
-    fn from(k: Key<M>) -> Self {
-        k.id
-    }
-}
-impl<M> From<&Key<M>> for u32
-where
-    M: KeyMaterial,
-{
-    fn from(k: &Key<M>) -> Self {
-        k.id
+    fn from(value: Key<M>) -> Self {
+        value.id
     }
 }
 
@@ -188,6 +169,7 @@ pub(crate) mod test {
             Self { algorithm, value }
         }
     }
+
     impl super::KeyMaterial for Material {
         type Algorithm = Algorithm;
         fn algorithm(&self) -> Self::Algorithm {

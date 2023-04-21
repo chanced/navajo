@@ -115,7 +115,7 @@ impl Verifier {
         }
     }
 
-    pub(crate) fn delete(&mut self, pub_id: &str) -> Result<Jwk, RemoveKeyError<Algorithm>> {
+    pub(crate) fn delete(&mut self, pub_id: &str) -> Result<Jwk, RemoveKeyError> {
         let k = self
             .keys
             .get(pub_id)
