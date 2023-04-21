@@ -607,13 +607,11 @@ impl From<crypto_common::InvalidLength> for OpenError {
     }
 }
 
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa"))]
 #[derive(Debug, Clone)]
 pub enum RemoveKeyError {
     IsPrimaryKey(u32),
     KeyNotFound(KeyNotFoundError),
 }
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa"))]
 
 impl fmt::Display for RemoveKeyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -631,10 +629,7 @@ impl From<KeyNotFoundError> for RemoveKeyError {
     }
 }
 
-#[cfg(all(
-    feature = "std",
-    any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa")
-))]
+#[cfg(feature = "std")]
 impl std::error::Error for RemoveKeyError {}
 
 #[derive(Debug, Clone)]
@@ -687,10 +682,6 @@ where
 }
 #[cfg(feature = "std")]
 impl<E> std::error::Error for VerifyStreamError<E> where E: std::error::Error {}
-
-#[cfg(not(feature = "std"))]
-#[cfg(feature = "std")]
-impl<E> Error for VerifyStreamError<E> where E: core::fmt::Debug + core::fmt::Display {}
 
 impl<E> From<MacVerificationError> for VerifyStreamError<E> {
     fn from(_: MacVerificationError) -> Self {
