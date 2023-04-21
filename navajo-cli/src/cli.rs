@@ -4,15 +4,10 @@ use std::{
     path::PathBuf,
 };
 
-use crate::{
-    algorithm::Algorithm,
-    envelope::{self, Envelope},
-    Aad, Encoding,
-};
+use crate::{algorithm::Algorithm, envelope::Envelope, Aad, Encoding};
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
 use navajo::{sensitive, Aead, Daead, Kind, Mac, Primitive, Signer};
-use url::Url;
 
 #[derive(Debug, Parser)]
 #[command(name = "navajo")]
@@ -234,13 +229,7 @@ impl Inspect {
         let envelope = envelope_args.get_envelope(None)?;
         let aad = envelope_args.get_aad();
         let primitive = envelope.open(aad, input)?;
-        let json = match primitive {
-            Primitive::Aead(aead) => serde_json::to_vec_pretty(&aead.keys()),
-            Primitive::Daead(daead) => serde_json::to_vec_pretty(&daead.keys()),
-            Primitive::Mac(mac) => serde_json::to_vec_pretty(&mac.keys()),
-            Primitive::Dsa(sig) => serde_json::to_vec_pretty(&sig.keys()),
-        }?;
-
+        let json = serde_json::to_vec_pretty(&primitive.info())?;
         output.write_all(&json)?;
         output.write_all(b"\n")?;
         output.flush()?;
@@ -753,7 +742,7 @@ mod tests {
 
     use super::*;
     use anyhow::Result;
-    use navajo::{Origin, Status};
+    use navajo::Status;
     use serde::Deserialize;
     use serde_json::json;
     use strum::IntoEnumIterator;
@@ -982,7 +971,35 @@ mod tests {
             )
             .unwrap();
 
-            println!("{:?}", String::from_utf8_lossy(&w));
+            let keyring_info: navajo::primitive::KeyringInfo = serde_json::from_slice(&w).unwrap();
+            assert_eq!(keyring_info.version(), 0);
+            assert_eq!(keyring_info.kind(), algorithm.kind());
+            match algorithm.kind() {
+                Kind::Aead => {
+                    let info = keyring_info.aead().unwrap();
+                    assert_eq!(info.keys.len(), 1);
+                    assert_eq!(info.keys[0].id, key.id);
+                    assert_eq!(info.keys[0].status, key.status);
+                }
+                Kind::Daead => {
+                    let info = keyring_info.daead().unwrap();
+                    assert_eq!(info.keys.len(), 1);
+                    assert_eq!(info.keys[0].id, key.id);
+                    assert_eq!(info.keys[0].status, key.status);
+                }
+                Kind::Mac => {
+                    let info = keyring_info.mac().unwrap();
+                    assert_eq!(info.keys.len(), 1);
+                    assert_eq!(info.keys[0].id, key.id);
+                    assert_eq!(info.keys[0].status, key.status);
+                }
+                Kind::Dsa => {
+                    let info = keyring_info.dsa().unwrap();
+                    assert_eq!(info.keys.len(), 1);
+                    assert_eq!(info.keys[0].id, key.id);
+                    assert_eq!(info.keys[0].status, key.status);
+                }
+            }
         }
     }
 }

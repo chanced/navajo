@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, fmt::Debug, str::FromStr};
+use std::{fmt::Debug, str::FromStr};
 
 use anyhow::{bail, Context, Result};
 
