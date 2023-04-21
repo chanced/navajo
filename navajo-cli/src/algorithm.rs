@@ -70,8 +70,8 @@ pub enum Algorithm {
         alias = "aes-256-siv",
         alias = "aes_256_siv"
     )]
-    #[strum(serialize = "AES256-SIV")]
-    AesSiv,
+    #[strum(serialize = "AES-256-SIV")]
+    Aes_256_Siv,
 
     // ------------------------------------------
     // MAC
@@ -281,7 +281,7 @@ impl Algorithm {
             | Algorithm::Chacha20Poly1305
             | Algorithm::Xchacha20Poly1305 => Kind::Aead,
 
-            Algorithm::AesSiv => Kind::Daead,
+            Algorithm::Aes_256_Siv => Kind::Daead,
 
             Algorithm::Blake3
             | Algorithm::Sha2_256
@@ -317,7 +317,7 @@ impl TryFrom<Algorithm> for navajo::daead::Algorithm {
 
     fn try_from(value: Algorithm) -> Result<Self, Self::Error> {
         match value {
-            Algorithm::AesSiv => Ok(navajo::daead::Algorithm::Aes256Siv),
+            Algorithm::Aes_256_Siv => Ok(navajo::daead::Algorithm::Aes256Siv),
             _ => bail!("Algorithm {value} is not DAEAD"),
         }
     }

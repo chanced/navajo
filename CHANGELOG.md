@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -   Renames DSA keyring `"key_pair"` to `"value"` (#52)
 -   Removes async from `navajo-cli`, making it sync for easier testing & resolving (#46)
 -   Each primitive's `KeyInfo` were renmaed from {Primitive}KeyInfo to `KeyInfo`
+-   Rename `Status::Secondary` to `Status::Active`
 
 ## Removed
 

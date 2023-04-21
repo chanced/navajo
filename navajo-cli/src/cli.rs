@@ -424,16 +424,16 @@ impl DeleteKey {
         let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
-                aead.delete(key_id)?;
+                aead.delete(key_id).context("failed to delete key")?;
             }
             Primitive::Daead(daead) => {
-                daead.delete(key_id)?;
+                daead.delete(key_id).context("failed to delete key")?;
             }
             Primitive::Mac(mac) => {
-                mac.delete(key_id)?;
+                mac.delete(key_id).context("failed to delete key")?;
             }
             Primitive::Dsa(sig) => {
-                sig.delete(key_id)?;
+                sig.delete(key_id).context("failed to delete key")?;
             }
         }
         envelope.seal_and_write(output, aad, primitive)
@@ -830,8 +830,6 @@ mod tests {
             let first_key = keyring.keys[0].clone();
             assert_eq!(first_key.status, Status::Primary);
             assert!(first_key.id > 0, "id is not greater than 0");
-            let r = w;
-            let mut w = vec![];
 
             let add = AddKey {
                 algorithm: algorithm.clone(),
@@ -840,6 +838,9 @@ mod tests {
                 io: Default::default(),
                 pub_id: None,
             };
+
+            let r = w;
+            let mut w = vec![];
 
             run_cmd(add, r.as_slice(), &mut w).unwrap();
 
@@ -854,9 +855,35 @@ mod tests {
             let second_key = keyring.keys[1].clone();
             assert_ne!(second_key.id, first_key.id);
             assert_eq!(keyring.keys[0].status, Status::Primary);
-            assert_eq!(second_key.status, Status::Secondary);
+            assert_eq!(second_key.status, Status::Active);
             assert!(second_key.id > 0, "id is not greater than 0");
             assert_eq!(second_key.alg, algorithm);
+
+            let kind = algorithm.kind();
+
+            // getting coverage for the is_* methods
+            let algo = if kind.is_aead() {
+                Algorithm::Blake3
+            } else if kind.is_daead() {
+                Algorithm::Ed25519
+            } else if kind.is_dsa() {
+                Algorithm::Aes_256_Gcm
+            } else if kind.is_mac() {
+                Algorithm::Aes_256_Siv
+            } else {
+                panic!("unknown kind {:?}", kind);
+            };
+
+            let add_key = AddKey {
+                algorithm: algo,
+                envelope_args: Default::default(),
+                metadata: Default::default(),
+                io: Default::default(),
+                pub_id: None,
+            };
+            let r = w;
+            let mut w = vec![];
+            assert!(run_cmd(add_key, r.as_slice(), &mut w).is_err());
         }
     }
     #[test]
@@ -902,7 +929,7 @@ mod tests {
             let second_key = keyring.keys[1].clone();
             assert_ne!(second_key.id, first_key.id);
             assert_eq!(keyring.keys[0].status, Status::Primary);
-            assert_eq!(second_key.status, Status::Secondary);
+            assert_eq!(second_key.status, Status::Active);
             assert!(second_key.id > 0, "id is not greater than 0");
             assert_eq!(second_key.alg, algorithm);
 
@@ -925,7 +952,7 @@ mod tests {
 
             let second_key = keyring.keys[1].clone();
             assert_ne!(second_key.id, first_key.id);
-            assert_eq!(keyring.keys[0].status, Status::Secondary);
+            assert_eq!(keyring.keys[0].status, Status::Active);
             assert_eq!(second_key.status, Status::Primary);
             assert!(second_key.id > 0, "id is not greater than 0");
             assert_eq!(second_key.alg, algorithm);
@@ -1002,4 +1029,173 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn test_disable_key_enable_key() {
+        for algorithm in Algorithm::iter() {
+            let mut w = vec![];
+            let r: Vec<u8> = vec![];
+            let new = New {
+                algorithm: algorithm.clone(),
+                env_args: Default::default(),
+                metadata: Default::default(),
+                output: Default::default(),
+                plaintext: true,
+                pub_id: None,
+            };
+            run_cmd(new, r.as_slice(), &mut w).unwrap();
+
+            let keyring_data = w.clone();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+
+            let first_key = keyring.keys[0].clone();
+            assert_eq!(first_key.status, Status::Primary);
+
+            let disable_key = DisableKey {
+                key_id: first_key.id,
+                io: Default::default(),
+                envelope_args: Default::default(),
+            };
+            assert!(run_cmd(disable_key, r.as_slice(), &mut w).is_err());
+
+            let add_key = AddKey {
+                algorithm: algorithm.clone(),
+                envelope_args: Default::default(),
+                metadata: Default::default(),
+                io: Default::default(),
+                pub_id: None,
+            };
+
+            let r = keyring_data;
+            let mut w = vec![];
+
+            run_cmd(add_key, r.as_slice(), &mut w).unwrap();
+            let keyring_data = w.clone();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            let second_key = &keyring.keys[1];
+
+            let disable_key = DisableKey {
+                key_id: first_key.id,
+                io: Default::default(),
+                envelope_args: Default::default(),
+            };
+
+            let r = w;
+            let mut w = vec![];
+            assert!(run_cmd(disable_key, r.as_slice(), &mut w).is_err());
+
+            let r = keyring_data.clone();
+            let mut w = vec![];
+            let disable_key = DisableKey {
+                key_id: second_key.id,
+                io: Default::default(),
+                envelope_args: Default::default(),
+            };
+            run_cmd(disable_key, r.as_slice(), &mut w).unwrap();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+
+            assert_eq!(keyring.keys.len(), 2);
+            assert_eq!(keyring.keys[0].status, Status::Primary);
+            assert_eq!(keyring.keys[1].status, Status::Disabled);
+
+            let enable_key = EnableKey {
+                key_id: second_key.id,
+                io: Default::default(),
+                envelope_args: Default::default(),
+            };
+
+            let r = w;
+            let mut w = vec![];
+
+            run_cmd(enable_key, r.as_slice(), &mut w).unwrap();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+
+            assert_eq!(keyring.keys.len(), 2);
+            assert_eq!(keyring.keys[0].status, Status::Primary);
+            assert_eq!(keyring.keys[1].status, Status::Active);
+        }
+    }
+    #[test]
+    fn test_delete_key() {
+        for algorithm in Algorithm::iter() {
+            let mut w = vec![];
+            let r: Vec<u8> = vec![];
+            let new = New {
+                algorithm: algorithm.clone(),
+                env_args: Default::default(),
+                metadata: Default::default(),
+                output: Default::default(),
+                plaintext: true,
+                pub_id: None,
+            };
+            run_cmd(new, r.as_slice(), &mut w).unwrap();
+
+            let keyring_data = w.clone();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+
+            let first_key = keyring.keys[0].clone();
+            assert_eq!(first_key.status, Status::Primary);
+
+            let delete_key = DeleteKey {
+                key_id: first_key.id,
+                io: Default::default(),
+                envelope_args: Default::default(),
+            };
+            assert!(run_cmd(delete_key, r.as_slice(), &mut w).is_err());
+
+            let add_key = AddKey {
+                algorithm: algorithm.clone(),
+                envelope_args: Default::default(),
+                metadata: Default::default(),
+                io: Default::default(),
+                pub_id: None,
+            };
+
+            let r = keyring_data;
+            let mut w = vec![];
+
+            run_cmd(add_key, r.as_slice(), &mut w).unwrap();
+            let keyring_data = w.clone();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            let second_key = &keyring.keys[1];
+
+            let delete_key = DeleteKey {
+                key_id: first_key.id,
+                io: Default::default(),
+                envelope_args: Default::default(),
+            };
+
+            let r = w;
+            let mut w = vec![];
+            assert!(run_cmd(delete_key, r.as_slice(), &mut w).is_err());
+
+            let r = keyring_data.clone();
+            let mut w = vec![];
+            let delete_key = DeleteKey {
+                key_id: second_key.id,
+                io: Default::default(),
+                envelope_args: Default::default(),
+            };
+            run_cmd(delete_key, r.as_slice(), &mut w).unwrap();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+
+            assert_eq!(keyring.keys.len(), 1);
+            assert_eq!(keyring.keys[0].status, Status::Primary);
+        }
+    }
 }
+
+// PromoteKey(PromoteKey),
+// EnableKey(EnableKey),
+// DisableKey(DisableKey),
+// DeleteKey(DeleteKey),
+// SetKeyMetadata(SetKeyMetadata),
+// CreatePublic(CreatePublic),
+
+// Migrate(Migrate),

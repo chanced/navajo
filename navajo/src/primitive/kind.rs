@@ -39,10 +39,7 @@ impl Kind {
             Kind::Dsa => 4,
         }
     }
-    /// Returns true if the primitive Kind is DSA (i.e. a signature algorithm)
-    pub fn is_signature(&self) -> bool {
-        matches!(self, Kind::Dsa)
-    }
+
     /// Returns `true` if the primitive Kind is `Dsa` (i.e. a signature algorithm)
     pub fn is_dsa(&self) -> bool {
         matches!(self, Kind::Dsa)

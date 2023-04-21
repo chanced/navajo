@@ -622,7 +622,7 @@ impl Mac {
         let material = Material::new(value, prefix, algorithm)?;
         let id = self.keyring.next_id(rng);
 
-        let key = Key::new(id, Status::Secondary, origin, material, metadata);
+        let key = Key::new(id, Status::Active, origin, material, metadata);
         Ok(self.keyring.add(key).into())
     }
 

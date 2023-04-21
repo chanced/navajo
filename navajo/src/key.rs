@@ -76,11 +76,11 @@ where
     }
 
     pub(crate) fn demote(&mut self) -> &Self {
-        self.status = Status::Secondary;
+        self.status = Status::Active;
         self
     }
     pub(crate) fn enable(&mut self) -> &Self {
-        self.status = Status::Secondary;
+        self.status = Status::Active;
         self
     }
 
@@ -204,7 +204,7 @@ pub(crate) mod test {
         );
 
         key.demote();
-        assert_eq!(key.status(), Status::Secondary);
+        assert_eq!(key.status(), Status::Active);
 
         key.promote();
         assert_eq!(key.status(), Status::Primary);

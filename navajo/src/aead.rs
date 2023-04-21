@@ -451,7 +451,7 @@ impl Aead {
     pub fn add(&mut self, algorithm: Algorithm, metadata: Option<Metadata>) -> KeyInfo {
         let id = self.keyring.next_id(&SystemRng);
         let material = Material::generate(&SystemRng, algorithm);
-        let key = Key::new(id, Status::Secondary, Origin::Navajo, material, metadata);
+        let key = Key::new(id, Status::Active, Origin::Navajo, material, metadata);
         self.keyring.add(key).into()
     }
     pub fn disable(

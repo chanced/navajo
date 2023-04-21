@@ -1,5 +1,8 @@
+// mod algorithm;
 mod keyring_info;
 mod kind;
+
+// pub use algorithm::Algorithm;
 pub use keyring_info::KeyringInfo;
 pub use kind::Kind;
 
@@ -163,6 +166,7 @@ impl Primitive {
             }
         }
     }
+
     pub fn kind(&self) -> Kind {
         match self {
             #[cfg(feature = "aead")]
