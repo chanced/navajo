@@ -607,7 +607,7 @@ impl From<crypto_common::InvalidLength> for OpenError {
     }
 }
 
-#[cfg(feature = "primitive")]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa"))]
 #[derive(Debug, Clone)]
 pub enum RemoveKeyError {
     IsPrimaryKey(u32),
@@ -624,7 +624,7 @@ impl fmt::Display for RemoveKeyError {
     }
 }
 
-#[cfg(feature = "primitive")]
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa"))]
 impl From<KeyNotFoundError> for RemoveKeyError {
     fn from(e: KeyNotFoundError) -> Self {
         Self::KeyNotFound(e)
@@ -637,13 +637,11 @@ impl From<KeyNotFoundError> for RemoveKeyError {
 ))]
 impl std::error::Error for RemoveKeyError {}
 
-#[cfg(feature = "primitive")]
 #[derive(Debug, Clone)]
 pub enum DisableKeyError {
     IsPrimaryKey(u32),
     KeyNotFound(KeyNotFoundError),
 }
-#[cfg(feature = "primitive")]
 impl fmt::Display for DisableKeyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -652,14 +650,13 @@ impl fmt::Display for DisableKeyError {
         }
     }
 }
-#[cfg(feature = "primitive")]
 impl From<KeyNotFoundError> for DisableKeyError {
     fn from(e: KeyNotFoundError) -> Self {
         Self::KeyNotFound(e)
     }
 }
 
-#[cfg(all(feature = "std", feature = "primitive",))]
+#[cfg(feature = "std")]
 impl std::error::Error for DisableKeyError {}
 
 pub enum VerifyStreamError<E> {

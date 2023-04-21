@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{algorithm::Algorithm, envelope::Envelope, Aad, Encoding};
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use navajo::{sensitive, Aead, Daead, Kind, Mac, Primitive, Signer};
 
@@ -349,16 +349,16 @@ impl EnableKey {
         let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
-                aead.enable(key_id)?;
+                aead.enable(key_id).context("failed to enable key")?;
             }
             Primitive::Daead(daead) => {
-                daead.enable(key_id)?;
+                daead.enable(key_id).context("failed to enable key")?;
             }
             Primitive::Mac(mac) => {
-                mac.enable(key_id)?;
+                mac.enable(key_id).context("failed to enable key")?;
             }
             Primitive::Dsa(sig) => {
-                sig.enable(key_id)?;
+                sig.enable(key_id).context("failed to enable key")?;
             }
         }
         envelope.seal_and_write(output, aad, primitive)
@@ -386,16 +386,16 @@ impl DisableKey {
         let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
-                aead.disable(key_id)?;
+                aead.disable(key_id).context("failed to disable key")?;
             }
             Primitive::Daead(daead) => {
-                daead.disable(key_id)?;
+                daead.disable(key_id).context("failed to disable key")?;
             }
             Primitive::Mac(mac) => {
-                mac.disable(key_id)?;
+                mac.disable(key_id).context("failed to disable key")?;
             }
             Primitive::Dsa(sig) => {
-                sig.disable(key_id)?;
+                sig.disable(key_id).context("failed to disable key")?;
             }
         }
         envelope.seal_and_write(output, aad, primitive)

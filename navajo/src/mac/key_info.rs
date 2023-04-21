@@ -3,6 +3,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Key, Metadata, Origin, Status};
 
+#[cfg(not(feature="std"))]
+use alloc::vec::Vec;
+
+
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct KeyInfo {
     pub id: u32,

@@ -341,13 +341,12 @@ default = [
 	"daead",
 	"hkdf",
 ]
-primitive = []
 ed25519 = ["ed25519-dalek"]
-dsa = ["primitive", "signature", "ed25519", "p256", "p384"]
-mac = ["primitive", "sha2", "hmac"]
-hkdf = ["primitive", "sha2", "hmac"]
-aead = ["primitive", "hkdf"]
-daead = ["primitive", "aes-siv"]
+dsa = ["signature", "ed25519", "p256", "p384"]
+mac = ["sha2", "hmac"]
+hkdf = ["sha2", "hmac"]
+aead = ["hkdf"]
+daead = ["aes-siv"]
 std = [
 	"miniz_oxide/std",
 	"ring?/std",
