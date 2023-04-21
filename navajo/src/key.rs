@@ -2,7 +2,6 @@
 use alloc::sync::Arc;
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "std")]
 use zeroize::ZeroizeOnDrop;
 
 use crate::{error::DisableKeyError, primitive::Kind, Metadata, Origin, Status};
