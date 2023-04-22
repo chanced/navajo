@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use crate::{algorithm::Algorithm, envelope::Envelope, Aad, Encoding};
+use crate::{algorithm::Algorithm, envelope::Envelope, Aad, Encoding, EncodingWriter};
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use navajo::{sensitive, Aead, Daead, Kind, Mac, Primitive, Signer};
@@ -248,7 +248,8 @@ impl Inspect {
         let primitive = envelope.open(aad, input)?;
         let json = serde_json::to_vec_pretty(&primitive.info())?;
         output.write_all(&json)?;
-        output.write_all(b"\n")?;
+        let mut output = output.into_inner()?;
+        // output.write(b"\n")?;
         output.flush()?;
         Ok(())
     }
@@ -669,14 +670,22 @@ pub struct Output {
         alias = "pad-out-encoding",
         short = 'P'
     )]
-    pub out_encoding_padding: bool,
+    pub pad_out_encoding: bool,
 }
 impl Output {
-    pub fn get<'a>(self, stdout: impl 'a + Write) -> std::io::Result<Box<dyn 'a + Write>> {
-        if let Some(output_path) = self.output {
-            Ok(Box::new(std::fs::File::create(output_path)?))
+    pub fn get<'a>(
+        self,
+        stdout: impl 'a + Write,
+    ) -> std::io::Result<EncodingWriter<Box<dyn 'a + Write>>> {
+        let boxed_out: Box<dyn Write> = if let Some(output_path) = self.output {
+            Box::new(std::fs::File::create(output_path)?)
         } else {
-            Ok(Box::new(stdout))
+            Box::new(stdout)
+        };
+        if let Some(encoding) = self.out_encoding {
+            Ok(encoding.encode_writer(boxed_out, self.pad_out_encoding))
+        } else {
+            Ok(EncodingWriter::None(Some(boxed_out)))
         }
     }
 }
@@ -699,7 +708,7 @@ impl IoArgs {
         self,
         stdin: impl 'a + Read,
         stdout: impl 'a + Write,
-    ) -> std::io::Result<(Box<dyn 'a + Read>, Box<dyn 'a + Write>)> {
+    ) -> std::io::Result<(Box<dyn 'a + Read>, EncodingWriter<Box<dyn 'a + Write>>)> {
         Ok((self.input.get(stdin)?, self.output.get(stdout)?))
     }
 }
@@ -810,8 +819,7 @@ mod tests {
         input: impl 'a + Read,
         output: impl 'a + Write,
     ) -> Result<()> {
-        let command = cmd.into();
-        let cli = Cli { command };
+        let cli: Cli = cmd.into().into();
         cli.run(input, output)
     }
 

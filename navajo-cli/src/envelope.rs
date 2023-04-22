@@ -6,6 +6,8 @@ use std::{
 use anyhow::{anyhow, bail, Context, Result};
 use navajo::{Aad, Aead, Primitive};
 
+use crate::EncodingWriter;
+
 #[derive(Clone, Debug)]
 pub enum Envelope {
     /// Plaintext is used when the `--plaintext` argument is provided.
@@ -81,7 +83,7 @@ impl Envelope {
     }
     pub fn seal_and_write<'a, A>(
         &self,
-        mut write: Box<dyn 'a + Write>,
+        mut write: EncodingWriter<Box<dyn 'a + Write>>,
         aad: Aad<A>,
         primitive: Primitive,
     ) -> anyhow::Result<()>

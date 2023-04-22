@@ -11,13 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 -   Adds json AEAD envelope support (#44)
 -   `KeyInfo` for Daead
--   `navajo::KeyringInfo` and corresponding methods on each primitive to return their respective `KeyringInfo`
+-   `navajo::KeyringInfo` and corresponding methods on each primitive to return their respective `KeyringInfo` (#53)
+-   Adds base64, base64url, and hex encoding and decoding to CLI input and output (#55)
 
 ### Changed
 
 -   Renames DSA keyring `"key_pair"` to `"value"` (#52)
 -   Removes async from `navajo-cli`, making it sync for easier testing & resolving (#46)
--   Each primitive's `KeyInfo` were renmaed from {Primitive}KeyInfo to `KeyInfo`
+-   Each primitive's `KeyInfo` were renmaed from {Primitive}KeyInfo to `KeyInfo` (#53)
 -   Rename `Status::Secondary` to `Status::Active`
 
 ## Removed
