@@ -572,7 +572,7 @@ mod tests {
     use super::*;
 
     #[quickcheck]
-    fn encrypt_decrypt(mut plaintext: Vec<u8>, aad: Vec<u8>) -> bool {
+    fn test_encrypt_decrypt(mut plaintext: Vec<u8>, aad: Vec<u8>) -> bool {
         for algorithm in Algorithm::iter() {
             let src = plaintext.clone();
             let aead = Aead::new(algorithm, None);
@@ -595,45 +595,51 @@ mod tests {
     }
 
     #[test]
-    fn test_encrypt_in_place() {
-        let aead = Aead::new(Algorithm::Aes256Gcm, None);
-        let mut data = b"hello world".to_vec();
-        aead.encrypt_in_place(Aad(b"additional data"), &mut data)
-            .unwrap();
-        assert_ne!(data, b"hello world");
-        assert!(!data.is_empty());
+    fn test_encrypt_decrypt_in_place() {
+        let rng = crate::rand::SystemRng;
+        for algorithm in Algorithm::iter() {
+            let mut size = 0;
+            while size == 0 {
+                size = rng.u32().unwrap() as usize % 3000000;
+            }
+            let mut data = vec![0u8; size];
+            rng.fill(&mut data).unwrap();
+            let plaintext = data.clone();
+            let aad = Aad(b"additional data");
+            let aead = Aead::new(algorithm, None);
+            aead.encrypt_in_place(aad, &mut data).unwrap();
+            assert_ne!(data, plaintext);
+            assert!(!data.is_empty());
+            aead.decrypt_in_place(aad, &mut data).unwrap();
+
+            assert_eq!(data, plaintext);
+        }
     }
-    #[test]
-    fn test_decrypt_in_place() {
-        let aead = Aead::new(Algorithm::Aes256Gcm, None);
-        let mut data = b"hello world".to_vec();
-        aead.encrypt_in_place(Aad(b"additional data"), &mut data)
-            .unwrap();
-        let aead = Aead::new(Algorithm::Aes256Gcm, None);
-        let mut data = b"hello world".to_vec();
-        aead.encrypt_in_place(Aad(b"additional data"), &mut data)
-            .unwrap();
-        assert_ne!(data, b"hello world");
-        aead.decrypt_in_place(Aad(b"additional data"), &mut data)
-            .unwrap();
-        assert_eq!(data, b"hello world");
-    }
+
     #[cfg(feature = "std")]
     #[test]
     fn test_encrypt_writer() {
         use std::io::Write;
+        let rng = crate::rand::SystemRng;
+        for algorithm in Algorithm::iter() {
+            let mut writer = vec![];
+            let mut size: usize = 0;
+            while size == 0 {
+                size = rng.u32().unwrap() as usize % 3000000;
+            }
+            let mut data = vec![0u8; size];
+            rng.fill(&mut data).unwrap();
 
-        let mut writer = vec![];
-        let aad = Aad(b"additional data");
-        let aead = Aead::new(Algorithm::Aes256Gcm, None);
-        let msg = b"hello world".to_vec();
-        aead.encrypt_writer(&mut writer, Aad(aad), Segment::FourKilobytes, |w| {
-            w.write_all(&msg)
-        })
-        .unwrap();
+            let aad = Aad(rng.u32().unwrap().to_be_bytes());
+            let aead = Aead::new(algorithm, None);
+            aead.encrypt_writer(&mut writer, Aad(aad), Segment::FourKilobytes, |w| {
+                w.write_all(&data)
+            })
+            .unwrap();
 
-        let decryptor = Decryptor::new(&aead, writer);
-        let result = decryptor.finalize(aad).unwrap().next().unwrap();
-        assert_eq!(result, msg);
+            let decryptor = Decryptor::new(&aead, writer);
+            let result: Vec<u8> = decryptor.finalize(aad).unwrap().flatten().collect();
+            assert_eq!(result, data);
+        }
     }
 }

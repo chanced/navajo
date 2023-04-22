@@ -9,6 +9,16 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use navajo::{sensitive, Aead, Daead, Kind, Mac, Primitive, Signer};
 
+pub fn proxy_env(src: &str, dst: &str) {
+    let src = src.to_uppercase();
+    let dst = dst.to_uppercase();
+    if let Ok(value) = std::env::var(src) {
+        if std::env::var(&dst).is_err() {
+            std::env::set_var(&dst, value);
+        }
+    }
+}
+
 #[derive(Debug, Parser)]
 #[command(name = "navajo")]
 #[command(about = "navajo cli", long_about = None)]
@@ -20,6 +30,13 @@ pub struct Cli {
 impl Cli {
     pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         self.command.run(stdin, stdout)
+    }
+    pub fn setup() -> Self {
+        proxy_env("NAVAJO_IN", "NAVAJO_INPUT");
+        proxy_env("NAVAJO_OUT", "NAVAJO_OUTPUT");
+        proxy_env("NAVAJO_IN_ENCODING", "NAVAJO_INPUT_ENCODING");
+        proxy_env("NAVAJO_OUT_ENCODING", "NAVAJO_OUTPUT_ENCODING");
+        Self::parse()
     }
 }
 impl From<Command> for Cli {
@@ -591,14 +608,28 @@ impl SetKeyMetadata {
 }
 
 #[derive(Debug, Clone, Parser, Default)]
-pub struct Input {
+pub struct In {
     /// The input file to read the keyring from.
     ///
     /// If not specified, stdin is used
-    #[arg(value_name = "INPUT", long = "input", short = 'i')]
+    #[arg(
+        value_name = "INPUT",
+        env = "NAVAJO_INPUT",
+        long = "in",
+        short = 'i',
+        alias = "input"
+    )]
     pub input: Option<PathBuf>,
+    /// The encoding to use for input file.
+    #[arg(
+        value_name = "INPUT_ENCODING",
+        env = "NAVAJO_INPUT_ENCODING",
+        long = "input-encoding",
+        short = 'I'
+    )]
+    pub input_encoding: Option<Encoding>,
 }
-impl Input {
+impl In {
     pub fn get<'a>(self, stdin: impl 'a + Read) -> std::io::Result<Box<dyn 'a + Read>> {
         if let Some(input_path) = self.input {
             Ok(Box::new(std::fs::File::open(input_path)?))
@@ -609,11 +640,23 @@ impl Input {
 }
 #[derive(Debug, Clone, Parser, Default)]
 pub struct Output {
-    /// The output file to write the keyring to.
-    ///
-    /// If not specified, stdout is used
-    #[arg(value_name = "OUTPUT", long = "output", short = 'o')]
+    /// The output file for keyrings or other cryptographic operations. If not
+    /// specified, stdout is used.s
+    #[arg(
+        value_name = "OUTPUT",
+        env = "NAVAJO_OUTPUT",
+        long = "out",
+        short = 'o'
+    )]
     pub output: Option<PathBuf>,
+    /// The encoding to use for the output file.
+    #[arg(
+        value_name = "OUTPUT_ENCODING",
+        env = "NAVAJO_OUTPUT_ENCODING",
+        long = "output-encoding",
+        short = 'O'
+    )]
+    pub out_encoding: Option<Encoding>,
 }
 impl Output {
     pub fn get<'a>(self, stdout: impl 'a + Write) -> std::io::Result<Box<dyn 'a + Write>> {
@@ -630,7 +673,7 @@ pub struct IoArgs {
     /// The input file to read the keyring from.
     ///
     /// If not specified, stdin is used
-    pub input: Input,
+    pub input: In,
 
     /// The output file to write the keyring to.
     ///
@@ -652,6 +695,7 @@ impl IoArgs {
 pub struct EnvelopeArgs {
     #[arg(
         value_name = "ENVELOPE_URI",
+        env = "NAVAJO_ENVELOPE_URI",
         long = "envelope",
         short = 'e',
         alias = "envelope-uri"
@@ -672,8 +716,10 @@ pub struct EnvelopeArgs {
     pub envelope: Option<Envelope>,
 
     /// Additional authenticated data(AAD), if any, used to authenticate the
-    /// keyring. The value can either be a URI in the form
-    /// <gcp|aws|azure|vault>://<key-path> or a possibly encoded (base64 or hex)
+    /// keyring.
+    ///
+    /// The value can either be a URI in the form
+    ///<gcp|aws|azure|vault>://<key-path> or a possibly encoded (base64 or hex)
     /// string.
     ///
     /// For URIs, the path should be the secret's URI on a supported secret
@@ -681,8 +727,8 @@ pub struct EnvelopeArgs {
     /// gcp://projects/my-project/secrets/my-secret/versions/1 would use the
     /// first version of the secret "my-secret" on GCP.
     ///
-    /// For both secrets hosted on a secret manager and strings, the the `envelope-aad-encoding`
-    /// determines if and how the value is decoded.
+    /// For both secrets hosted on a secret manager and strings, the the
+    /// `envelope-aad-encoding` determines if and how the value is decoded.
     #[arg(
         value_name = "ENVELOPE_AAD",
         alias = "env-aad",

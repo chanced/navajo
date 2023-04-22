@@ -20,7 +20,7 @@ navajo = { version = "0.0.3", features = [
 navajo-gcp = { version = "0.0.2" }
 
 strum = { version = "0.24", features = ["derive", "strum_macros"] }
-clap = { version = "4.2", features = ["derive", "wrap_help"] }
+clap = { version = "4.2", features = ["derive", "wrap_help", "env"] }
 url = "2.3"
 serde = { version = "1.0" }
 serde_json = { version = "1.0", features = ["std", "alloc", "raw_value"] }

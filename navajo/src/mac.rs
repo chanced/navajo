@@ -656,31 +656,35 @@ mod tests {
     use crate::envelope::InMemory;
     use crate::mac::{Algorithm, Mac};
     use crate::Aad;
+    use strum::IntoEnumIterator;
 
     #[test]
     fn test_seal_unseal_sync() {
-        let mac = Mac::new(Algorithm::Sha256, None);
-        let primary_key = mac.primary_key();
-        // in a real application, you would use a real key management service.
-        // InMemory is only suitable for testing.
-        let in_mem = InMemory::default();
-        let ciphertext = Mac::seal_sync(Aad::empty(), &mac, &in_mem).unwrap();
-        let mac = Mac::open_sync(Aad::empty(), ciphertext, &in_mem).unwrap();
-        assert_eq!(mac.primary_key(), primary_key);
+        for algorithm in Algorithm::iter() {
+            let mac = Mac::new(algorithm, None);
+            let primary_key = mac.primary_key();
+            // in a real application, you would use a real key management service.
+            // InMemory is only suitable for testing.
+            let in_mem = InMemory::default();
+            let ciphertext = Mac::seal_sync(Aad::empty(), &mac, &in_mem).unwrap();
+            let mac = Mac::open_sync(Aad::empty(), ciphertext, &in_mem).unwrap();
+            assert_eq!(mac.primary_key(), primary_key);
+        }
     }
 
     #[cfg(feature = "std")]
     #[tokio::test]
     async fn test_seal_unseal() {
-        let mac = Mac::new(Algorithm::Sha256, None);
-        let primary_key = mac.primary_key();
-        // in a real application, you would use a real key management service.
-        // InMemory is only suitable for testing.
-        let in_mem = InMemory::default();
+        for algorithm in Algorithm::iter() {
+            let mac = Mac::new(algorithm, None);
+            let primary_key = mac.primary_key();
+            // in a real application, you would use a real key management service.
+            // InMemory is only suitable for testing.
+            let in_mem = InMemory::default();
 
-        let data = Mac::seal(Aad::empty(), &mac, &in_mem).await.unwrap();
-
-        let mac = Mac::open(Aad::empty(), data, &in_mem).await.unwrap();
-        assert_eq!(mac.primary_key(), primary_key);
+            let data = Mac::seal(Aad::empty(), &mac, &in_mem).await.unwrap();
+            let mac = Mac::open(Aad::empty(), data, &in_mem).await.unwrap();
+            assert_eq!(mac.primary_key(), primary_key);
+        }
     }
 }
