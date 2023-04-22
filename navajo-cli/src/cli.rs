@@ -624,7 +624,8 @@ pub struct In {
     #[arg(
         value_name = "INPUT_ENCODING",
         env = "NAVAJO_INPUT_ENCODING",
-        long = "input-encoding",
+        long = "in-encoding",
+        alias = "input-encoding",
         short = 'I'
     )]
     pub input_encoding: Option<Encoding>,
@@ -653,10 +654,22 @@ pub struct Output {
     #[arg(
         value_name = "OUTPUT_ENCODING",
         env = "NAVAJO_OUTPUT_ENCODING",
-        long = "output-encoding",
+        long = "out-encoding",
+        alias = "output-encoding",
         short = 'O'
     )]
     pub out_encoding: Option<Encoding>,
+
+    /// if set and OUTPUT_ENCODING is set to base64 or base64url then padding
+    /// will be added
+    #[arg(
+        value_name = "PAD_OUTPUT_ENCODING",
+        env = "NAVAJO_PAD_OUTPUT_ENCODING",
+        long = "pad-out-encoding",
+        alias = "pad-out-encoding",
+        short = 'P'
+    )]
+    pub out_encoding_padding: bool,
 }
 impl Output {
     pub fn get<'a>(self, stdout: impl 'a + Write) -> std::io::Result<Box<dyn 'a + Write>> {

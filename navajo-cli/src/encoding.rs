@@ -3,19 +3,22 @@ use std::io::{Read, Write};
 use std::str::FromStr;
 
 use anyhow::{bail, Context};
-use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
+use base64::engine::{
+    general_purpose::{STANDARD as BASE64_STANDARD, URL_SAFE as BASE64_URL_SAFE},
+    DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig,
+};
 use base64::read::DecoderReader as Base64Reader;
 use base64::write::EncoderWriter as Base64Writer;
 use base64::Engine;
 use clap::ValueEnum;
 
-const BASE64_STANDARD: GeneralPurpose = GeneralPurpose::new(
+const BASE64_STANDARD_NO_PAD_INDIF: GeneralPurpose = GeneralPurpose::new(
     &base64::alphabet::STANDARD,
     GeneralPurposeConfig::new()
         .with_encode_padding(false)
         .with_decode_padding_mode(DecodePaddingMode::Indifferent),
 );
-const BASE64_URL_SAFE: GeneralPurpose = GeneralPurpose::new(
+const BASE64_URL_SAFE_NO_PAD_INDIF: GeneralPurpose = GeneralPurpose::new(
     &base64::alphabet::URL_SAFE,
     GeneralPurposeConfig::new()
         .with_encode_padding(false)
@@ -26,14 +29,12 @@ const BASE64_URL_SAFE: GeneralPurpose = GeneralPurpose::new(
 #[strum(serialize_all = "lowercase")]
 /// The encoding of a value, used for determining how to encode or decode a value.
 ///
-/// The encoded output will always be NO_PAD
-///
 /// For Base64 and Base64Url, padding is indifferent for decoding
 ///
 pub enum Encoding {
-    /// Base64 encoding; output is NO_PAD but input can be with or without padding
+    /// Base64; decoding is indifferent to padding and defaults to no padding on output unless overridden --out
     Base64,
-    /// Base64 URL encoding; output is NO_PAD but input can be with or without padding
+    /// Base64 URL; decoding is indifferent to padding while padding is optional for encoding
     #[strum(serialize = "base64url")]
     Base64url,
     /// Hex encoding
@@ -41,14 +42,14 @@ pub enum Encoding {
 }
 
 impl Encoding {
-    pub fn encode<T>(&self, value: T) -> String
+    pub fn encode<T>(&self, value: T, pad: bool) -> String
     where
         T: AsRef<[u8]>,
     {
         match self {
             Encoding::Hex => Self::encode_hex(value.as_ref()),
-            Encoding::Base64 => Self::encode_base64(value.as_ref()),
-            Encoding::Base64url => Self::encode_base64_url(value.as_ref()),
+            Encoding::Base64 => Self::encode_base64(value.as_ref(), pad),
+            Encoding::Base64url => Self::encode_base64_url(value.as_ref(), pad),
         }
     }
 
@@ -62,36 +63,59 @@ impl Encoding {
             Encoding::Base64url => Self::decode_base64_url(value.as_ref()),
         }
     }
-    pub fn encode_writer<W: Write>(&self, write: W) -> EncodingWriter<W> {
+    pub fn encode_writer<W: Write>(&self, write: W, pad: bool) -> EncodingWriter<W> {
         match self {
             Encoding::Hex => EncodingWriter::Hex(HexWriter::new(write)),
-            Encoding::Base64 => EncodingWriter::Base64(Base64Writer::new(write, &BASE64_STANDARD)),
+            Encoding::Base64 => {
+                if pad {
+                    EncodingWriter::Base64(Base64Writer::new(write, &BASE64_STANDARD))
+                } else {
+                    EncodingWriter::Base64(Base64Writer::new(write, &BASE64_STANDARD_NO_PAD_INDIF))
+                }
+            }
             Encoding::Base64url => {
-                EncodingWriter::Base64url(Base64Writer::new(write, &BASE64_URL_SAFE))
+                if pad {
+                    EncodingWriter::Base64Url(Base64Writer::new(write, &BASE64_URL_SAFE))
+                } else {
+                    EncodingWriter::Base64Url(Base64Writer::new(
+                        write,
+                        &BASE64_URL_SAFE_NO_PAD_INDIF,
+                    ))
+                }
             }
         }
     }
     pub fn decode_reader<R: Read>(&self, read: R) -> EncodingReader<R> {
         match self {
             Encoding::Hex => EncodingReader::Hex(HexReader::new(read)),
-            Encoding::Base64 => EncodingReader::Base64(Base64Reader::new(read, &BASE64_STANDARD)),
+            Encoding::Base64 => {
+                EncodingReader::Base64(Base64Reader::new(read, &BASE64_STANDARD_NO_PAD_INDIF))
+            }
             Encoding::Base64url => {
-                EncodingReader::Base64url(Base64Reader::new(read, &BASE64_URL_SAFE))
+                EncodingReader::Base64url(Base64Reader::new(read, &BASE64_URL_SAFE_NO_PAD_INDIF))
             }
         }
     }
 
-    fn encode_base64(value: &[u8]) -> String {
-        BASE64_STANDARD.encode(value)
+    fn encode_base64(value: &[u8], pad: bool) -> String {
+        if pad {
+            base64::engine::general_purpose::STANDARD.encode(value)
+        } else {
+            BASE64_STANDARD_NO_PAD_INDIF.encode(value)
+        }
     }
-    fn encode_base64_url(value: &[u8]) -> String {
-        BASE64_URL_SAFE.encode(value)
+    fn encode_base64_url(value: &[u8], pad: bool) -> String {
+        if pad {
+            base64::engine::general_purpose::URL_SAFE.encode(value)
+        } else {
+            BASE64_URL_SAFE_NO_PAD_INDIF.encode(value)
+        }
     }
     fn encode_hex(value: &[u8]) -> String {
         hex::encode(value)
     }
     fn decode_base64(value: &[u8]) -> anyhow::Result<Vec<u8>> {
-        BASE64_STANDARD
+        BASE64_STANDARD_NO_PAD_INDIF
             .decode(value)
             .context("failed to decode base64")
     }
@@ -99,7 +123,7 @@ impl Encoding {
         hex::decode(value).context("failed to decode hex")
     }
     fn decode_base64_url(value: &[u8]) -> anyhow::Result<Vec<u8>> {
-        BASE64_URL_SAFE
+        BASE64_URL_SAFE_NO_PAD_INDIF
             .decode(value)
             .context("failed to decode base64")
     }
@@ -135,22 +159,28 @@ where
     W: Write,
 {
     Base64(Base64Writer<'static, GeneralPurpose, W>),
-    Base64url(Base64Writer<'static, GeneralPurpose, W>),
+    Base64Url(Base64Writer<'static, GeneralPurpose, W>),
+    Base64Padded(Base64Writer<'static, GeneralPurpose, W>),
+    Base64UrlPadded(Base64Writer<'static, GeneralPurpose, W>),
     Hex(HexWriter<W>),
 }
 impl<W: Write> Write for EncodingWriter<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         match self {
             EncodingWriter::Base64(w) => w.write(buf),
-            EncodingWriter::Base64url(w) => w.write(buf),
+            EncodingWriter::Base64Url(w) => w.write(buf),
             EncodingWriter::Hex(w) => w.write(buf),
+            EncodingWriter::Base64Padded(w) => w.write(buf),
+            EncodingWriter::Base64UrlPadded(w) => w.write(buf),
         }
     }
     fn flush(&mut self) -> std::io::Result<()> {
         match self {
             EncodingWriter::Base64(w) => w.flush(),
-            EncodingWriter::Base64url(w) => w.flush(),
+            EncodingWriter::Base64Url(w) => w.flush(),
             EncodingWriter::Hex(w) => w.flush(),
+            EncodingWriter::Base64Padded(w) => w.flush(),
+            EncodingWriter::Base64UrlPadded(w) => w.flush(),
         }
     }
 }
@@ -164,13 +194,23 @@ impl<W: Write> Drop for EncodingWriter<W> {
                     w.finish();
                 }
             }
-            EncodingWriter::Base64url(w) => {
+            EncodingWriter::Base64Url(w) => {
                 if w.flush().is_ok() {
                     w.finish();
                 }
             }
             EncodingWriter::Hex(w) => {
                 w.flush();
+            }
+            EncodingWriter::Base64Padded(w) => {
+                if w.flush().is_ok() {
+                    w.finish();
+                }
+            }
+            EncodingWriter::Base64UrlPadded(w) => {
+                if w.flush().is_ok() {
+                    w.finish();
+                }
             }
         };
     }
@@ -267,23 +307,43 @@ mod tests {
             let mut bytes = vec![0; size];
             rng.fill(&mut bytes).unwrap();
 
-            let encoded = Encoding::Base64.encode(&bytes);
+            let encoded = Encoding::Base64.encode(&bytes, false);
             let decoded = STANDARD_NO_PAD.decode(&encoded).unwrap();
             assert_eq!(bytes, decoded.as_slice());
 
-            let encoded = Encoding::Base64.encode(&bytes);
+            let encoded = Encoding::Base64.encode(&bytes, false);
             let decoded = STANDARD_NO_PAD.decode(&encoded).unwrap();
             assert_eq!(bytes, decoded.as_slice());
 
-            let encoded = Encoding::Base64url.encode(&bytes);
-            let decoded = URL_SAFE.decode(&encoded).unwrap();
-            assert_eq!(bytes, decoded.as_slice());
-
-            let encoded = Encoding::Base64url.encode(&bytes);
+            let encoded = Encoding::Base64url.encode(&bytes, false);
             let decoded = URL_SAFE_NO_PAD.decode(&encoded).unwrap();
             assert_eq!(bytes, decoded.as_slice());
 
-            let encoded = Encoding::Hex.encode(&bytes);
+            let encoded = Encoding::Base64url.encode(&bytes, false);
+            let decoded = URL_SAFE_NO_PAD.decode(&encoded).unwrap();
+            assert_eq!(bytes, decoded.as_slice());
+
+            let encoded = Encoding::Hex.encode(&bytes, false);
+            let decoded = hex::decode(&encoded).unwrap();
+            assert_eq!(bytes, decoded.as_slice());
+
+            let encoded = Encoding::Base64.encode(&bytes, true);
+            let decoded = STANDARD.decode(&encoded).unwrap();
+            assert_eq!(bytes, decoded.as_slice());
+
+            let encoded = Encoding::Base64.encode(&bytes, true);
+            let decoded = STANDARD.decode(&encoded).unwrap();
+            assert_eq!(bytes, decoded.as_slice());
+
+            let encoded = Encoding::Base64url.encode(&bytes, true);
+            let decoded = URL_SAFE.decode(&encoded).unwrap();
+            assert_eq!(bytes, decoded.as_slice());
+
+            let encoded = Encoding::Base64url.encode(&bytes, true);
+            let decoded = URL_SAFE.decode(&encoded).unwrap();
+            assert_eq!(bytes, decoded.as_slice());
+
+            let encoded = Encoding::Hex.encode(&bytes, true);
             let decoded = hex::decode(&encoded).unwrap();
             assert_eq!(bytes, decoded.as_slice());
         }
@@ -342,7 +402,17 @@ mod tests {
             rng.fill(&mut bytes).unwrap();
 
             for encoding in Encoding::iter() {
-                let encoded = encoding.encode(&bytes);
+                let encoded = encoding.encode(&bytes, false);
+                let mut reader = encoding.decode_reader(encoded.as_bytes());
+                let mut decoded = vec![];
+
+                reader
+                    .read_to_end(&mut decoded)
+                    .unwrap_or_else(|_| panic!("encoding: {:?} failed", encoding));
+
+                assert_eq!(bytes, decoded, "encoding: {:?} failed", encoding);
+
+                let encoded = encoding.encode(&bytes, true);
                 let mut reader = encoding.decode_reader(encoded.as_bytes());
                 let mut decoded = vec![];
 
@@ -370,9 +440,25 @@ mod tests {
             rng.fill(&mut bytes).unwrap();
 
             for encoding in Encoding::iter() {
-                let expected = encoding.encode(&bytes);
+                let expected = encoding.encode(&bytes, false);
                 let mut result = vec![];
-                let mut w = encoding.encode_writer(&mut result);
+                let mut w = encoding.encode_writer(&mut result, false);
+                let len = w.write_all(&bytes);
+                if let Err(e) = len {
+                    panic!("encoding: {:?} failed: {}", encoding, e);
+                }
+                drop(w);
+                len.unwrap();
+                assert_eq!(
+                    expected,
+                    String::from_utf8_lossy(&result),
+                    "encoding: {:?} failed",
+                    encoding
+                );
+
+                let expected = encoding.encode(&bytes, true);
+                let mut result = vec![];
+                let mut w = encoding.encode_writer(&mut result, true);
                 let len = w.write_all(&bytes);
                 if let Err(e) = len {
                     panic!("encoding: {:?} failed: {}", encoding, e);
