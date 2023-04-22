@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::str::FromStr;
 
@@ -27,7 +28,7 @@ const BASE64_URL_SAFE: GeneralPurpose = GeneralPurpose::new(
 ///
 /// The encoded output will always be NO_PAD
 ///
-/// For Base64 and Base64Url, padding is detected and processed accordingly.
+/// For Base64 and Base64Url, padding is indifferent for decoding
 ///
 pub enum Encoding {
     /// Base64 encoding; output is NO_PAD but input can be with or without padding
@@ -154,6 +155,27 @@ impl<W: Write> Write for EncodingWriter<W> {
     }
 }
 
+#[allow(unused_must_use)]
+impl<W: Write> Drop for EncodingWriter<W> {
+    fn drop(&mut self) {
+        match self {
+            EncodingWriter::Base64(w) => {
+                if w.flush().is_ok() {
+                    w.finish();
+                }
+            }
+            EncodingWriter::Base64url(w) => {
+                if w.flush().is_ok() {
+                    w.finish();
+                }
+            }
+            EncodingWriter::Hex(w) => {
+                w.flush();
+            }
+        };
+    }
+}
+
 impl<R: Read> Read for HexReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let mut data = vec![0; buf.len() * 2];
@@ -168,19 +190,42 @@ impl<R: Read> Read for HexReader<R> {
         Ok(n / 2)
     }
 }
-pub struct HexWriter<W: Write>(W);
+pub struct HexWriter<W: Write> {
+    w: W,
+    buf: VecDeque<u8>,
+}
 impl<W: Write> HexWriter<W> {
-    pub fn new(dst: W) -> Self {
-        Self(dst)
+    pub fn new(w: W) -> Self {
+        Self {
+            w,
+            buf: VecDeque::new(),
+        }
     }
 }
 impl<W: Write> Write for HexWriter<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.0.write(hex::encode(buf).as_bytes())
+        self.buf.reserve(buf.len() * 2);
+        for b in hex::encode(buf).as_bytes() {
+            self.buf.push_back(*b);
+        }
+        let mut i = 0;
+        let mut data = vec![0; self.buf.len()];
+        while i < buf.len() && !self.buf.is_empty() {
+            data[i] = self.buf.pop_front().unwrap();
+            i += 1;
+        }
+        self.w.write(&data[0..i])
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        self.0.flush()
+        self.w.flush()
+    }
+}
+
+#[allow(unused_must_use)]
+impl<W: Write> Drop for HexWriter<W> {
+    fn drop(&mut self) {
+        self.w.write(self.buf.make_contiguous()); // error is ignored
     }
 }
 
@@ -325,20 +370,18 @@ mod tests {
             rng.fill(&mut bytes).unwrap();
 
             for encoding in Encoding::iter() {
-                if encoding != Encoding::Hex {
-                    // todo: remove
-                    continue;
-                }
                 let expected = encoding.encode(&bytes);
                 let mut result = vec![];
-                let r = encoding.encode_writer(&mut result).write_all(&bytes);
-                if let Err(e) = r {
+                let mut w = encoding.encode_writer(&mut result);
+                let len = w.write_all(&bytes);
+                if let Err(e) = len {
                     panic!("encoding: {:?} failed: {}", encoding, e);
                 }
-                r.unwrap();
+                drop(w);
+                len.unwrap();
                 assert_eq!(
-                    expected.as_bytes(),
-                    &result,
+                    expected,
+                    String::from_utf8_lossy(&result),
                     "encoding: {:?} failed",
                     encoding
                 );
