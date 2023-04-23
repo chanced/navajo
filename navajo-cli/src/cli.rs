@@ -4,8 +4,11 @@ use std::{
     path::PathBuf,
 };
 
-use crate::{algorithm::Algorithm, envelope::Envelope, Aad, Encoding, EncodingWriter};
+use crate::{
+    algorithm::Algorithm, envelope::Envelope, Aad, Encoding, EncodingReader, EncodingWriter,
+};
 use anyhow::{bail, Context, Result};
+use base64::read::DecoderReader;
 use clap::{Parser, Subcommand};
 use navajo::{sensitive, Aead, Daead, Kind, Mac, Primitive, Signer};
 
@@ -249,7 +252,7 @@ impl Inspect {
         let json = serde_json::to_vec_pretty(&primitive.info())?;
         output.write_all(&json)?;
         let mut output = output.into_inner()?;
-        // output.write(b"\n")?;
+        // output.write_all(b"\n")?; https://github.com/marshallpierce/rust-base64/issues/236
         output.flush()?;
         Ok(())
     }
@@ -543,7 +546,8 @@ impl CreatePublic {
             let public = sig.verifier();
             let jwks = serde_json::to_vec_pretty(&public)?;
             output.write_all(&jwks)?;
-            output.write_all(b"\n")?;
+            let mut output = output.into_inner()?;
+            // output.write_all(b"\n")?; https://github.com/marshallpierce/rust-base64/issues/236
             output.flush()?;
         } else {
             bail!("only signature keyrings support public keysets");
@@ -609,7 +613,7 @@ impl SetKeyMetadata {
 }
 
 #[derive(Debug, Clone, Parser, Default)]
-pub struct In {
+pub struct Input {
     /// The input file to read the keyring from.
     ///
     /// If not specified, stdin is used
@@ -631,12 +635,17 @@ pub struct In {
     )]
     pub input_encoding: Option<Encoding>,
 }
-impl In {
-    pub fn get<'a>(self, stdin: impl 'a + Read) -> std::io::Result<Box<dyn 'a + Read>> {
-        if let Some(input_path) = self.input {
-            Ok(Box::new(std::fs::File::open(input_path)?))
+impl Input {
+    pub fn get<'a>(self, stdin: impl 'a + Read) -> Result<EncodingReader<Box<dyn 'a + Read>>> {
+        let r: Box<dyn Read> = if let Some(input_path) = self.input {
+            Box::new(std::fs::File::open(input_path)?)
         } else {
-            Ok(Box::new(stdin))
+            Box::new(stdin)
+        };
+        if let Some(encoding) = self.input_encoding {
+            Ok(encoding.decode_reader(r))
+        } else {
+            Ok(EncodingReader::None(r))
         }
     }
 }
@@ -689,13 +698,14 @@ impl Output {
         }
     }
 }
+
 #[derive(Debug, Parser, Default)]
 pub struct IoArgs {
     #[command(flatten)]
     /// The input file to read the keyring from.
     ///
     /// If not specified, stdin is used
-    pub input: In,
+    pub input: Input,
 
     /// The output file to write the keyring to.
     ///
@@ -703,12 +713,16 @@ pub struct IoArgs {
     #[command(flatten)]
     pub output: Output,
 }
+#[allow(clippy::type_complexity)]
 impl IoArgs {
     pub fn get<'a>(
         self,
         stdin: impl 'a + Read,
         stdout: impl 'a + Write,
-    ) -> std::io::Result<(Box<dyn 'a + Read>, EncodingWriter<Box<dyn 'a + Write>>)> {
+    ) -> Result<(
+        EncodingReader<Box<dyn 'a + Read>>,
+        EncodingWriter<Box<dyn 'a + Write>>,
+    )> {
         Ok((self.input.get(stdin)?, self.output.get(stdout)?))
     }
 }

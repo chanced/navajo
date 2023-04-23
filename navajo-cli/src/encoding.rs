@@ -6,24 +6,25 @@ use std::str::FromStr;
 use anyhow::{bail, Context, Result};
 use base64::engine::{
     general_purpose::{STANDARD as BASE64_STANDARD, URL_SAFE as BASE64_URL_SAFE},
-    DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig,
+    DecodePaddingMode, Engine, GeneralPurpose, GeneralPurposeConfig,
 };
 use base64::read::DecoderReader as Base64Reader;
 use base64::write::EncoderWriter as Base64Writer;
-use base64::Engine;
 use clap::ValueEnum;
 
 const BASE64_STANDARD_NO_PAD_INDIF: GeneralPurpose = GeneralPurpose::new(
     &base64::alphabet::STANDARD,
     GeneralPurposeConfig::new()
         .with_encode_padding(false)
-        .with_decode_padding_mode(DecodePaddingMode::Indifferent),
+        .with_decode_padding_mode(DecodePaddingMode::Indifferent)
+        .with_decode_allow_trailing_bits(true),
 );
 const BASE64_URL_SAFE_NO_PAD_INDIF: GeneralPurpose = GeneralPurpose::new(
     &base64::alphabet::URL_SAFE,
     GeneralPurposeConfig::new()
         .with_encode_padding(false)
-        .with_decode_padding_mode(DecodePaddingMode::Indifferent),
+        .with_decode_padding_mode(DecodePaddingMode::Indifferent)
+        .with_decode_allow_trailing_bits(true),
 );
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum, strum::Display, strum::EnumIter)]
@@ -176,13 +177,13 @@ impl<W: Write> EncodingWriter<W> {
             EncodingWriter::Base64(ref mut w) => {
                 let mut w = w.take().context("writer already closed")?;
                 w.flush()?;
-                w.finish()?;
+                // w.finish()?;
                 Ok(w.into_inner())
             }
             EncodingWriter::Base64Url(ref mut w) => {
                 let mut w = w.take().context("writer already closed")?;
                 w.flush()?;
-                w.finish()?;
+                // w.finish()?;
                 Ok(w.into_inner())
             }
             EncodingWriter::Hex(ref mut w) => {
@@ -193,13 +194,13 @@ impl<W: Write> EncodingWriter<W> {
             EncodingWriter::Base64Padded(ref mut w) => {
                 let mut w = w.take().context("writer already closed")?;
                 w.flush()?;
-                w.finish()?;
+                // w.finish()?;
                 Ok(w.into_inner())
             }
             EncodingWriter::Base64UrlPadded(ref mut w) => {
                 let mut w = w.take().context("writer already closed")?;
                 w.flush()?;
-                w.finish()?;
+                // w.finish()?;
                 Ok(w.into_inner())
             }
             EncodingWriter::None(ref mut w) => {

@@ -6,7 +6,7 @@ use std::{
 use anyhow::{anyhow, bail, Context, Result};
 use navajo::{Aad, Aead, Primitive};
 
-use crate::EncodingWriter;
+use crate::{EncodingReader, EncodingWriter};
 
 #[derive(Clone, Debug)]
 pub enum Envelope {
@@ -71,10 +71,10 @@ impl Envelope {
     pub fn open<'a>(
         &self,
         aad: navajo::Aad<navajo::sensitive::Bytes>,
-        mut read: Box<dyn 'a + Read>,
+        mut input: EncodingReader<Box<dyn 'a + Read>>,
     ) -> anyhow::Result<Primitive> {
         let mut data = Vec::new();
-        read.read_to_end(&mut data)?;
+        input.read_to_end(&mut data)?;
         match self {
             Envelope::Plaintext(envelope) => Ok(Primitive::open_sync(aad, data, envelope)?),
             Envelope::Gcp(envelope) => Ok(Primitive::open_sync(aad, data, envelope)?),
@@ -83,7 +83,7 @@ impl Envelope {
     }
     pub fn seal_and_write<'a, A>(
         &self,
-        mut write: EncodingWriter<Box<dyn 'a + Write>>,
+        mut output: EncodingWriter<Box<dyn 'a + Write>>,
         aad: Aad<A>,
         primitive: Primitive,
     ) -> anyhow::Result<()>
@@ -95,9 +95,11 @@ impl Envelope {
             Envelope::Gcp(envelope) => primitive.seal_sync(aad, envelope)?,
             Envelope::Json(envelope) => primitive.seal_sync(aad, envelope)?,
         };
-        write.write_all(&sealed)?;
-        write.write_all(b"\n")?;
-        write.flush()?;
+        output.write_all(&sealed)?;
+        let mut output = output.into_inner()?;
+        // output.write_all(b"\n")?; https://github.com/marshallpierce/rust-base64/issues/236
+        output.flush()?;
+
         Ok(())
     }
 }
