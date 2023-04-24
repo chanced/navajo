@@ -14,7 +14,7 @@ mod verifier;
 
 pub use algorithm::Algorithm;
 pub use computer::Computer;
-pub use key_info::MacKeyInfo;
+pub use key_info::{KeyInfo, KeyringInfo};
 pub use stream::{ComputeStream, MacStream, VerifyStream};
 pub use tag::Tag;
 pub use try_stream::{ComputeTryStream, MacTryStream, VerifyTryStream};
@@ -29,7 +29,6 @@ use crate::key::Key;
 use crate::primitive::Primitive;
 use crate::rand::{Rng, SystemRng};
 use crate::{Aad, Envelope, Keyring, Metadata, Origin, Status};
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 use context::*;
 use futures::{Stream, TryStream};
@@ -214,7 +213,7 @@ impl Mac {
         let bytes = algorithm.generate_key(rng);
         // safe, the key is generated
         let material = Material::new(&bytes, None, algorithm).unwrap();
-        let metadata = metadata.map(Arc::new);
+
         let key = Key::new(
             rng.u32().unwrap(),
             Status::Primary,
@@ -279,7 +278,7 @@ impl Mac {
         N: Rng,
     {
         let material = Material::new(key.as_ref(), prefix, algorithm)?;
-        let metadata = metadata.map(Arc::new);
+
         let key = Key::new(
             rng.u32().unwrap(),
             Status::Primary,
@@ -502,7 +501,7 @@ impl Mac {
         algorithm: Algorithm,
         origin: Origin,
         metadata: Option<Metadata>,
-    ) -> MacKeyInfo
+    ) -> KeyInfo
     where
         N: Rng,
     {
@@ -512,15 +511,15 @@ impl Mac {
     }
 
     /// Returns [`MacKeyInfo`] for the primary key.
-    pub fn primary_key(&self) -> MacKeyInfo {
+    pub fn primary_key(&self) -> KeyInfo {
         self.keyring.primary().into()
     }
     /// Returns a [`Vec`] containing a [`MacKeyInfo`] for each key in this keyring.
-    pub fn keys(&self) -> Vec<MacKeyInfo> {
-        self.keyring.keys().iter().map(MacKeyInfo::new).collect()
+    pub fn keys(&self) -> Vec<KeyInfo> {
+        self.keyring.keys().iter().map(Into::into).collect()
     }
 
-    pub fn add(&mut self, algorithm: Algorithm, metadata: Option<Metadata>) -> MacKeyInfo {
+    pub fn add(&mut self, algorithm: Algorithm, metadata: Option<Metadata>) -> KeyInfo {
         self.generate_key(&SystemRng, algorithm, Origin::Navajo, metadata)
     }
 
@@ -530,7 +529,7 @@ impl Mac {
         rng: &N,
         algorithm: Algorithm,
         metadata: Option<Metadata>,
-    ) -> MacKeyInfo
+    ) -> KeyInfo
     where
         N: Rng,
     {
@@ -543,7 +542,7 @@ impl Mac {
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
         metadata: Option<Metadata>,
-    ) -> Result<MacKeyInfo, KeyError>
+    ) -> Result<KeyInfo, KeyError>
     where
         K: AsRef<[u8]>,
     {
@@ -564,7 +563,7 @@ impl Mac {
         algorithm: Algorithm,
         prefix: Option<&[u8]>,
         metadata: Option<Metadata>,
-    ) -> Result<MacKeyInfo, KeyError>
+    ) -> Result<KeyInfo, KeyError>
     where
         K: AsRef<[u8]>,
         N: Rng,
@@ -582,36 +581,23 @@ impl Mac {
     pub fn promote(
         &mut self,
         key_id: impl Into<u32>,
-    ) -> Result<MacKeyInfo, crate::error::KeyNotFoundError> {
-        self.keyring.promote(key_id).map(MacKeyInfo::new)
+    ) -> Result<KeyInfo, crate::error::KeyNotFoundError> {
+        self.keyring.promote(key_id).map(Into::into)
     }
 
     pub fn disable(
         &mut self,
         key_id: impl Into<u32>,
-    ) -> Result<MacKeyInfo, crate::error::DisableKeyError<Algorithm>> {
-        self.keyring.disable(key_id).map(MacKeyInfo::new)
+    ) -> Result<KeyInfo, crate::error::DisableKeyError> {
+        self.keyring.disable(key_id).map(Into::into)
     }
 
-    pub fn enable(&mut self, key_id: impl Into<u32>) -> Result<MacKeyInfo, KeyNotFoundError> {
-        self.keyring.enable(key_id).map(MacKeyInfo::new)
+    pub fn enable(&mut self, key_id: impl Into<u32>) -> Result<KeyInfo, KeyNotFoundError> {
+        self.keyring.enable(key_id).map(Into::into)
     }
 
-    pub fn delete(
-        &mut self,
-        key_id: impl Into<u32>,
-    ) -> Result<MacKeyInfo, RemoveKeyError<Algorithm>> {
-        self.keyring.remove(key_id).map(|k| MacKeyInfo::new(&k))
-    }
-
-    pub fn update_key_meta(
-        &mut self,
-        key_id: impl Into<u32>,
-        metadata: Option<Metadata>,
-    ) -> Result<MacKeyInfo, KeyNotFoundError> {
-        self.keyring
-            .update_key_metadata(key_id, metadata)
-            .map(MacKeyInfo::new)
+    pub fn delete(&mut self, key_id: impl Into<u32>) -> Result<KeyInfo, RemoveKeyError> {
+        self.keyring.remove(key_id).map(Into::into)
     }
 
     pub(crate) fn keyring(&self) -> &Keyring<Material> {
@@ -629,27 +615,32 @@ impl Mac {
         prefix: Option<&[u8]>,
         origin: Origin,
         metadata: Option<Metadata>,
-    ) -> Result<MacKeyInfo, KeyError>
+    ) -> Result<KeyInfo, KeyError>
     where
         N: Rng,
     {
         let material = Material::new(value, prefix, algorithm)?;
         let id = self.keyring.next_id(rng);
-        let metadata = metadata.map(Arc::new);
-        let key = Key::new(id, Status::Secondary, origin, material, metadata);
-        let info = MacKeyInfo::new(&key);
-        self.keyring.add(key);
-        Ok(info)
+
+        let key = Key::new(id, Status::Enabled, origin, material, metadata);
+        Ok(self.keyring.add(key).into())
     }
 
     pub fn set_key_metadata(
         &mut self,
         key_id: u32,
         metadata: Option<Metadata>,
-    ) -> Result<MacKeyInfo, KeyNotFoundError> {
+    ) -> Result<KeyInfo, KeyNotFoundError> {
         self.keyring.update_key_metadata(key_id, metadata)?;
-        let key = self.keyring.get(key_id)?;
-        Ok(MacKeyInfo::new(key))
+        self.keyring.get(key_id).map(Into::into)
+    }
+
+    pub fn info(&self) -> KeyringInfo {
+        KeyringInfo {
+            keys: self.keys(),
+            version: self.keyring().version,
+            kind: crate::primitive::Kind::Mac,
+        }
     }
 }
 
@@ -665,31 +656,35 @@ mod tests {
     use crate::envelope::InMemory;
     use crate::mac::{Algorithm, Mac};
     use crate::Aad;
+    use strum::IntoEnumIterator;
 
     #[test]
     fn test_seal_unseal_sync() {
-        let mac = Mac::new(Algorithm::Sha256, None);
-        let primary_key = mac.primary_key();
-        // in a real application, you would use a real key management service.
-        // InMemory is only suitable for testing.
-        let in_mem = InMemory::default();
-        let ciphertext = Mac::seal_sync(Aad::empty(), &mac, &in_mem).unwrap();
-        let mac = Mac::open_sync(Aad::empty(), ciphertext, &in_mem).unwrap();
-        assert_eq!(mac.primary_key(), primary_key);
+        for algorithm in Algorithm::iter() {
+            let mac = Mac::new(algorithm, None);
+            let primary_key = mac.primary_key();
+            // in a real application, you would use a real key management service.
+            // InMemory is only suitable for testing.
+            let in_mem = InMemory::default();
+            let ciphertext = Mac::seal_sync(Aad::empty(), &mac, &in_mem).unwrap();
+            let mac = Mac::open_sync(Aad::empty(), ciphertext, &in_mem).unwrap();
+            assert_eq!(mac.primary_key(), primary_key);
+        }
     }
 
     #[cfg(feature = "std")]
     #[tokio::test]
     async fn test_seal_unseal() {
-        let mac = Mac::new(Algorithm::Sha256, None);
-        let primary_key = mac.primary_key();
-        // in a real application, you would use a real key management service.
-        // InMemory is only suitable for testing.
-        let in_mem = InMemory::default();
+        for algorithm in Algorithm::iter() {
+            let mac = Mac::new(algorithm, None);
+            let primary_key = mac.primary_key();
+            // in a real application, you would use a real key management service.
+            // InMemory is only suitable for testing.
+            let in_mem = InMemory::default();
 
-        let data = Mac::seal(Aad::empty(), &mac, &in_mem).await.unwrap();
-
-        let mac = Mac::open(Aad::empty(), data, &in_mem).await.unwrap();
-        assert_eq!(mac.primary_key(), primary_key);
+            let data = Mac::seal(Aad::empty(), &mac, &in_mem).await.unwrap();
+            let mac = Mac::open(Aad::empty(), data, &in_mem).await.unwrap();
+            assert_eq!(mac.primary_key(), primary_key);
+        }
     }
 }

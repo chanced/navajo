@@ -607,15 +607,13 @@ impl From<crypto_common::InvalidLength> for OpenError {
     }
 }
 
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 #[derive(Debug, Clone)]
-pub enum RemoveKeyError<A> {
-    IsPrimaryKey(crate::KeyInfo<A>),
+pub enum RemoveKeyError {
+    IsPrimaryKey(u32),
     KeyNotFound(KeyNotFoundError),
 }
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa"))]
 
-impl<A> fmt::Display for RemoveKeyError<A> {
+impl fmt::Display for RemoveKeyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::IsPrimaryKey(_) => write!(f, "cannot remove primary key"),
@@ -623,33 +621,23 @@ impl<A> fmt::Display for RemoveKeyError<A> {
         }
     }
 }
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
-impl<A> From<crate::KeyInfo<A>> for RemoveKeyError<A> {
-    fn from(info: crate::KeyInfo<A>) -> Self {
-        Self::IsPrimaryKey(info)
-    }
-}
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
-impl<A> From<KeyNotFoundError> for RemoveKeyError<A> {
+
+#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa"))]
+impl From<KeyNotFoundError> for RemoveKeyError {
     fn from(e: KeyNotFoundError) -> Self {
         Self::KeyNotFound(e)
     }
 }
 
-#[cfg(all(
-    feature = "std",
-    any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa")
-))]
-impl<A> std::error::Error for RemoveKeyError<A> where A: Debug {}
+#[cfg(feature = "std")]
+impl std::error::Error for RemoveKeyError {}
 
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
 #[derive(Debug, Clone)]
-pub enum DisableKeyError<A> {
-    IsPrimaryKey(crate::KeyInfo<A>),
+pub enum DisableKeyError {
+    IsPrimaryKey(u32),
     KeyNotFound(KeyNotFoundError),
 }
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
-impl<A> fmt::Display for DisableKeyError<A> {
+impl fmt::Display for DisableKeyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::IsPrimaryKey(_) => write!(f, "cannot disable primary key"),
@@ -657,24 +645,14 @@ impl<A> fmt::Display for DisableKeyError<A> {
         }
     }
 }
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
-impl<A> From<crate::KeyInfo<A>> for DisableKeyError<A> {
-    fn from(info: crate::KeyInfo<A>) -> Self {
-        Self::IsPrimaryKey(info)
-    }
-}
-#[cfg(any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa",))]
-impl<A> From<KeyNotFoundError> for DisableKeyError<A> {
+impl From<KeyNotFoundError> for DisableKeyError {
     fn from(e: KeyNotFoundError) -> Self {
         Self::KeyNotFound(e)
     }
 }
 
-#[cfg(all(
-    feature = "std",
-    any(feature = "aead", feature = "daead", feature = "mac", feature = "dsa")
-))]
-impl<A> std::error::Error for DisableKeyError<A> where A: Debug {}
+#[cfg(feature = "std")]
+impl std::error::Error for DisableKeyError {}
 
 pub enum VerifyStreamError<E> {
     Upstream(E),
@@ -704,10 +682,6 @@ where
 }
 #[cfg(feature = "std")]
 impl<E> std::error::Error for VerifyStreamError<E> where E: std::error::Error {}
-
-#[cfg(not(feature = "std"))]
-#[cfg(feature = "std")]
-impl<E> Error for VerifyStreamError<E> where E: core::fmt::Debug + core::fmt::Display {}
 
 impl<E> From<MacVerificationError> for VerifyStreamError<E> {
     fn from(_: MacVerificationError) -> Self {

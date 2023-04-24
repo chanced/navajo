@@ -80,7 +80,7 @@ impl VerifyingKey {
         algorithm: Algorithm,
         pub_id: String,
         key_pair: &KeyPair,
-        metadata: Arc<Metadata>,
+        metadata: Metadata,
     ) -> Result<Self, KeyError> {
         let inner = Arc::new(Inner::from_key_pair(algorithm, key_pair)?);
         let key = key_pair.public.clone();

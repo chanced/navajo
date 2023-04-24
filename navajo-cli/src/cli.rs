@@ -1,12 +1,25 @@
-use std::{borrow::BorrowMut, path::PathBuf};
-
-use crate::{algorithm::Algorithm, envelope::Envelope};
-use clap::{Parser, Subcommand};
-use navajo::{
-    secret_store::SecretStore, sensitive, Aad, Aead, Daead, Kind, Mac, Primitive, Signer,
+use std::{
+    borrow::BorrowMut,
+    io::{Read, Write},
+    path::PathBuf,
 };
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
-use url::Url;
+
+use crate::{
+    algorithm::Algorithm, envelope::Envelope, Aad, Encoding, EncodingReader, EncodingWriter,
+};
+use anyhow::{bail, Context, Result};
+use clap::{Parser, Subcommand};
+use navajo::{sensitive, Aead, Daead, Kind, Mac, Primitive, Signer};
+
+pub fn proxy_env(src: &str, dst: &str) {
+    let src = src.to_uppercase();
+    let dst = dst.to_uppercase();
+    if let Ok(value) = std::env::var(src) {
+        if std::env::var(&dst).is_err() {
+            std::env::set_var(&dst, value);
+        }
+    }
+}
 
 #[derive(Debug, Parser)]
 #[command(name = "navajo")]
@@ -17,19 +30,26 @@ pub struct Cli {
 }
 
 impl Cli {
-    pub async fn run(
-        self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.command.run(stdin, stdout).await
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
+        self.command.run(stdin, stdout)
+    }
+    pub fn setup() -> Self {
+        proxy_env("NAVAJO_IN", "NAVAJO_INPUT");
+        proxy_env("NAVAJO_OUT", "NAVAJO_OUTPUT");
+        proxy_env("NAVAJO_IN_ENCODING", "NAVAJO_INPUT_ENCODING");
+        proxy_env("NAVAJO_OUT_ENCODING", "NAVAJO_OUTPUT_ENCODING");
+        Self::parse()
+    }
+}
+impl From<Command> for Cli {
+    fn from(command: Command) -> Self {
+        Self { command }
     }
 }
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Creates a new keyring, optionally encrypting it using a key
-    /// from a KMS as an envelope.
+    /// Creates a new keyring, optionally encrypting it using an envelope.
     #[command(alias = "n")]
     New(New),
 
@@ -43,30 +63,22 @@ pub enum Command {
     )]
     Inpsect(Inspect),
 
-    #[command(alias = "m")]
-    /// Updates the AAD secret URI and/or change the KMS key URI.
-    Migrate(Migrate),
-
-    #[command(alias = "create_public")]
-    /// Generates a public JWKS from a private, asymmetric keyring.
-    CreatePublic(CreatePublic),
-
-    #[command(alias = "add_key", alias = "add", alias = "a")]
     /// Adds a new key to a keyring.
+    #[command(alias = "add_key", alias = "add", alias = "a")]
     AddKey(AddKey),
 
-    #[command(alias = "promote_key", alias = "promote", alias = "p")]
     /// Promotes a key to primary in a keyring.
+    #[command(alias = "promote_key", alias = "promote", alias = "p")]
     PromoteKey(PromoteKey),
 
-    #[command(alias = "enable_key", alias = "enable", alias = "e")]
     /// Enables a disabled key in a keyring.
+    #[command(alias = "enable_key", alias = "enable", alias = "e")]
     EnableKey(EnableKey),
 
+    /// Disables a key in a keyring.
     #[command(alias = "disable_key", alias = "disable", alias = "d")]
-    /// Disables a key in a keyring. Disabling a key effectively removes
-    /// the key from the keyring, but leaves it in a recoverable state.
     DisableKey(DisableKey),
+
     /// Deletes a key from a keyring.
     #[command(
         alias = "delete_key",
@@ -80,26 +92,81 @@ pub enum Command {
     /// Sets metadata of a key in a keyring.
     #[command(alias = "set_key_metadata", alias = "metadata")]
     SetKeyMetadata(SetKeyMetadata),
+
+    /// Migrates a keyring to a new envelope, changes the envelope's AAD, or both.
+    #[command(alias = "m")]
+    Migrate(Migrate),
+
+    /// Generates a public JWKS from a private, asymmetric keyring.
+    #[command(alias = "create_public")]
+    CreatePublic(CreatePublic),
 }
 
 impl Command {
-    pub async fn run(
-        self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         match self {
-            Command::New(cmd) => cmd.run(stdin, stdout).await,
-            Command::Inpsect(cmd) => cmd.run(stdin, stdout).await,
-            Command::Migrate(cmd) => cmd.run(stdin, stdout).await,
-            Command::CreatePublic(cmd) => cmd.run(stdin, stdout).await,
-            Command::AddKey(cmd) => cmd.run(stdin, stdout).await,
-            Command::PromoteKey(cmd) => cmd.run(stdin, stdout).await,
-            Command::EnableKey(cmd) => cmd.run(stdin, stdout).await,
-            Command::DisableKey(cmd) => cmd.run(stdin, stdout).await,
-            Command::DeleteKey(cmd) => cmd.run(stdin, stdout).await,
-            Command::SetKeyMetadata(cmd) => cmd.run(stdin, stdout).await,
+            Command::New(cmd) => cmd.run(stdin, stdout),
+            Command::Inpsect(cmd) => cmd.run(stdin, stdout),
+            Command::Migrate(cmd) => cmd.run(stdin, stdout),
+            Command::CreatePublic(cmd) => cmd.run(stdin, stdout),
+            Command::AddKey(cmd) => cmd.run(stdin, stdout),
+            Command::PromoteKey(cmd) => cmd.run(stdin, stdout),
+            Command::EnableKey(cmd) => cmd.run(stdin, stdout),
+            Command::DisableKey(cmd) => cmd.run(stdin, stdout),
+            Command::DeleteKey(cmd) => cmd.run(stdin, stdout),
+            Command::SetKeyMetadata(cmd) => cmd.run(stdin, stdout),
         }
+    }
+}
+
+impl From<New> for Command {
+    fn from(cmd: New) -> Self {
+        Command::New(cmd)
+    }
+}
+impl From<Inspect> for Command {
+    fn from(cmd: Inspect) -> Self {
+        Command::Inpsect(cmd)
+    }
+}
+impl From<Migrate> for Command {
+    fn from(cmd: Migrate) -> Self {
+        Command::Migrate(cmd)
+    }
+}
+impl From<CreatePublic> for Command {
+    fn from(cmd: CreatePublic) -> Self {
+        Command::CreatePublic(cmd)
+    }
+}
+impl From<AddKey> for Command {
+    fn from(cmd: AddKey) -> Self {
+        Command::AddKey(cmd)
+    }
+}
+impl From<PromoteKey> for Command {
+    fn from(cmd: PromoteKey) -> Self {
+        Command::PromoteKey(cmd)
+    }
+}
+impl From<EnableKey> for Command {
+    fn from(cmd: EnableKey) -> Self {
+        Command::EnableKey(cmd)
+    }
+}
+impl From<DisableKey> for Command {
+    fn from(cmd: DisableKey) -> Self {
+        Command::DisableKey(cmd)
+    }
+}
+impl From<DeleteKey> for Command {
+    fn from(cmd: DeleteKey) -> Self {
+        Command::DeleteKey(cmd)
+    }
+}
+impl From<SetKeyMetadata> for Command {
+    fn from(cmd: SetKeyMetadata) -> Self {
+        Command::SetKeyMetadata(cmd)
     }
 }
 
@@ -112,47 +179,49 @@ pub struct New {
     #[command(flatten)]
     pub output: Output,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub env_args: EnvelopeArgs,
+    /// For asymetric keys, the public ID of the key to use.
+    ///
+    /// If not provided, the generated 7-8 digit numeric ID of the key will be
+    /// used.
     #[arg(value_name = "PUB_ID", long = "public-id", short = 'p')]
     pub pub_id: Option<String>,
+
+    /// Disables envelope encryption, outputting the keyring as plaintext JSON.
     #[arg(value_name = "PLAINTEXT", long = "plaintext")]
     pub plaintext: bool,
 }
 
 impl New {
-    pub async fn run(
-        self,
-        _stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, _stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let New {
             algorithm,
-            envelope: env_args,
+            env_args,
             output,
             metadata,
             pub_id,
             plaintext,
         } = self;
-        if env_args.key_uri.is_none() && !plaintext {
-            return Err("Either --plaintext or --kms-key-uri must be provided".into());
+        if env_args.envelope.is_none() && !plaintext {
+            bail!("Either --plaintext or --envelope must be provided");
         }
 
-        let output = output.get(stdout).await?;
-        let envelope = env_args.get_envelope()?;
-        let aad = env_args.get_aad().await?;
+        let output = output.get(stdout)?;
+        let envelope = env_args.get_envelope(Some(plaintext))?;
+        let aad = env_args.get_aad();
         let metadata = metadata.try_into()?;
 
         let primitive = match algorithm.kind() {
             Kind::Aead => Primitive::Aead(Aead::new(algorithm.try_into()?, metadata)),
             Kind::Daead => Primitive::Daead(Daead::new(algorithm.try_into()?, metadata)),
             Kind::Mac => Primitive::Mac(Mac::new(algorithm.try_into()?, metadata)),
-            Kind::Signature => Primitive::Dsa(Signer::new(algorithm.try_into()?, pub_id, metadata)),
+            Kind::Dsa => Primitive::Dsa(Signer::new(algorithm.try_into()?, pub_id, metadata)),
         };
-        envelope.seal_and_write(output, aad, primitive).await
+        envelope.seal_and_write(output, aad, primitive)
     }
 }
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Default)]
 pub struct Metadata {
     /// Metadata for a given key in the form of JSON object.
     pub metadata: Option<String>,
@@ -169,30 +238,21 @@ pub struct Inspect {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub envelope_args: EnvelopeArgs,
 }
 
 impl Inspect {
-    pub async fn run(
-        self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let Inspect { io, envelope } = self;
-        let (input, mut output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
-        let envelope = envelope.get_envelope()?;
-        let primitive = envelope.open(aad, input).await?;
-        let json = match primitive {
-            Primitive::Aead(aead) => serde_json::to_vec_pretty(&aead.keys()),
-            Primitive::Daead(daead) => serde_json::to_vec_pretty(&daead.keys()),
-            Primitive::Mac(mac) => serde_json::to_vec_pretty(&mac.keys()),
-            Primitive::Dsa(sig) => serde_json::to_vec_pretty(&sig.keys()),
-        }?;
-
-        output.write_all(&json).await?;
-        output.write_all(b"\n").await?;
-        output.flush().await?;
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
+        let Inspect { io, envelope_args } = self;
+        let (input, mut output) = io.get(stdin, stdout)?;
+        let envelope = envelope_args.get_envelope(None)?;
+        let aad = envelope_args.get_aad();
+        let primitive = envelope.open(aad, input)?;
+        let json = serde_json::to_vec_pretty(&primitive.info())?;
+        output.write_all(&json)?;
+        let mut output = output.into_inner()?;
+        // output.write_all(b"\n")?; https://github.com/marshallpierce/rust-base64/issues/236
+        output.flush()?;
         Ok(())
     }
 }
@@ -202,7 +262,7 @@ pub struct AddKey {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub envelope_args: EnvelopeArgs,
     /// Specifies the algorithm to use for the key.
     ///     
     /// Errors if the algorithm is not of the same primitive (AEAD, DAEAD,
@@ -219,23 +279,19 @@ pub struct AddKey {
 }
 
 impl AddKey {
-    pub async fn run(
-        self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let AddKey {
             io,
-            envelope,
+            envelope_args,
             algorithm,
             metadata,
             pub_id,
         } = self;
-        let (input, output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
-        let envelope = envelope.get_envelope()?;
+        let (input, output) = io.get(stdin, stdout)?;
+        let aad = envelope_args.get_aad();
+        let envelope = envelope_args.get_envelope(None)?;
         let metadata = metadata.try_into()?;
-        let mut primitive = envelope.open(aad.clone(), input).await?;
+        let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive {
             Primitive::Aead(ref mut aead) => {
                 aead.add(algorithm.try_into()?, metadata);
@@ -250,7 +306,7 @@ impl AddKey {
                 sig.add(algorithm.try_into()?, pub_id, metadata)?;
             }
         }
-        envelope.seal_and_write(output, aad, primitive).await
+        envelope.seal_and_write(output, aad, primitive)
     }
 }
 
@@ -259,25 +315,21 @@ pub struct PromoteKey {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub envelope_args: EnvelopeArgs,
     /// The ID of the key to operate on.
     pub key_id: u32,
 }
 impl PromoteKey {
-    pub async fn run(
-        self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let PromoteKey {
             io,
-            envelope,
+            envelope_args,
             key_id,
         } = self;
-        let (input, output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
-        let envelope = envelope.get_envelope()?;
-        let mut primitive = envelope.open(aad.clone(), input).await?;
+        let (input, output) = io.get(stdin, stdout)?;
+        let aad = envelope_args.get_aad();
+        let envelope = envelope_args.get_envelope(None)?;
+        let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
                 aead.promote(key_id)?;
@@ -292,7 +344,7 @@ impl PromoteKey {
                 sig.promote(key_id)?;
             }
         }
-        envelope.seal_and_write(output, aad, primitive).await
+        envelope.seal_and_write(output, aad, primitive)
     }
 }
 #[derive(Debug, Parser)]
@@ -300,40 +352,36 @@ pub struct EnableKey {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub envelope_args: EnvelopeArgs,
     /// The ID of the key to operate on.
     pub key_id: u32,
 }
 impl EnableKey {
-    pub async fn run(
-        self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let EnableKey {
             io,
-            envelope,
+            envelope_args,
             key_id,
         } = self;
-        let (input, output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
-        let envelope = envelope.get_envelope()?;
-        let mut primitive = envelope.open(aad.clone(), input).await?;
+        let (input, output) = io.get(stdin, stdout)?;
+        let aad = envelope_args.get_aad();
+        let envelope = envelope_args.get_envelope(None)?;
+        let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
-                aead.enable(key_id)?;
+                aead.enable(key_id).context("failed to enable key")?;
             }
             Primitive::Daead(daead) => {
-                daead.enable(key_id)?;
+                daead.enable(key_id).context("failed to enable key")?;
             }
             Primitive::Mac(mac) => {
-                mac.enable(key_id)?;
+                mac.enable(key_id).context("failed to enable key")?;
             }
             Primitive::Dsa(sig) => {
-                sig.enable(key_id)?;
+                sig.enable(key_id).context("failed to enable key")?;
             }
         }
-        envelope.seal_and_write(output, aad, primitive).await
+        envelope.seal_and_write(output, aad, primitive)
     }
 }
 #[derive(Debug, Parser)]
@@ -341,40 +389,36 @@ pub struct DisableKey {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub envelope_args: EnvelopeArgs,
     /// The ID of the key to operate on.
     pub key_id: u32,
 }
 impl DisableKey {
-    pub async fn run(
-        self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let DisableKey {
             io,
-            envelope,
+            envelope_args,
             key_id,
         } = self;
-        let (input, output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
-        let envelope = envelope.get_envelope()?;
-        let mut primitive = envelope.open(aad.clone(), input).await?;
+        let (input, output) = io.get(stdin, stdout)?;
+        let aad = envelope_args.get_aad();
+        let envelope = envelope_args.get_envelope(None)?;
+        let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
-                aead.disable(key_id)?;
+                aead.disable(key_id).context("failed to disable key")?;
             }
             Primitive::Daead(daead) => {
-                daead.disable(key_id)?;
+                daead.disable(key_id).context("failed to disable key")?;
             }
             Primitive::Mac(mac) => {
-                mac.disable(key_id)?;
+                mac.disable(key_id).context("failed to disable key")?;
             }
             Primitive::Dsa(sig) => {
-                sig.disable(key_id)?;
+                sig.disable(key_id).context("failed to disable key")?;
             }
         }
-        envelope.seal_and_write(output, aad, primitive).await
+        envelope.seal_and_write(output, aad, primitive)
     }
 }
 
@@ -383,40 +427,36 @@ pub struct DeleteKey {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub envelope_args: EnvelopeArgs,
     /// The ID of the key to operate on.
     pub key_id: u32,
 }
 impl DeleteKey {
-    pub async fn run(
-        self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let DeleteKey {
             io,
-            envelope,
+            envelope_args,
             key_id,
         } = self;
-        let (input, output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
-        let envelope = envelope.get_envelope()?;
-        let mut primitive = envelope.open(aad.clone(), input).await?;
+        let (input, output) = io.get(stdin, stdout)?;
+        let aad = envelope_args.get_aad();
+        let envelope = envelope_args.get_envelope(None)?;
+        let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
-                aead.delete(key_id)?;
+                aead.delete(key_id).context("failed to delete key")?;
             }
             Primitive::Daead(daead) => {
-                daead.delete(key_id)?;
+                daead.delete(key_id).context("failed to delete key")?;
             }
             Primitive::Mac(mac) => {
-                mac.delete(key_id)?;
+                mac.delete(key_id).context("failed to delete key")?;
             }
             Primitive::Dsa(sig) => {
-                sig.delete(key_id)?;
+                sig.delete(key_id).context("failed to delete key")?;
             }
         }
-        envelope.seal_and_write(output, aad, primitive).await
+        envelope.seal_and_write(output, aad, primitive)
     }
 }
 
@@ -424,60 +464,65 @@ impl DeleteKey {
 pub struct Migrate {
     #[command(flatten)]
     io: IoArgs,
+
     #[command(flatten)]
-    envelope: IntegrationArgs,
-    #[arg(value_name = "NEW_ENVELOPE", long = "new-master-key-uri", short = 'n')]
+    envelope_args: EnvelopeArgs,
+
     /// The new URI to a crypto key in a KMS to use as envelope encryption for
     /// the keyring.
     ///
     /// If not specified, the keyring will be re-encrypted with the same key (if any).
-    pub new_key_uri: Option<Url>,
+    #[arg(value_name = "NEW_ENVELOPE", long = "new-envelope")]
+    pub new_envelope: Option<Envelope>,
+
     /// The new URI to a secret in a cloud secret manager to be used as
     /// additional authenticated data for the keyring.
-    #[arg(value_name = "NEW_SECRET_URI", long = "new-secret-uri", short = 'a')]
-    pub new_secret_uri: Option<Url>,
+    #[arg(value_name = "NEW_ENVELOPE_AAD", long = "new-envelope-aad")]
+    pub new_envelope_aad: Option<Aad>,
 
-    /// Disables encryption, outputting the keyring as plaintext JSON.
+    #[arg(
+        value_name = "NEW_ENVELOPE_AAD_ENCODING",
+        long = "new-envelope-aad-encoding"
+    )]
+    pub new_envelope_aad_encoding: Option<Encoding>,
+
+    /// If set, the keyring will have encryption disabled and will be output to plaintext JSON.
     #[arg(value_name = "PLAINTEXT", long = "plaintext")]
     pub plaintext: bool,
 }
 
 impl Migrate {
-    pub async fn run(
-        self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let Migrate {
-            envelope,
+            envelope_args,
             io,
-            new_key_uri,
-            new_secret_uri,
+            new_envelope: new_key_uri,
+            new_envelope_aad,
             plaintext,
+            new_envelope_aad_encoding,
         } = self;
-        let (input, output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
-        let envelope = envelope.get_envelope()?;
-        let primitive = envelope.open(aad.clone(), input).await?;
+        let (input, output) = io.get(stdin, stdout)?;
+        let aad = envelope_args.get_aad();
+        let current_envelope = envelope_args.get_envelope(None)?;
+        let primitive = current_envelope.open(aad.clone(), input)?;
 
-        let updated_args = IntegrationArgs {
-            aad_secret_store_uri: new_secret_uri,
-            key_uri: new_key_uri,
+        let updated_args = EnvelopeArgs {
+            envelope_aad: new_envelope_aad,
+            envelope: new_key_uri,
+            envelope_aad_encoding: new_envelope_aad_encoding,
         };
 
-        let new_envelope = if updated_args.key_uri.is_none() && !plaintext {
-            envelope
+        let new_envelope = if updated_args.envelope.is_none() && !plaintext {
+            current_envelope
         } else {
-            updated_args.get_envelope()?
+            updated_args.get_envelope(Some(plaintext))?
         };
-        let new_aad = if updated_args.aad_secret_store_uri.is_none() && !plaintext {
+        let new_aad = if updated_args.envelope_aad.is_none() && !plaintext {
             aad
         } else {
-            updated_args.get_aad().await?
+            updated_args.get_aad()
         };
-        new_envelope
-            .seal_and_write(output, new_aad, primitive)
-            .await
+        new_envelope.seal_and_write(output, new_aad, primitive)
     }
 }
 
@@ -486,28 +531,25 @@ pub struct CreatePublic {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub envelope_args: EnvelopeArgs,
 }
 
 impl CreatePublic {
-    pub async fn run(
-        self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let CreatePublic { io, envelope } = self;
-        let (input, mut output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
-        let envelope = envelope.get_envelope()?;
-        let primitive = envelope.open(aad.clone(), input).await?;
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
+        let CreatePublic { io, envelope_args } = self;
+        let (input, mut output) = io.get(stdin, stdout)?;
+        let aad = envelope_args.get_aad();
+        let envelope = envelope_args.get_envelope(None)?;
+        let primitive = envelope.open(aad, input)?;
         if let Primitive::Dsa(sig) = primitive {
             let public = sig.verifier();
             let jwks = serde_json::to_vec_pretty(&public)?;
-            output.write_all(&jwks).await?;
-            output.write_all(b"\n").await?;
-            output.flush().await?;
+            output.write_all(&jwks)?;
+            let mut output = output.into_inner()?;
+            // output.write_all(b"\n")?; https://github.com/marshallpierce/rust-base64/issues/236
+            output.flush()?;
         } else {
-            return Err("only signature keyrings support public keysets".into());
+            bail!("only signature keyrings support public keysets");
         }
         Ok(())
     }
@@ -518,7 +560,7 @@ pub struct SetKeyMetadata {
     #[command(flatten)]
     pub io: IoArgs,
     #[command(flatten)]
-    pub envelope: IntegrationArgs,
+    pub envelope_args: EnvelopeArgs,
     /// The ID of the key to operate on.
     pub key_id: u32,
     /// The new metadata for the key. To clear the metadata, use --clear
@@ -532,21 +574,17 @@ pub struct SetKeyMetadata {
     pub clear_metadata: bool,
 }
 impl SetKeyMetadata {
-    pub async fn run(
-        self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
         let SetKeyMetadata {
             io,
-            envelope,
+            envelope_args,
             key_id,
             metadata,
             clear_metadata,
         } = self;
-        let (input, output) = io.get(stdin, stdout).await?;
-        let aad = envelope.get_aad().await?;
-        let envelope = envelope.get_envelope()?;
+        let (input, output) = io.get(stdin, stdout)?;
+        let aad = envelope_args.get_aad();
+        let envelope = envelope_args.get_envelope(None)?;
 
         let meta: Option<navajo::Metadata> = if clear_metadata {
             None
@@ -554,7 +592,7 @@ impl SetKeyMetadata {
             metadata.try_into()?
         };
 
-        let mut primitive = envelope.open(aad.clone(), input).await?;
+        let mut primitive = envelope.open(aad.clone(), input)?;
         match primitive.borrow_mut() {
             Primitive::Aead(aead) => {
                 aead.set_key_metadata(key_id, meta)?;
@@ -569,51 +607,98 @@ impl SetKeyMetadata {
                 sig.set_key_metadata(key_id, meta)?;
             }
         }
-        envelope.seal_and_write(output, aad, primitive).await
+        envelope.seal_and_write(output, aad, primitive)
     }
 }
 
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, Default)]
 pub struct Input {
     /// The input file to read the keyring from.
     ///
     /// If not specified, stdin is used
-    #[arg(value_name = "INPUT", long = "input", short = 'i')]
+    #[arg(
+        value_name = "INPUT",
+        env = "NAVAJO_INPUT",
+        long = "in",
+        short = 'i',
+        alias = "input"
+    )]
     pub input: Option<PathBuf>,
+    /// The encoding to use for input file.
+    #[arg(
+        value_name = "INPUT_ENCODING",
+        env = "NAVAJO_INPUT_ENCODING",
+        long = "in-encoding",
+        alias = "input-encoding",
+        short = 'I'
+    )]
+    pub input_encoding: Option<Encoding>,
 }
 impl Input {
-    pub async fn get(
-        self,
-        stdin: impl 'static + AsyncRead + Unpin,
-    ) -> std::io::Result<Box<dyn AsyncRead + Unpin>> {
-        if let Some(input_path) = self.input {
-            Ok(Box::new(tokio::fs::File::open(input_path).await?))
+    pub fn get<'a>(self, stdin: impl 'a + Read) -> Result<EncodingReader<Box<dyn 'a + Read>>> {
+        let r: Box<dyn Read> = if let Some(input_path) = self.input {
+            Box::new(std::fs::File::open(input_path)?)
         } else {
-            Ok(Box::new(stdin))
+            Box::new(stdin)
+        };
+        if let Some(encoding) = self.input_encoding {
+            Ok(encoding.decode_reader(r))
+        } else {
+            Ok(EncodingReader::None(r))
         }
     }
 }
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, Default)]
 pub struct Output {
-    /// The output file to write the keyring to.
-    ///
-    /// If not specified, stdout is used
-    #[arg(value_name = "OUTPUT", long = "output", short = 'o')]
+    /// The output file for keyrings or other cryptographic operations. If not
+    /// specified, stdout is used.s
+    #[arg(
+        value_name = "OUTPUT",
+        env = "NAVAJO_OUTPUT",
+        long = "out",
+        short = 'o'
+    )]
     pub output: Option<PathBuf>,
+    /// The encoding to use for the output file.
+    #[arg(
+        value_name = "OUTPUT_ENCODING",
+        env = "NAVAJO_OUTPUT_ENCODING",
+        long = "out-encoding",
+        alias = "output-encoding",
+        short = 'O'
+    )]
+    pub out_encoding: Option<Encoding>,
+
+    /// if set and OUTPUT_ENCODING is set to base64 or base64url then padding
+    /// will be added
+    #[arg(
+        value_name = "PAD_OUTPUT_ENCODING",
+        env = "NAVAJO_PAD_OUTPUT_ENCODING",
+        long = "pad-out-encoding",
+        alias = "pad-out-encoding",
+        short = 'P'
+    )]
+    pub pad_out_encoding: bool,
 }
 impl Output {
-    pub async fn get(
+    pub fn get<'a>(
         self,
-        stdout: impl 'static + AsyncWrite + Unpin,
-    ) -> std::io::Result<Box<dyn AsyncWrite + Unpin>> {
-        if let Some(output_path) = self.output {
-            Ok(Box::new(tokio::fs::File::create(output_path).await?))
+        stdout: impl 'a + Write,
+    ) -> std::io::Result<EncodingWriter<Box<dyn 'a + Write>>> {
+        let boxed_out: Box<dyn Write> = if let Some(output_path) = self.output {
+            Box::new(std::fs::File::create(output_path)?)
         } else {
-            Ok(Box::new(stdout))
+            Box::new(stdout)
+        };
+        if let Some(encoding) = self.out_encoding {
+            Ok(encoding.encode_writer(boxed_out, self.pad_out_encoding))
+        } else {
+            Ok(EncodingWriter::None(Some(boxed_out)))
         }
     }
 }
-#[derive(Debug, Parser)]
+
+#[derive(Debug, Parser, Default)]
 pub struct IoArgs {
     #[command(flatten)]
     /// The input file to read the keyring from.
@@ -627,104 +712,570 @@ pub struct IoArgs {
     #[command(flatten)]
     pub output: Output,
 }
+#[allow(clippy::type_complexity)]
 impl IoArgs {
-    pub async fn get(
+    pub fn get<'a>(
         self,
-        stdin: impl 'static + AsyncRead + Unpin,
-        stdout: impl 'static + AsyncWrite + Unpin,
-    ) -> std::io::Result<(Box<dyn AsyncRead + Unpin>, Box<dyn AsyncWrite + Unpin>)> {
-        Ok((self.input.get(stdin).await?, self.output.get(stdout).await?))
+        stdin: impl 'a + Read,
+        stdout: impl 'a + Write,
+    ) -> Result<(
+        EncodingReader<Box<dyn 'a + Read>>,
+        EncodingWriter<Box<dyn 'a + Write>>,
+    )> {
+        Ok((self.input.get(stdin)?, self.output.get(stdout)?))
     }
 }
 
-#[derive(Debug, Parser)]
-pub struct IntegrationArgs {
-    #[arg(value_name = "KMS_KEY_URI", long = "kms-key-uri", short = 'k')]
+#[derive(Debug, Parser, Default)]
+pub struct EnvelopeArgs {
+    #[arg(
+        value_name = "ENVELOPE_URI",
+        env = "NAVAJO_ENVELOPE_URI",
+        long = "envelope",
+        short = 'e',
+        alias = "envelope-uri"
+    )]
     /// The URI for the crypto key from a KMS to use as envelope encryption if
     /// the keyring is to be encrypted.
     ///
     /// The value should be in the form <gcp|aws|azure|vault>://<key-path>.
     ///
     ///
-    /// - GCP:   gcp://projects/<project-id>/locations/<location>/keyRings/<keyring-id>/cryptoKeys/<key-id>
+    /// - GCP:             gcp://projects/<project-id>/locations/<location>/keyRings/<keyring-id>/cryptoKeys/<key-id>
     ///
-    /// - AWS:   aws://arn:aws:kms:<region>:<account-id>:key/<key-id>
+    /// - AWS:             aws://arn:aws:kms:<region>:<account-id>:key/<key-id>
+    ///
+    /// - JSON Plaintext:  json://<path-to-json-file>
     ///
     ///
-    pub key_uri: Option<Url>,
+    pub envelope: Option<Envelope>,
 
-    /// The URI for the Secret Store to use for additional authenticated data
-    /// (AAD). The URI is of the form <gcp|aws|azure|vault>://<key-path>.
+    /// Additional authenticated data(AAD), if any, used to authenticate the
+    /// keyring.
     ///
-    /// For example, a path of:
+    /// The value can either be a URI in the form
+    ///<gcp|aws|azure|vault>://<key-path> or a possibly encoded (base64 or hex)
+    /// string.
+    ///
+    /// For URIs, the path should be the secret's URI on a supported secret
+    /// manager. For example, a path of:
     /// gcp://projects/my-project/secrets/my-secret/versions/1 would use the
     /// first version of the secret "my-secret" on GCP.
-    #[arg(value_name = "AAD_SECRET_URI", long = "aad-secret-uri", short = 's')]
-    pub aad_secret_store_uri: Option<Url>,
+    ///
+    /// For both secrets hosted on a secret manager and strings, the the
+    /// `envelope-aad-encoding` determines if and how the value is decoded.
+    #[arg(
+        value_name = "ENVELOPE_AAD",
+        alias = "env-aad",
+        long = "envelope-aad",
+        short = 's'
+    )]
+    pub envelope_aad: Option<Aad>,
+
+    /// The encoding of the envelope AAD value, if any. If not specified, the
+    /// value is treated as a string.
+    #[arg(
+        value_name = "ENVELOPE_AAD_ENCODING",
+        long = "envelope-aad-encoding",
+        short = 'd'
+    )]
+    pub envelope_aad_encoding: Option<Encoding>,
 }
-
-impl IntegrationArgs {
-    pub fn get_envelope(&self) -> Result<Envelope, Box<dyn std::error::Error>> {
-        let uri = self.key_uri.as_ref();
-        if uri.is_none() {
-            return Ok(Envelope::Cleartext(navajo::PlaintextJson));
-        }
-        let uri = uri.unwrap();
-        let uri_str = uri
-            .to_string()
-            .replace(&(uri.scheme().to_string() + "://"), "");
-
-        match uri.scheme().to_lowercase().as_str() {
-            "gcp" => Ok(Envelope::Gcp(navajo_gcp::Kms::new().key(uri_str))),
-            "aws" => Err("AWS KMS is not yet implemented".into()),
-            "azure" => Err("Azure KMS is not yet implemented".into()),
-            "vault" => Err("Vault KMS is not yet implemented".into()),
-            _ => Err(format!("unknown KMS scheme: {}", uri.scheme()).into()),
+impl EnvelopeArgs {
+    pub fn get_aad(&self) -> navajo::Aad<sensitive::Bytes> {
+        match &self.envelope_aad {
+            Some(aad) => aad.0.clone(),
+            None => navajo::Aad(sensitive::Bytes::default()),
         }
     }
-    pub async fn get_aad(&self) -> Result<Aad<sensitive::Bytes>, Box<dyn std::error::Error>> {
-        if let Some(uri) = self.aad_secret_store_uri.as_ref() {
-            let path = uri
-                .to_string()
-                .replace(&(uri.scheme().to_string() + "://"), "");
-            match uri.scheme().to_lowercase().as_str() {
-                "gcp" => {
-                    let client = navajo_gcp::SecretManager::new();
-                    let secret = client.get_secret(&path).await?;
-                    Ok(Aad(secret))
-                }
-                "aws" => Err("AWS Secret Manager is not yet implemented".into()),
-                "azure" => Err("Azure Key Vault is not yet implemented".into()),
-                "vault" => Err("Vault is not yet implemented".into()),
-                _ => Err(format!("unknown Secret Store scheme: {}", uri.scheme()).into()),
-            }
-        } else {
-            Ok(Aad(sensitive::Bytes::default()))
+    pub fn get_envelope(&self, plaintext: Option<bool>) -> Result<Envelope> {
+        match &self.envelope {
+            Some(envelope) => Ok(envelope.clone()),
+            None => match plaintext {
+                Some(true) => Ok(Envelope::Plaintext(navajo::PlaintextJson)),
+                Some(false) => bail!("Either --plaintext or --envelope must be provided"),
+                None => Ok(Envelope::Plaintext(navajo::PlaintextJson)),
+            },
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    #[derive(Deserialize, Clone, Debug)]
+    struct Key {
+        id: u32,
+        alg: Algorithm,
+        origin: navajo::Origin,
+        status: Status,
+        value: serde_json::Value,
+        #[serde(default)]
+        pub_id: Option<String>,
+        #[serde(default)]
+        metadata: Option<navajo::Metadata>,
+    }
+    #[derive(Deserialize, Debug)]
+    struct Keyring {
+        keys: Vec<Key>,
+        kind: navajo::Kind,
+        version: u8,
+    }
 
-    #[tokio::test]
-    async fn test_migrate() {
-        // let mut w = vec![];
-        // let r = vec![];
-        // Cli {
-        //     command: Command::Migrate(Migrate {
-        //         io: IoArgs {
-        //             input: Input { input: None },
-        //             output: Output { output: None },
-        //         },
-        //         envelope: todo!(),
-        //         new_key_uri: todo!(),
-        //         new_secret_uri: todo!(),
-        //         plaintext: todo!(),
-        //     }),
-        // }
-        // .run(r.as_slice(), &mut w)
-        // .await
-        // .unwrap()
+    use super::*;
+    use anyhow::Result;
+    use navajo::Status;
+    use serde::Deserialize;
+    use serde_json::json;
+    use strum::IntoEnumIterator;
+    fn run_cmd<'a>(
+        cmd: impl Into<Command>,
+        input: impl 'a + Read,
+        output: impl 'a + Write,
+    ) -> Result<()> {
+        let cli: Cli = cmd.into().into();
+        cli.run(input, output)
+    }
+
+    #[test]
+    fn test_new_plaintext() {
+        for algorithm in Algorithm::iter() {
+            let mut w = vec![];
+            let r: Vec<u8> = vec![];
+            let meta = json!({"example": "value"});
+            let metadata = Some(serde_json::to_string(&meta).unwrap());
+            let new = New {
+                algorithm: algorithm.clone(),
+                env_args: Default::default(),
+                metadata: Metadata { metadata },
+                output: Default::default(),
+                plaintext: true,
+                pub_id: None,
+            };
+            run_cmd(new, r.as_slice(), &mut w).unwrap();
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            assert_eq!(
+                keyring.keys.len(),
+                1,
+                "expected 1 key, found {}",
+                keyring.keys.len()
+            );
+            let key = &keyring.keys[0];
+            assert!(key.id > 0, "id is not greater than 0");
+
+            assert_eq!(
+                key.alg, algorithm,
+                "expected algorithm {algorithm}, found {}",
+                key.alg,
+            );
+
+            assert_eq!(key.status, Status::Primary);
+            assert_eq!(keyring.version, 0);
+            assert_eq!(key.origin, navajo::Origin::Navajo);
+            assert_eq!(keyring.kind, algorithm.kind());
+
+            if let Some(pub_id) = &key.pub_id {
+                assert_eq!(pub_id, &key.id.to_string());
+            }
+            if keyring.kind.is_dsa() {
+                assert!(key.value.is_array());
+                let value = key.value.as_array().unwrap();
+                assert_eq!(value.len(), 2);
+            } else {
+                assert!(key.value.is_string());
+            }
+            let mut expected_meta = navajo::Metadata::new();
+            expected_meta
+                .insert("example".into(), "value".into())
+                .unwrap();
+            assert_eq!(key.metadata.clone().unwrap(), expected_meta);
+        }
+    }
+
+    #[test]
+    fn test_add_key_plaintext() {
+        for algorithm in Algorithm::iter() {
+            let mut w = vec![];
+            let r: Vec<u8> = vec![];
+            let new = New {
+                algorithm: algorithm.clone(),
+                env_args: Default::default(),
+                metadata: Default::default(),
+                output: Default::default(),
+                plaintext: true,
+                pub_id: None,
+            };
+            run_cmd(new, r.as_slice(), &mut w).unwrap();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            let first_key = keyring.keys[0].clone();
+            assert_eq!(first_key.status, Status::Primary);
+            assert!(first_key.id > 0, "id is not greater than 0");
+
+            let add = AddKey {
+                algorithm: algorithm.clone(),
+                envelope_args: Default::default(),
+                metadata: Default::default(),
+                io: Default::default(),
+                pub_id: None,
+            };
+
+            let r = w;
+            let mut w = vec![];
+
+            run_cmd(add, r.as_slice(), &mut w).unwrap();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            assert_eq!(keyring.version, 0);
+            assert_eq!(
+                keyring.keys.len(),
+                2,
+                "expected 2 keys, found {}",
+                keyring.keys.len()
+            );
+            let second_key = keyring.keys[1].clone();
+            assert_ne!(second_key.id, first_key.id);
+            assert_eq!(keyring.keys[0].status, Status::Primary);
+            assert_eq!(second_key.status, Status::Enabled);
+            assert!(second_key.id > 0, "id is not greater than 0");
+            assert_eq!(second_key.alg, algorithm);
+
+            let kind = algorithm.kind();
+
+            // getting coverage for the is_* methods
+            let algo = if kind.is_aead() {
+                Algorithm::Blake3
+            } else if kind.is_daead() {
+                Algorithm::Ed25519
+            } else if kind.is_dsa() {
+                Algorithm::Aes_256_Gcm
+            } else if kind.is_mac() {
+                Algorithm::Aes_256_Siv
+            } else {
+                panic!("unknown kind {:?}", kind);
+            };
+
+            let add_key = AddKey {
+                algorithm: algo,
+                envelope_args: Default::default(),
+                metadata: Default::default(),
+                io: Default::default(),
+                pub_id: None,
+            };
+            let r = w;
+            let mut w = vec![];
+            assert!(run_cmd(add_key, r.as_slice(), &mut w).is_err());
+        }
+    }
+    #[test]
+    fn test_promote_key_plaintext() {
+        for algorithm in Algorithm::iter() {
+            let mut w = vec![];
+            let r: Vec<u8> = vec![];
+            let new = New {
+                algorithm: algorithm.clone(),
+                env_args: Default::default(),
+                metadata: Default::default(),
+                output: Default::default(),
+                plaintext: true,
+                pub_id: None,
+            };
+            run_cmd(new, r.as_slice(), &mut w).unwrap();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            let first_key = keyring.keys[0].clone();
+            assert_eq!(first_key.status, Status::Primary);
+            assert!(first_key.id > 0, "id is not greater than 0");
+
+            let r = w;
+            let mut w = vec![];
+
+            let add = AddKey {
+                algorithm: algorithm.clone(),
+                envelope_args: Default::default(),
+                metadata: Default::default(),
+                io: Default::default(),
+                pub_id: None,
+            };
+            run_cmd(add, r.as_slice(), &mut w).unwrap();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            assert_eq!(keyring.version, 0);
+            assert_eq!(
+                keyring.keys.len(),
+                2,
+                "expected 2 keys, found {}",
+                keyring.keys.len()
+            );
+            let second_key = keyring.keys[1].clone();
+            assert_ne!(second_key.id, first_key.id);
+            assert_eq!(keyring.keys[0].status, Status::Primary);
+            assert_eq!(second_key.status, Status::Enabled);
+            assert!(second_key.id > 0, "id is not greater than 0");
+            assert_eq!(second_key.alg, algorithm);
+
+            let r = w;
+            let mut w = vec![];
+            let promote = PromoteKey {
+                key_id: second_key.id,
+                io: Default::default(),
+                envelope_args: Default::default(),
+            };
+            run_cmd(promote, r.as_slice(), &mut w).unwrap();
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            assert_eq!(keyring.version, 0);
+            assert_eq!(
+                keyring.keys.len(),
+                2,
+                "expected 2 keys, found {}",
+                keyring.keys.len()
+            );
+
+            let second_key = keyring.keys[1].clone();
+            assert_ne!(second_key.id, first_key.id);
+            assert_eq!(keyring.keys[0].status, Status::Enabled);
+            assert_eq!(second_key.status, Status::Primary);
+            assert!(second_key.id > 0, "id is not greater than 0");
+            assert_eq!(second_key.alg, algorithm);
+        }
+    }
+
+    #[test]
+    fn test_inspect() {
+        for algorithm in Algorithm::iter() {
+            let mut w = vec![];
+            let r: Vec<u8> = vec![];
+            let meta = json!({"example": "value"});
+            let metadata = Some(serde_json::to_string(&meta).unwrap());
+            let new = New {
+                algorithm: algorithm.clone(),
+                env_args: Default::default(),
+                metadata: Metadata { metadata },
+                output: Default::default(),
+                plaintext: true,
+                pub_id: None,
+            };
+
+            run_cmd(new, r.as_slice(), &mut w).unwrap();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            let key = keyring.keys.get(0).ok_or("invalid number of keys").unwrap();
+            let mut expected_meta = navajo::Metadata::new();
+            expected_meta
+                .insert("example".into(), "value".into())
+                .unwrap();
+            assert_eq!(key.metadata.clone().unwrap(), expected_meta);
+
+            let r = w;
+            let mut w = vec![];
+
+            run_cmd(
+                Inspect {
+                    io: Default::default(),
+                    envelope_args: Default::default(),
+                },
+                r.as_slice(),
+                &mut w,
+            )
+            .unwrap();
+
+            let keyring_info: navajo::primitive::KeyringInfo = serde_json::from_slice(&w).unwrap();
+            assert_eq!(keyring_info.version(), 0);
+            assert_eq!(keyring_info.kind(), algorithm.kind());
+            match algorithm.kind() {
+                Kind::Aead => {
+                    let info = keyring_info.aead().unwrap();
+                    assert_eq!(info.keys.len(), 1);
+                    assert_eq!(info.keys[0].id, key.id);
+                    assert_eq!(info.keys[0].status, key.status);
+                }
+                Kind::Daead => {
+                    let info = keyring_info.daead().unwrap();
+                    assert_eq!(info.keys.len(), 1);
+                    assert_eq!(info.keys[0].id, key.id);
+                    assert_eq!(info.keys[0].status, key.status);
+                }
+                Kind::Mac => {
+                    let info = keyring_info.mac().unwrap();
+                    assert_eq!(info.keys.len(), 1);
+                    assert_eq!(info.keys[0].id, key.id);
+                    assert_eq!(info.keys[0].status, key.status);
+                }
+                Kind::Dsa => {
+                    let info = keyring_info.dsa().unwrap();
+                    assert_eq!(info.keys.len(), 1);
+                    assert_eq!(info.keys[0].id, key.id);
+                    assert_eq!(info.keys[0].status, key.status);
+                }
+            }
+        }
+    }
+    #[test]
+    fn test_disable_key_enable_key() {
+        for algorithm in Algorithm::iter() {
+            let mut w = vec![];
+            let r: Vec<u8> = vec![];
+            let new = New {
+                algorithm: algorithm.clone(),
+                env_args: Default::default(),
+                metadata: Default::default(),
+                output: Default::default(),
+                plaintext: true,
+                pub_id: None,
+            };
+            run_cmd(new, r.as_slice(), &mut w).unwrap();
+
+            let keyring_data = w.clone();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+
+            let first_key = keyring.keys[0].clone();
+            assert_eq!(first_key.status, Status::Primary);
+
+            let disable_key = DisableKey {
+                key_id: first_key.id,
+                io: Default::default(),
+                envelope_args: Default::default(),
+            };
+            assert!(run_cmd(disable_key, r.as_slice(), &mut w).is_err());
+
+            let add_key = AddKey {
+                algorithm: algorithm.clone(),
+                envelope_args: Default::default(),
+                metadata: Default::default(),
+                io: Default::default(),
+                pub_id: None,
+            };
+
+            let r = keyring_data;
+            let mut w = vec![];
+
+            run_cmd(add_key, r.as_slice(), &mut w).unwrap();
+            let keyring_data = w.clone();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            let second_key = &keyring.keys[1];
+
+            let disable_key = DisableKey {
+                key_id: first_key.id,
+                io: Default::default(),
+                envelope_args: Default::default(),
+            };
+
+            let r = w;
+            let mut w = vec![];
+            assert!(run_cmd(disable_key, r.as_slice(), &mut w).is_err());
+
+            let r = keyring_data.clone();
+            let mut w = vec![];
+            let disable_key = DisableKey {
+                key_id: second_key.id,
+                io: Default::default(),
+                envelope_args: Default::default(),
+            };
+            run_cmd(disable_key, r.as_slice(), &mut w).unwrap();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+
+            assert_eq!(keyring.keys.len(), 2);
+            assert_eq!(keyring.keys[0].status, Status::Primary);
+            assert_eq!(keyring.keys[1].status, Status::Disabled);
+
+            let enable_key = EnableKey {
+                key_id: second_key.id,
+                io: Default::default(),
+                envelope_args: Default::default(),
+            };
+
+            let r = w;
+            let mut w = vec![];
+
+            run_cmd(enable_key, r.as_slice(), &mut w).unwrap();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+
+            assert_eq!(keyring.keys.len(), 2);
+            assert_eq!(keyring.keys[0].status, Status::Primary);
+            assert_eq!(keyring.keys[1].status, Status::Enabled);
+        }
+    }
+    #[test]
+    fn test_delete_key() {
+        for algorithm in Algorithm::iter() {
+            let mut w = vec![];
+            let r: Vec<u8> = vec![];
+            let new = New {
+                algorithm: algorithm.clone(),
+                env_args: Default::default(),
+                metadata: Default::default(),
+                output: Default::default(),
+                plaintext: true,
+                pub_id: None,
+            };
+            run_cmd(new, r.as_slice(), &mut w).unwrap();
+
+            let keyring_data = w.clone();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+
+            let first_key = keyring.keys[0].clone();
+            assert_eq!(first_key.status, Status::Primary);
+
+            let delete_key = DeleteKey {
+                key_id: first_key.id,
+                io: Default::default(),
+                envelope_args: Default::default(),
+            };
+            assert!(run_cmd(delete_key, r.as_slice(), &mut w).is_err());
+
+            let add_key = AddKey {
+                algorithm: algorithm.clone(),
+                envelope_args: Default::default(),
+                metadata: Default::default(),
+                io: Default::default(),
+                pub_id: None,
+            };
+
+            let r = keyring_data;
+            let mut w = vec![];
+
+            run_cmd(add_key, r.as_slice(), &mut w).unwrap();
+            let keyring_data = w.clone();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            let second_key = &keyring.keys[1];
+
+            let delete_key = DeleteKey {
+                key_id: first_key.id,
+                io: Default::default(),
+                envelope_args: Default::default(),
+            };
+
+            let r = w;
+            let mut w = vec![];
+            assert!(run_cmd(delete_key, r.as_slice(), &mut w).is_err());
+
+            let r = keyring_data.clone();
+            let mut w = vec![];
+            let delete_key = DeleteKey {
+                key_id: second_key.id,
+                io: Default::default(),
+                envelope_args: Default::default(),
+            };
+            run_cmd(delete_key, r.as_slice(), &mut w).unwrap();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+
+            assert_eq!(keyring.keys.len(), 1);
+            assert_eq!(keyring.keys[0].status, Status::Primary);
+        }
     }
 }
+
+// PromoteKey(PromoteKey),
+// EnableKey(EnableKey),
+// DisableKey(DisableKey),
+// DeleteKey(DeleteKey),
+// SetKeyMetadata(SetKeyMetadata),
+// CreatePublic(CreatePublic),
+
+// Migrate(Migrate),

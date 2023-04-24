@@ -26,6 +26,7 @@ use super::Algorithm;
 
 #[derive(Clone, ZeroizeOnDrop, Serialize)]
 pub(crate) struct SigningKey {
+    #[serde(rename = "value")]
     key_pair: KeyPair,
     #[zeroize(skip)]
     #[serde(rename = "alg")]
@@ -44,6 +45,7 @@ impl Key<SigningKey> {
     pub(crate) fn pub_id(&self) -> &str {
         &self.material().pub_id
     }
+
     pub(crate) fn verifying_key(&self) -> VerifyingKey {
         self.material().verifying_key.clone()
     }
@@ -109,7 +111,6 @@ impl SigningKey {
     where
         N: Rng,
     {
-        let metadata = metadata.map(Arc::new);
         Self::generate(rng, algorithm, pub_id, metadata)
     }
 
@@ -117,7 +118,7 @@ impl SigningKey {
         algorithm: Algorithm,
         pub_id: String,
         key_pair: KeyPair,
-        metadata: Arc<Metadata>,
+        metadata: Metadata,
     ) -> Result<Self, KeyError> {
         let inner = Arc::new(Inner::from_key_pair(algorithm, &key_pair)?);
         let verifying_key =
@@ -135,7 +136,7 @@ impl SigningKey {
         rng: &N,
         algorithm: Algorithm,
         pub_id: String,
-        metadata: Option<Arc<Metadata>>,
+        metadata: Option<Metadata>,
     ) -> Self
     where
         N: Rng,
@@ -166,14 +167,14 @@ impl<'de> Deserialize<'de> for SigningKey {
     {
         #[derive(Deserialize)]
         struct SerializedKey {
-            key_pair: KeyPair,
+            value: KeyPair,
             alg: Algorithm,
             pub_id: String,
             #[serde(default)]
-            metadata: Arc<Metadata>,
+            metadata: Metadata,
         }
         let SerializedKey {
-            key_pair,
+            value: key_pair,
             alg,
             pub_id,
             metadata,
@@ -204,9 +205,8 @@ impl KeyMaterial for SigningKey {
     fn algorithm(&self) -> Self::Algorithm {
         self.algorithm
     }
-
     fn kind() -> crate::primitive::Kind {
-        Kind::Signature
+        Kind::Dsa
     }
 }
 

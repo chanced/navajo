@@ -1,10 +1,13 @@
 #![allow(non_camel_case_types)]
 
+use anyhow::bail;
 use clap::ValueEnum;
 
 use navajo::Kind;
+use serde::Deserialize;
 
-#[derive(Clone, Debug, PartialEq, Eq, ValueEnum, strum::Display)]
+#[derive(Clone, Debug, PartialEq, Eq, ValueEnum, strum::Display, strum::EnumIter, Deserialize)]
+#[serde(try_from = "&str")]
 pub enum Algorithm {
     // ------------------------------------------
     // AEAD
@@ -60,15 +63,15 @@ pub enum Algorithm {
     // ------------------------------------------
     // DAEAD
     // ------------------------------------------
-    /// DAEAD - AES-SIV
+    /// DAEAD - AES-256-SIV
     #[clap(
-        alias = "AES-SIV",
-        alias = "AES_SIV",
-        alias = "aes-siv",
-        alias = "aes_siv"
+        alias = "AES-256-SIV",
+        alias = "AES_256_SIV",
+        alias = "aes-256-siv",
+        alias = "aes_256_siv"
     )]
-    #[strum(serialize = "AES-SIV")]
-    AesSiv,
+    #[strum(serialize = "AES-256-SIV")]
+    Aes_256_Siv,
 
     // ------------------------------------------
     // MAC
@@ -255,6 +258,21 @@ pub enum Algorithm {
     #[strum(serialize = "Ed25519")]
     Ed25519,
 }
+impl TryFrom<String> for Algorithm {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Algorithm::from_str(&value, true)
+    }
+}
+impl TryFrom<&str> for Algorithm {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Algorithm::from_str(value, true)
+    }
+}
+
 impl Algorithm {
     pub fn kind(&self) -> Kind {
         match self {
@@ -263,7 +281,7 @@ impl Algorithm {
             | Algorithm::Chacha20Poly1305
             | Algorithm::Xchacha20Poly1305 => Kind::Aead,
 
-            Algorithm::AesSiv => Kind::Daead,
+            Algorithm::Aes_256_Siv => Kind::Daead,
 
             Algorithm::Blake3
             | Algorithm::Sha2_256
@@ -277,12 +295,12 @@ impl Algorithm {
             | Algorithm::Aes_192
             | Algorithm::Aes_256 => Kind::Mac,
 
-            Algorithm::Es256 | Algorithm::Es384 | Algorithm::Ed25519 => Kind::Signature,
+            Algorithm::Es256 | Algorithm::Es384 | Algorithm::Ed25519 => Kind::Dsa,
         }
     }
 }
 impl TryFrom<Algorithm> for navajo::aead::Algorithm {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(value: Algorithm) -> Result<Self, Self::Error> {
         match value {
@@ -290,35 +308,35 @@ impl TryFrom<Algorithm> for navajo::aead::Algorithm {
             Algorithm::Aes_256_Gcm => Ok(navajo::aead::Algorithm::Aes256Gcm),
             Algorithm::Chacha20Poly1305 => Ok(navajo::aead::Algorithm::ChaCha20Poly1305),
             Algorithm::Xchacha20Poly1305 => Ok(navajo::aead::Algorithm::XChaCha20Poly1305),
-            _ => Err(format!("Algorithm {value} is not AEAD")),
+            _ => bail!("Algorithm {value} is not AEAD"),
         }
     }
 }
 impl TryFrom<Algorithm> for navajo::daead::Algorithm {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(value: Algorithm) -> Result<Self, Self::Error> {
         match value {
-            Algorithm::AesSiv => Ok(navajo::daead::Algorithm::Aes256Siv),
-            _ => Err(format!("Algorithm {value} is not DAEAD")),
+            Algorithm::Aes_256_Siv => Ok(navajo::daead::Algorithm::Aes256Siv),
+            _ => bail!("Algorithm {value} is not DAEAD"),
         }
     }
 }
 impl TryFrom<Algorithm> for navajo::dsa::Algorithm {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(value: Algorithm) -> Result<Self, Self::Error> {
         match value {
             Algorithm::Es256 => Ok(navajo::dsa::Algorithm::Es256),
             Algorithm::Es384 => Ok(navajo::dsa::Algorithm::Es384),
             Algorithm::Ed25519 => Ok(navajo::dsa::Algorithm::Ed25519),
-            _ => Err(format!("Algorithm {value} is not Signature")),
+            _ => bail!("Algorithm {value} is not Signature"),
         }
     }
 }
 
 impl TryFrom<Algorithm> for navajo::mac::Algorithm {
-    type Error = String;
+    type Error = anyhow::Error;
     fn try_from(value: Algorithm) -> Result<Self, Self::Error> {
         match value {
             Algorithm::Blake3 => Ok(navajo::mac::Algorithm::Blake3),
@@ -332,7 +350,7 @@ impl TryFrom<Algorithm> for navajo::mac::Algorithm {
             Algorithm::Aes_128 => Ok(navajo::mac::Algorithm::Aes128),
             Algorithm::Aes_192 => Ok(navajo::mac::Algorithm::Aes192),
             Algorithm::Aes_256 => Ok(navajo::mac::Algorithm::Aes256),
-            _ => Err(format!("Algorithm {value} is not MAC")),
+            _ => bail!("Algorithm {value} is not MAC"),
         }
     }
 }

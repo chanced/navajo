@@ -31,18 +31,18 @@ pub enum Algorithm {
     Blake3,
 
     #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
-    #[serde(rename = "SHA2-256")]
-    #[strum(serialize = "SHA2-256")]
+    #[serde(rename = "SHA-256")]
+    #[strum(serialize = "SHA-256")]
     Sha256,
 
     #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
-    #[serde(rename = "SHA2-384")]
-    #[strum(serialize = "SHA2-384")]
+    #[serde(rename = "SHA-384")]
+    #[strum(serialize = "SHA-384")]
     Sha384,
 
     #[cfg(any(feature = "ring", all(feature = "sha2", feature = "hmac")))]
-    #[serde(rename = "SHA2-512")]
-    #[strum(serialize = "SHA2-512")]
+    #[serde(rename = "SHA-512")]
+    #[strum(serialize = "SHA-512")]
     Sha512,
 
     #[cfg(all(feature = "sha3", feature = "hmac"))]

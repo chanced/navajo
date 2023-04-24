@@ -57,6 +57,7 @@ impl CryptoKey {
         Ok(self.client.get_or_try_init(init_client).await?.get())
     }
 }
+
 impl Envelope for CryptoKey {
     type EncryptError = KmsError;
     type DecryptError = KmsError;
@@ -166,8 +167,8 @@ pub mod sync {
                 runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
             }
         }
-        pub fn key<N: ToString>(&self, name: N) -> Key {
-            Key {
+        pub fn key<N: ToString>(&self, name: N) -> CryptoKey {
+            CryptoKey {
                 key: Arc::new(self.kms.key(name)),
                 runtime: self.runtime.clone(),
             }
@@ -181,12 +182,12 @@ pub mod sync {
     }
 
     #[derive(Clone, Debug)]
-    pub struct Key {
+    pub struct CryptoKey {
         key: Arc<super::CryptoKey>,
         runtime: Arc<tokio::runtime::Runtime>,
     }
 
-    impl navajo::envelope::sync::Envelope for Key {
+    impl navajo::envelope::sync::Envelope for CryptoKey {
         type EncryptError = super::KmsError;
         type DecryptError = super::KmsError;
 

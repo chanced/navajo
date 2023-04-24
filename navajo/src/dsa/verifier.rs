@@ -12,7 +12,7 @@ use alloc::{
 };
 use serde::{Deserialize, Serialize};
 
-use super::{verifying_key::VerifyingKey, Algorithm};
+use super::{verifying_key::VerifyingKey};
 
 #[cfg(feature = "std")]
 type Map<K, V> = std::collections::HashMap<K, V>;
@@ -115,7 +115,7 @@ impl Verifier {
         }
     }
 
-    pub(crate) fn delete(&mut self, pub_id: &str) -> Result<Jwk, RemoveKeyError<Algorithm>> {
+    pub(crate) fn delete(&mut self, pub_id: &str) -> Result<Jwk, RemoveKeyError> {
         let k = self
             .keys
             .get(pub_id)

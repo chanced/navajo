@@ -1,12 +1,7 @@
-use clap::Parser;
 use navajo_cli::Cli;
 
-#[tokio::main]
-async fn main() {
-    match Cli::parse()
-        .run(tokio::io::stdin(), tokio::io::stdout())
-        .await
-    {
+fn main() {
+    match Cli::setup().run(std::io::stdin(), std::io::stdout()) {
         Ok(_) => (),
         Err(e) => {
             eprintln!("{e}");

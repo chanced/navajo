@@ -13,7 +13,7 @@ pub enum Status {
     ///
     /// The key will be used for verification or decryption when applicable
     /// but will not be used for signing or encryption.
-    Secondary,
+    Enabled,
     /// A disabled key is not active and cannot be used for cryptographic purposes.
     ///
     /// While disabled keys are present in the keyring, they are effectively deleted
@@ -23,7 +23,7 @@ pub enum Status {
 
 impl Default for Status {
     fn default() -> Self {
-        Self::Secondary
+        Self::Enabled
     }
 }
 impl Status {
@@ -32,7 +32,7 @@ impl Status {
         *self == Self::Primary
     }
     pub fn is_secondary(&self) -> bool {
-        *self == Self::Secondary
+        *self == Self::Enabled
     }
     /// Returns `true` if the `Status` is `Primary` or `Secondary`.
     pub fn is_enabled(&self) -> bool {

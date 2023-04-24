@@ -73,7 +73,7 @@ impl Default for SecretManager {
 
 impl SecretStore for SecretManager {
     type Error = SecretManagerError;
-    fn get_secret<N: ToString>(
+    fn get<N: ToString>(
         &self,
         name: N,
     ) -> std::pin::Pin<
@@ -121,7 +121,7 @@ pub mod sync {
     impl SecretStore for SecretManager {
         type Error = super::SecretManagerError;
         fn get<N: ToString>(&self, name: N) -> Result<navajo::sensitive::Bytes, Self::Error> {
-            self.runtime.block_on(self.inner.get_secret(name))
+            self.runtime.block_on(self.inner.get(name))
         }
     }
     impl Default for SecretManager {
@@ -246,7 +246,7 @@ mod tests {
         let project_id = std::env::var("PROJECT_ID").unwrap();
         let secret_name = format!("projects/{project_id}/secrets/test-secret2/version/1");
         let secret_manager = SecretManager::new();
-        let secret = secret_manager.get_secret(secret_name).await.unwrap();
+        let secret = secret_manager.get(secret_name).await.unwrap();
         println!("{:?}", String::from_utf8_lossy(secret.as_ref()))
     }
 }

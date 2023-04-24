@@ -3,7 +3,9 @@ use core::str::FromStr;
 use alloc::{format, string::String};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, strum::Display, strum::EnumIter,
+)]
 
 pub enum Kind {
     #[serde(rename = "AEAD")]
@@ -15,7 +17,7 @@ pub enum Kind {
     #[serde(rename = "MAC")]
     Mac,
     #[serde(rename = "DSA")]
-    Signature,
+    Dsa,
 }
 
 impl Kind {
@@ -25,7 +27,7 @@ impl Kind {
             Kind::Daead => "DAEAD",
             // PrimitiveType::Hpke => "HPKE",
             Kind::Mac => "MAC",
-            Kind::Signature => "Signature",
+            Kind::Dsa => "Signature",
         }
     }
     pub fn as_u8(&self) -> u8 {
@@ -34,8 +36,25 @@ impl Kind {
             Kind::Daead => 1,
             // PrimitiveType::Hpke => 2,
             Kind::Mac => 3,
-            Kind::Signature => 4,
+            Kind::Dsa => 4,
         }
+    }
+
+    /// Returns `true` if the primitive Kind is `Dsa` (i.e. a signature algorithm)
+    pub fn is_dsa(&self) -> bool {
+        matches!(self, Kind::Dsa)
+    }
+    /// Returns `true` if the primitive is `Aead `
+    pub fn is_aead(&self) -> bool {
+        matches!(self, Kind::Aead)
+    }
+    /// Returns `true` if the primitive is `Daead`
+    pub fn is_daead(&self) -> bool {
+        matches!(self, Kind::Daead)
+    }
+    /// Returns `true` if the primitive is `Mac`
+    pub fn is_mac(&self) -> bool {
+        matches!(self, Kind::Mac)
     }
 }
 
@@ -47,16 +66,12 @@ impl FromStr for Kind {
             "DAEAD" => Ok(Kind::Daead),
             // "HPKE" => Ok(PrimitiveType::Hpke),
             "MAC" => Ok(Kind::Mac),
-            "SIGNATURE" => Ok(Kind::Signature),
+            "SIGNATURE" => Ok(Kind::Dsa),
             _ => Err(format!("invalid primitive type: \"{s}\"")),
         }
     }
 }
-impl core::fmt::Display for Kind {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.as_str())
-    }
-}
+
 impl From<Kind> for u8 {
     fn from(pt: Kind) -> Self {
         pt.as_u8()
@@ -70,7 +85,7 @@ impl TryFrom<u8> for Kind {
             1 => Ok(Kind::Daead),
             // 2 => Ok(PrimitiveType::Hpke),
             3 => Ok(Kind::Mac),
-            4 => Ok(Kind::Signature),
+            4 => Ok(Kind::Dsa),
             _ => Err(format!("invalid primitive type: \"{value}\"")),
         }
     }

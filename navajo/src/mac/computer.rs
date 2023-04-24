@@ -121,10 +121,10 @@ impl std::io::Write for Computer {
 
 #[cfg(test)]
 mod tests {
-    use crate::mac::Algorithm::Sha256;
+    use strum::IntoEnumIterator;
 
     use super::*;
-
+    use crate::mac::Algorithm;
     #[test]
     fn test_basic() {
         let key = hex::decode("52fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649")
@@ -132,7 +132,7 @@ mod tests {
         let expected =
             hex::decode("20fd9496199a45e414bdd82ce531ec681200ce459ab4a85239cc6076dc5de225")
                 .unwrap();
-        let mac = crate::mac::Mac::new_external_key(key, Sha256, None, None).unwrap();
+        let mac = crate::mac::Mac::new_external_key(key, Algorithm::Sha256, None, None).unwrap();
 
         let mut hasher = Computer::new(&mac);
         hasher.update(b"message");
@@ -140,15 +140,38 @@ mod tests {
         assert_eq!(tag.omit_header().unwrap(), &expected[..]);
     }
     #[test]
+    fn test_compute() {
+        let rng = crate::rand::SystemRng;
+        let mut size = 0;
+        while size == 0 {
+            size = rng.u16().unwrap() as usize;
+        }
+        let mut data = vec![0u8; size];
+        rng.fill(&mut data).unwrap();
+        for algorithm in Algorithm::iter() {
+            let mac = crate::mac::Mac::new(algorithm, None);
+            let mut hasher = Computer::new(&mac);
+            hasher.update(&data);
+            let tag = hasher.finalize();
+            let tag = tag.omit_header().unwrap();
+            let tag2 = mac.compute(&data);
+            assert_eq!(tag, tag2);
+        }
+    }
+
+    #[test]
     fn test_chunked() {
         let key = hex::decode("52fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649")
             .unwrap();
-        let mut mac = crate::mac::Mac::new_external_key(key, Sha256, None, None).unwrap();
+        let mut mac =
+            crate::mac::Mac::new_external_key(key, Algorithm::Sha256, None, None).unwrap();
 
         let second_key =
             hex::decode("85bcda2d6d76b547e47d8e6ca49b95ff19ea5d8b4e37569b72367d5aa0336d22")
                 .unwrap();
-        let second_key = mac.add_external(&second_key, Sha256, None, None).unwrap();
+        let second_key = mac
+            .add_external(&second_key, Algorithm::Sha256, None, None)
+            .unwrap();
         mac.promote(&second_key).unwrap();
         let expected =
             hex::decode("72fd211411c56848ccc90eafd19269a7fa1c3067d5bce20836575d786f828f4e")

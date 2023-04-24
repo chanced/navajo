@@ -1,12 +1,13 @@
 
 [package]
 name = "navajo"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["Chance Dinkins"]
 description = "cryptographic APIs"
 keywords = ["cryptography", "crypto", "security"]
+
 #------------------------------------------------------#
 #                                                      #
 #                     Dependencies                     #
@@ -271,6 +272,12 @@ features = ["sec1"]
 version = "2.0"
 optional = true
 
+# hex
+[dependencies.hex]
+version = "0.4"
+default-features = false
+features = ["serde", "alloc"]
+
 
 # # rsa
 # [dependencies.rsa]
@@ -303,20 +310,15 @@ version = "0.1"
 [dev-dependencies.mockall]
 version = "0.11"
 
-# proptest
-# https://docs.rs/proptest/1.1.0/proptest/
-[dev-dependencies.proptest]
-version = "1.1"
+# # proptest
+# # https://docs.rs/proptest/1.1.0/proptest/
+# [dev-dependencies.proptest]
+# version = "1.1"
 
-# hex
-[dev-dependencies.hex]
-version = "0.4"
-default-features = false
-features = ["serde", "alloc"]
 
-# hex-literal
-[dev-dependencies.hex-literal]
-version = "0.3"
+# # hex-literal
+# [dev-dependencies.hex-literal]
+# version = "0.4.1"
 
 # tokio
 [dev-dependencies.tokio]
@@ -338,6 +340,7 @@ default = [
 	"dsa",
 	"mac",
 	"daead",
+	"hkdf",
 ]
 ed25519 = ["ed25519-dalek"]
 dsa = ["signature", "ed25519", "p256", "p384"]
@@ -365,6 +368,7 @@ std = [
 	"ed25519-dalek?/std",
 	"base64/std",
 	"derive_builder/std",
+	"hex/std",
 	# "anyhow/default",
 	# "anyhow/std",
 	# "rsa?/std",

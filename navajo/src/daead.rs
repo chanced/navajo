@@ -2,11 +2,8 @@
 
 mod algorithm;
 mod cipher;
+mod key_info;
 mod material;
-
-pub use algorithm::Algorithm;
-pub(crate) use material::Material;
-
 use crate::{
     error::{
         DisableKeyError, EncryptDeterministicallyError, KeyNotFoundError, OpenError,
@@ -14,10 +11,15 @@ use crate::{
     },
     key::Key,
     keyring::Keyring,
-    Aad, Buffer, Envelope, KeyInfo, Metadata, Origin, Primitive, Rng, Status, SystemRng,
+    Aad, Buffer, Envelope, Metadata, Origin, Primitive, Rng, Status, SystemRng,
 };
-use alloc::{sync::Arc, vec::Vec};
+use alloc::vec::Vec;
 use zeroize::ZeroizeOnDrop;
+
+pub(crate) use material::Material;
+
+pub use algorithm::Algorithm;
+pub use key_info::{KeyInfo, KeyringInfo};
 
 #[derive(Clone, Debug, ZeroizeOnDrop)]
 pub struct Daead {
@@ -168,7 +170,6 @@ impl Daead {
     {
         let id = rng.u32().unwrap();
         let material = Material::generate(rng, algorithm);
-        let metadata = metadata.map(Arc::new);
         let key = Key::new(id, Status::Primary, Origin::Navajo, material, metadata);
         let keyring = Keyring::new(key);
         Self { keyring }
@@ -181,8 +182,16 @@ impl Daead {
         Self { keyring }
     }
 
-    pub fn keys(&self) -> Vec<KeyInfo<crate::daead::Algorithm>> {
-        self.keyring.keys().iter().map(|k| k.info()).collect()
+    pub fn keys(&self) -> Vec<KeyInfo> {
+        self.keyring.keys().iter().map(Into::into).collect()
+    }
+
+    pub fn info(&self) -> KeyringInfo {
+        KeyringInfo {
+            keys: self.keys(),
+            version: self.keyring().version,
+            kind: crate::primitive::Kind::Daead,
+        }
     }
 
     pub fn encrypt_in_place_deterministically<A, B>(
@@ -264,55 +273,40 @@ impl Daead {
         key.decrypt_in_place_deterministically(aad, ciphertext)
     }
 
-    pub fn add(&mut self, algorithm: Algorithm, metadata: Option<Metadata>) -> KeyInfo<Algorithm> {
+    pub fn add(&mut self, algorithm: Algorithm, metadata: Option<Metadata>) -> KeyInfo {
         let material = Material::generate(&SystemRng, algorithm);
         let id = self.keyring.next_id(&SystemRng);
-        let metadata = metadata.map(Arc::new);
-        let key = Key::new(id, Status::Primary, Origin::Navajo, material, metadata);
+        let key = Key::new(id, Status::Enabled, Origin::Navajo, material, metadata);
         self.keyring.add(key);
         self.keyring.last().into()
     }
 
-    pub fn promote(
-        &mut self,
-        key_id: impl Into<u32>,
-    ) -> Result<KeyInfo<Algorithm>, KeyNotFoundError> {
-        self.keyring.promote(key_id).map(|key| key.info())
+    pub fn promote(&mut self, key_id: impl Into<u32>) -> Result<KeyInfo, KeyNotFoundError> {
+        self.keyring.promote(key_id).map(Into::into)
     }
 
-    pub fn enable(
-        &mut self,
-        key_id: impl Into<u32>,
-    ) -> Result<KeyInfo<Algorithm>, KeyNotFoundError> {
-        self.keyring.enable(key_id).map(|key| key.info())
+    pub fn enable(&mut self, key_id: impl Into<u32>) -> Result<KeyInfo, KeyNotFoundError> {
+        self.keyring.enable(key_id).map(Into::into)
     }
 
-    pub fn disable(
-        &mut self,
-        key_id: u32,
-    ) -> Result<KeyInfo<Algorithm>, DisableKeyError<Algorithm>> {
-        self.keyring.disable(key_id).map(|key| key.info())
+    pub fn disable(&mut self, key_id: u32) -> Result<KeyInfo, DisableKeyError> {
+        self.keyring.disable(key_id).map(Into::into)
     }
 
-    pub fn delete(
-        &mut self,
-        key_id: impl Into<u32>,
-    ) -> Result<KeyInfo<Algorithm>, RemoveKeyError<Algorithm>> {
-        self.keyring.remove(key_id).map(|k| k.info())
+    pub fn delete(&mut self, key_id: impl Into<u32>) -> Result<KeyInfo, RemoveKeyError> {
+        self.keyring.remove(key_id).map(Into::into)
     }
-
+    /// Sets the metadata for the given key and returns the previous metadata if it exists.
     pub fn set_key_metadata(
         &mut self,
         key_id: u32,
         metadata: Option<Metadata>,
-    ) -> Result<KeyInfo<Algorithm>, KeyNotFoundError> {
-        self.keyring.update_key_metadata(key_id, metadata)?;
-        let key = self.keyring.get(key_id)?;
-        Ok(key.info())
+    ) -> Result<Option<Metadata>, KeyNotFoundError> {
+        self.keyring.update_key_metadata(key_id, metadata)
     }
 
     /// Returns [`KeyInfo<Algorithm>`] for the primary key.
-    pub fn primary_key(&self) -> KeyInfo<Algorithm> {
+    pub fn primary_key(&self) -> KeyInfo {
         self.keyring.primary().into()
     }
 }
@@ -334,7 +328,7 @@ mod tests {
         let decrypted = daead.decrypt_deterministically(aad, &ciphertext).unwrap();
         assert_eq!(plaintext, &decrypted[..]);
         {
-            let new_key = daead.add(Algorithm::Aes256Siv, None);
+            let new_key = daead.add(Algorithm::Aes256Siv, None).id;
             daead.promote(new_key).unwrap();
         }
 
@@ -347,7 +341,7 @@ mod tests {
         let mut daead = Daead::new(Algorithm::Aes256Siv, None);
         daead.add(Algorithm::Aes256Siv, None);
         {
-            let new_key = daead.add(Algorithm::Aes256Siv, None);
+            let new_key = daead.add(Algorithm::Aes256Siv, None).id;
             daead.promote(new_key).unwrap();
         }
 

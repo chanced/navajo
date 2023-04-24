@@ -17,9 +17,9 @@ pub const RESERVED_METADATA_KEYS: [&str; 19] = [
 
 #[derive(Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct Metadata {
-    #[serde(rename = "use", default)]
+    #[serde(rename = "use", default, skip_serializing_if = "Option::is_none")]
     key_use: Option<KeyUse>,
-    #[serde(rename = "key_ops", default)]
+    #[serde(rename = "key_ops", default, skip_serializing_if = "Option::is_none")]
     key_operations: Option<Vec<KeyOperation>>,
 
     #[serde(flatten, default)]
@@ -186,6 +186,14 @@ impl Metadata {
             known: self.known_fields.keys(),
             additional: self.additional_fields.keys(),
         }
+    }
+}
+
+impl TryFrom<serde_json::Value> for Metadata {
+    type Error = serde_json::Error;
+
+    fn try_from(value: serde_json::Value) -> Result<Self, Self::Error> {
+        serde_json::from_value(value)
     }
 }
 

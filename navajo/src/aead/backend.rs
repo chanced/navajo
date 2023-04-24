@@ -8,17 +8,17 @@ use crate::{
 use super::Algorithm;
 
 #[allow(clippy::large_enum_variant)]
-pub(super) enum Cipher {
+pub(super) enum Backend {
     #[cfg(feature = "ring")]
-    Ring(RingCipher),
+    Ring(RingBackend),
     RustCrypto(RustCryptoCipher),
 }
-impl core::fmt::Debug for Cipher {
+impl core::fmt::Debug for Backend {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_tuple("Cipher").field(&self.algorithm()).finish()
     }
 }
-impl Cipher {
+impl Backend {
     pub(super) fn algorithm(&self) -> Algorithm {
         match self {
             Self::RustCrypto(rc) => rc.algorithm(),
@@ -31,7 +31,7 @@ impl Cipher {
             Algorithm::ChaCha20Poly1305 => {
                 #[cfg(feature = "ring")]
                 {
-                    Self::Ring(RingCipher::new(
+                    Self::Ring(RingBackend::new(
                         algorithm,
                         &ring::aead::CHACHA20_POLY1305,
                         key,
@@ -45,7 +45,7 @@ impl Cipher {
             Algorithm::Aes128Gcm => {
                 #[cfg(feature = "ring")]
                 {
-                    Self::Ring(RingCipher::new(algorithm, &ring::aead::AES_128_GCM, key))
+                    Self::Ring(RingBackend::new(algorithm, &ring::aead::AES_128_GCM, key))
                 }
                 #[cfg(not(feature = "ring"))]
                 {
@@ -55,7 +55,7 @@ impl Cipher {
             Algorithm::Aes256Gcm => {
                 #[cfg(feature = "ring")]
                 {
-                    Self::Ring(RingCipher::new(algorithm, &ring::aead::AES_256_GCM, key))
+                    Self::Ring(RingBackend::new(algorithm, &ring::aead::AES_256_GCM, key))
                 }
                 #[cfg(not(feature = "ring"))]
                 {
@@ -98,23 +98,22 @@ impl Cipher {
         }
     }
 }
-
 #[cfg(feature = "ring")]
-pub(super) struct RingCipher {
+pub(super) struct RingBackend {
     key: ring::aead::LessSafeKey,
     algorithm: Algorithm,
 }
 
 #[cfg(feature = "ring")]
-impl RingCipher {
+impl RingBackend {
     pub(super) fn new(
         algorithm: Algorithm,
         ring_algorithm: &'static ring::aead::Algorithm,
         key: &[u8],
-    ) -> RingCipher {
+    ) -> RingBackend {
         let unbounded = ring::aead::UnboundKey::new(ring_algorithm, key).unwrap(); // safe, keys are only generated and are always the correct size
         let key = ring::aead::LessSafeKey::new(unbounded);
-        RingCipher { key, algorithm }
+        RingBackend { key, algorithm }
     }
     fn algorithm(&self) -> Algorithm {
         self.algorithm
