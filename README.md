@@ -2,7 +2,7 @@
 
 navajo is Rust library that provides secure and easy to use cryptographic APIs.
 
-This project is being dogfooded and is in on-going development. SEMVER will be
+This project is being dogfooded and is in on-going development. SemVer will be
 respected beginning with version `0.1.0`. Until then, each version of `0.0` may
 contain breaking changes.
 
