@@ -8,7 +8,6 @@ use crate::{
     algorithm::Algorithm, envelope::Envelope, Aad, Encoding, EncodingReader, EncodingWriter,
 };
 use anyhow::{bail, Context, Result};
-use base64::read::DecoderReader;
 use clap::{Parser, Subcommand};
 use navajo::{sensitive, Aead, Daead, Kind, Mac, Primitive, Signer};
 
