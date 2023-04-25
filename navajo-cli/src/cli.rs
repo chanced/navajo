@@ -1,11 +1,13 @@
 use std::{
     borrow::BorrowMut,
+    fs,
     io::{Read, Write},
     path::PathBuf,
 };
 
 use crate::{
     algorithm::Algorithm, envelope::Envelope, Aad, Encoding, EncodingReader, EncodingWriter,
+    Segment,
 };
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
@@ -38,6 +40,7 @@ impl Cli {
         proxy_env("NAVAJO_OUT", "NAVAJO_OUTPUT");
         proxy_env("NAVAJO_IN_ENCODING", "NAVAJO_INPUT_ENCODING");
         proxy_env("NAVAJO_OUT_ENCODING", "NAVAJO_OUTPUT_ENCODING");
+        proxy_env("NAVAJO_ENVELOPE_URI", "NAVAJO_ENVELOPE");
         Self::parse()
     }
 }
@@ -72,11 +75,11 @@ pub enum Command {
     PromoteKey(PromoteKey),
 
     /// Enables a disabled key in a keyring.
-    #[command(alias = "enable_key", alias = "enable", alias = "e")]
+    #[command(alias = "enable_key", alias = "enable")]
     EnableKey(EnableKey),
 
     /// Disables a key in a keyring.
-    #[command(alias = "disable_key", alias = "disable", alias = "d")]
+    #[command(alias = "disable_key", alias = "disable")]
     DisableKey(DisableKey),
 
     /// Deletes a key from a keyring.
@@ -100,6 +103,14 @@ pub enum Command {
     /// Generates a public JWKS from a private, asymmetric keyring.
     #[command(alias = "create_public")]
     CreatePublic(CreatePublic),
+
+    /// Encrypt a file or stdin using an AEAD keyring.
+    #[command(alias = "e")]
+    Encrypt(Encrypt),
+
+    /// Decrypt a file or stdin using an AEAD keyring.
+    #[command(alias = "d")]
+    Decrypt(Decrypt),
 }
 
 impl Command {
@@ -115,6 +126,8 @@ impl Command {
             Command::DisableKey(cmd) => cmd.run(stdin, stdout),
             Command::DeleteKey(cmd) => cmd.run(stdin, stdout),
             Command::SetKeyMetadata(cmd) => cmd.run(stdin, stdout),
+            Command::Encrypt(cmd) => cmd.run(stdin, stdout),
+            Command::Decrypt(cmd) => cmd.run(stdin, stdout),
         }
     }
 }
@@ -167,6 +180,16 @@ impl From<DeleteKey> for Command {
 impl From<SetKeyMetadata> for Command {
     fn from(cmd: SetKeyMetadata) -> Self {
         Command::SetKeyMetadata(cmd)
+    }
+}
+impl From<Encrypt> for Command {
+    fn from(cmd: Encrypt) -> Self {
+        Command::Encrypt(cmd)
+    }
+}
+impl From<Decrypt> for Command {
+    fn from(cmd: Decrypt) -> Self {
+        Command::Decrypt(cmd)
     }
 }
 
@@ -236,7 +259,7 @@ impl TryFrom<Metadata> for Option<navajo::Metadata> {
 #[derive(Debug, Parser)]
 pub struct Inspect {
     #[command(flatten)]
-    pub io: IoArgs,
+    pub io: Io,
     #[command(flatten)]
     pub envelope_args: EnvelopeArgs,
 }
@@ -260,7 +283,7 @@ impl Inspect {
 #[derive(Debug, Parser)]
 pub struct AddKey {
     #[command(flatten)]
-    pub io: IoArgs,
+    pub io: Io,
     #[command(flatten)]
     pub envelope_args: EnvelopeArgs,
     /// Specifies the algorithm to use for the key.
@@ -313,7 +336,7 @@ impl AddKey {
 #[derive(Debug, Parser)]
 pub struct PromoteKey {
     #[command(flatten)]
-    pub io: IoArgs,
+    pub io: Io,
     #[command(flatten)]
     pub envelope_args: EnvelopeArgs,
     /// The ID of the key to operate on.
@@ -350,7 +373,7 @@ impl PromoteKey {
 #[derive(Debug, Parser)]
 pub struct EnableKey {
     #[command(flatten)]
-    pub io: IoArgs,
+    pub io: Io,
     #[command(flatten)]
     pub envelope_args: EnvelopeArgs,
     /// The ID of the key to operate on.
@@ -387,7 +410,7 @@ impl EnableKey {
 #[derive(Debug, Parser)]
 pub struct DisableKey {
     #[command(flatten)]
-    pub io: IoArgs,
+    pub io: Io,
     #[command(flatten)]
     pub envelope_args: EnvelopeArgs,
     /// The ID of the key to operate on.
@@ -425,7 +448,7 @@ impl DisableKey {
 #[derive(Debug, Parser)]
 pub struct DeleteKey {
     #[command(flatten)]
-    pub io: IoArgs,
+    pub io: Io,
     #[command(flatten)]
     pub envelope_args: EnvelopeArgs,
     /// The ID of the key to operate on.
@@ -463,7 +486,7 @@ impl DeleteKey {
 #[derive(Debug, Parser)]
 pub struct Migrate {
     #[command(flatten)]
-    io: IoArgs,
+    io: Io,
 
     #[command(flatten)]
     envelope_args: EnvelopeArgs,
@@ -529,7 +552,7 @@ impl Migrate {
 #[derive(Debug, Parser)]
 pub struct CreatePublic {
     #[command(flatten)]
-    pub io: IoArgs,
+    pub io: Io,
     #[command(flatten)]
     pub envelope_args: EnvelopeArgs,
 }
@@ -558,7 +581,7 @@ impl CreatePublic {
 #[derive(Debug, Parser)]
 pub struct SetKeyMetadata {
     #[command(flatten)]
-    pub io: IoArgs,
+    pub io: Io,
     #[command(flatten)]
     pub envelope_args: EnvelopeArgs,
     /// The ID of the key to operate on.
@@ -611,6 +634,130 @@ impl SetKeyMetadata {
     }
 }
 
+#[derive(Debug, Parser)]
+pub struct Encrypt {
+    #[command(flatten)]
+    pub io: Io,
+    #[command(flatten)]
+    pub envelope_args: EnvelopeArgs,
+    #[arg(
+        value_name = "SEGMENT_SIZE",
+        long = "segment",
+        short = 's',
+        env = "NAVAJO_SEGMENT_SIZE"
+    )]
+    pub segment: Segment,
+
+    #[arg(
+        value_name = "AEAD_KEYRING",
+        long = "keyring",
+        alias = "aead",
+        short = 'k',
+        env = "NAVAJO_AEAD_KEYRING"
+    )]
+    pub keyring: PathBuf,
+
+    #[arg(
+        value_name = "AEAD_KEYRING_ENCODING",
+        long = "keyring-encoding",
+        alias = "aead-encoding",
+        short = 'K',
+        env = "NAVAJO_AEAD_KEYRING_ENCODING"
+    )]
+    pub keyring_encoding: Option<Encoding>,
+}
+
+impl Encrypt {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
+        let Encrypt {
+            io,
+            envelope_args,
+            segment,
+            keyring,
+            keyring_encoding,
+        } = self;
+        let (mut input, mut output) = io.get(stdin, stdout)?;
+        let keyring = fs::File::open(keyring)?;
+
+        let aad = envelope_args.get_aad();
+        let envelope = envelope_args.get_envelope(None)?;
+
+        let keyring = if let Some(encoding) = keyring_encoding {
+            encoding.decode_reader(keyring)
+        } else {
+            EncodingReader::None(keyring)
+        };
+        let primitive = envelope.open(aad.clone(), keyring)?;
+
+        if let Some(aead) = primitive.aead() {
+            aead.encrypt_writer(&mut output, aad, segment.into(), |w| {
+                std::io::copy(&mut input, w)?;
+                Ok(())
+            })?;
+            Ok(())
+        } else {
+            bail!("only AEAD keyrings support encryption");
+        }
+    }
+}
+
+#[derive(Debug, Parser)]
+pub struct Decrypt {
+    #[command(flatten)]
+    pub io: Io,
+    #[command(flatten)]
+    pub envelope_args: EnvelopeArgs,
+
+    #[arg(
+        value_name = "AEAD_KEYRING",
+        long = "keyring",
+        alias = "aead",
+        short = 'k',
+        env = "NAVAJO_AEAD_KEYRING"
+    )]
+    pub keyring: PathBuf,
+
+    #[arg(
+        value_name = "AEAD_KEYRING_ENCODING",
+        long = "keyring-encoding",
+        alias = "aead-encoding",
+        short = 'K',
+        env = "NAVAJO_AEAD_KEYRING_ENCODING"
+    )]
+    pub keyring_encoding: Option<Encoding>,
+}
+
+impl Decrypt {
+    pub fn run<'a>(self, stdin: impl 'a + Read, stdout: impl 'a + Write) -> Result<()> {
+        let Decrypt {
+            io,
+            envelope_args,
+            keyring,
+            keyring_encoding,
+        } = self;
+        let (mut input, mut output) = io.get(stdin, stdout)?;
+        let keyring = fs::File::open(keyring)?;
+
+        let aad = envelope_args.get_aad();
+        let envelope = envelope_args.get_envelope(None)?;
+
+        let keyring = if let Some(encoding) = keyring_encoding {
+            encoding.decode_reader(keyring)
+        } else {
+            EncodingReader::None(keyring)
+        };
+        let primitive = envelope.open(aad.clone(), keyring)?;
+
+        if let Some(aead) = primitive.aead() {
+            let mut reader = aead.decrypt_reader(&mut input, aad);
+            std::io::copy(&mut reader, &mut output)?;
+            Ok(())
+        } else {
+            bail!("only AEAD keyrings support encryption");
+        }
+    }
+}
+
 #[derive(Debug, Clone, Parser, Default)]
 pub struct Input {
     /// The input file to read the keyring from.
@@ -634,6 +781,7 @@ pub struct Input {
     )]
     pub input_encoding: Option<Encoding>,
 }
+
 impl Input {
     pub fn get<'a>(self, stdin: impl 'a + Read) -> Result<EncodingReader<Box<dyn 'a + Read>>> {
         let r: Box<dyn Read> = if let Some(input_path) = self.input {
@@ -686,6 +834,9 @@ impl Output {
         stdout: impl 'a + Write,
     ) -> std::io::Result<EncodingWriter<Box<dyn 'a + Write>>> {
         let boxed_out: Box<dyn Write> = if let Some(output_path) = self.output {
+            if let Some(parent) = output_path.parent() {
+                std::fs::create_dir_all(parent)?
+            }
             Box::new(std::fs::File::create(output_path)?)
         } else {
             Box::new(stdout)
@@ -699,7 +850,7 @@ impl Output {
 }
 
 #[derive(Debug, Parser, Default)]
-pub struct IoArgs {
+pub struct Io {
     #[command(flatten)]
     /// The input file to read the keyring from.
     ///
@@ -713,7 +864,7 @@ pub struct IoArgs {
     pub output: Output,
 }
 #[allow(clippy::type_complexity)]
-impl IoArgs {
+impl Io {
     pub fn get<'a>(
         self,
         stdin: impl 'a + Read,
@@ -730,7 +881,7 @@ impl IoArgs {
 pub struct EnvelopeArgs {
     #[arg(
         value_name = "ENVELOPE_URI",
-        env = "NAVAJO_ENVELOPE_URI",
+        env = "NAVAJO_ENVELOPE",
         long = "envelope",
         short = 'e',
         alias = "envelope-uri"
@@ -741,13 +892,12 @@ pub struct EnvelopeArgs {
     /// The value should be in the form <gcp|aws|azure|vault>://<key-path>.
     ///
     ///
-    /// - GCP:             gcp://projects/<project-id>/locations/<location>/keyRings/<keyring-id>/cryptoKeys/<key-id>
-    ///
-    /// - AWS:             aws://arn:aws:kms:<region>:<account-id>:key/<key-id>
-    ///
-    /// - JSON Plaintext:  json://<path-to-json-file>
+    /// - \033[1mGCP\033[0m:   gcp://projects/<project-id>/locations/<location>/keyRings/<keyring-id>/cryptoKeys/<key-id>
+    /// - AWS:   aws://arn:aws:kms:<region>:<account-id>:key/<key-id>
+    /// - JSON:  json://<path-to-json-file>
     ///
     ///
+    #[clap(verbatim_doc_comment)]
     pub envelope: Option<Envelope>,
 
     /// Additional authenticated data(AAD), if any, used to authenticate the
@@ -768,7 +918,7 @@ pub struct EnvelopeArgs {
         value_name = "ENVELOPE_AAD",
         alias = "env-aad",
         long = "envelope-aad",
-        short = 's'
+        short = 'E'
     )]
     pub envelope_aad: Option<Aad>,
 
@@ -777,7 +927,8 @@ pub struct EnvelopeArgs {
     #[arg(
         value_name = "ENVELOPE_AAD_ENCODING",
         long = "envelope-aad-encoding",
-        short = 'd'
+        short = 'A',
+        env = "NAVAJO_ENVELOPE_AAD_ENCODING"
     )]
     pub envelope_aad_encoding: Option<Encoding>,
 }
@@ -799,6 +950,12 @@ impl EnvelopeArgs {
         }
     }
 }
+
+// =======================================================================================================
+// =======================================================================================================
+// ================================================ Tests ================================================
+// =======================================================================================================
+// =======================================================================================================
 
 #[cfg(test)]
 mod tests {
@@ -846,7 +1003,7 @@ mod tests {
             let meta = json!({"example": "value"});
             let metadata = Some(serde_json::to_string(&meta).unwrap());
             let new = New {
-                algorithm: algorithm.clone(),
+                algorithm,
                 env_args: Default::default(),
                 metadata: Metadata { metadata },
                 output: Default::default(),
@@ -899,7 +1056,7 @@ mod tests {
             let mut w = vec![];
             let r: Vec<u8> = vec![];
             let new = New {
-                algorithm: algorithm.clone(),
+                algorithm,
                 env_args: Default::default(),
                 metadata: Default::default(),
                 output: Default::default(),
@@ -914,7 +1071,7 @@ mod tests {
             assert!(first_key.id > 0, "id is not greater than 0");
 
             let add = AddKey {
-                algorithm: algorithm.clone(),
+                algorithm,
                 envelope_args: Default::default(),
                 metadata: Default::default(),
                 io: Default::default(),
@@ -974,7 +1131,7 @@ mod tests {
             let mut w = vec![];
             let r: Vec<u8> = vec![];
             let new = New {
-                algorithm: algorithm.clone(),
+                algorithm,
                 env_args: Default::default(),
                 metadata: Default::default(),
                 output: Default::default(),
@@ -992,7 +1149,7 @@ mod tests {
             let mut w = vec![];
 
             let add = AddKey {
-                algorithm: algorithm.clone(),
+                algorithm,
                 envelope_args: Default::default(),
                 metadata: Default::default(),
                 io: Default::default(),
@@ -1049,7 +1206,7 @@ mod tests {
             let meta = json!({"example": "value"});
             let metadata = Some(serde_json::to_string(&meta).unwrap());
             let new = New {
-                algorithm: algorithm.clone(),
+                algorithm,
                 env_args: Default::default(),
                 metadata: Metadata { metadata },
                 output: Default::default(),
@@ -1117,7 +1274,7 @@ mod tests {
             let mut w = vec![];
             let r: Vec<u8> = vec![];
             let new = New {
-                algorithm: algorithm.clone(),
+                algorithm,
                 env_args: Default::default(),
                 metadata: Default::default(),
                 output: Default::default(),
@@ -1141,7 +1298,7 @@ mod tests {
             assert!(run_cmd(disable_key, r.as_slice(), &mut w).is_err());
 
             let add_key = AddKey {
-                algorithm: algorithm.clone(),
+                algorithm,
                 envelope_args: Default::default(),
                 metadata: Default::default(),
                 io: Default::default(),
@@ -1206,7 +1363,7 @@ mod tests {
             let mut w = vec![];
             let r: Vec<u8> = vec![];
             let new = New {
-                algorithm: algorithm.clone(),
+                algorithm,
                 env_args: Default::default(),
                 metadata: Default::default(),
                 output: Default::default(),
@@ -1230,7 +1387,7 @@ mod tests {
             assert!(run_cmd(delete_key, r.as_slice(), &mut w).is_err());
 
             let add_key = AddKey {
-                algorithm: algorithm.clone(),
+                algorithm,
                 envelope_args: Default::default(),
                 metadata: Default::default(),
                 io: Default::default(),
@@ -1271,13 +1428,201 @@ mod tests {
             assert_eq!(keyring.keys[0].status, Status::Primary);
         }
     }
+    #[test]
+    fn test_add_key_json() {
+        let rng = navajo::rand::SystemRng;
+        for algorithm in Algorithm::iter() {
+            let mut w = vec![];
+            let r: Vec<u8> = vec![];
+            let new = New {
+                algorithm,
+                env_args: Default::default(),
+                metadata: Default::default(),
+                output: Default::default(),
+                plaintext: true,
+                pub_id: None,
+            };
+            run_cmd(new, r.as_slice(), &mut w).unwrap();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            let first_key = keyring.keys[0].clone();
+            assert_eq!(first_key.status, Status::Primary);
+            assert!(first_key.id > 0, "id is not greater than 0");
+            let mut tmp_dir = std::env::temp_dir();
+            tmp_dir.push(rng.u64().unwrap().to_string() + ".json");
+
+            let add = AddKey {
+                algorithm,
+                envelope_args: Default::default(),
+                metadata: Default::default(),
+                io: Default::default(),
+                pub_id: None,
+            };
+
+            let r = w;
+            let mut w = vec![];
+
+            run_cmd(add, r.as_slice(), &mut w).unwrap();
+
+            let keyring: Keyring = serde_json::from_slice(&w).unwrap();
+            assert_eq!(keyring.version, 0);
+            assert_eq!(
+                keyring.keys.len(),
+                2,
+                "expected 2 keys, found {}",
+                keyring.keys.len()
+            );
+            let second_key = keyring.keys[1].clone();
+            assert_ne!(second_key.id, first_key.id);
+            assert_eq!(keyring.keys[0].status, Status::Primary);
+            assert_eq!(second_key.status, Status::Enabled);
+            assert!(second_key.id > 0, "id is not greater than 0");
+            assert_eq!(second_key.alg, algorithm);
+
+            let kind = algorithm.kind();
+
+            // getting coverage for the is_* methods
+            let algo = if kind.is_aead() {
+                Algorithm::Blake3
+            } else if kind.is_daead() {
+                Algorithm::Ed25519
+            } else if kind.is_dsa() {
+                Algorithm::Aes_256_Gcm
+            } else if kind.is_mac() {
+                Algorithm::Aes_256_Siv
+            } else {
+                panic!("unknown kind {:?}", kind);
+            };
+
+            let add_key = AddKey {
+                algorithm: algo,
+                envelope_args: Default::default(),
+                metadata: Default::default(),
+                io: Default::default(),
+                pub_id: None,
+            };
+            let r = w;
+            let mut w = vec![];
+            assert!(run_cmd(add_key, r.as_slice(), &mut w).is_err());
+        }
+    }
+    #[test]
+    fn test_encrypt_decrypt() {
+        let tmp = std::env::temp_dir();
+        let rng = navajo::rand::SystemRng;
+        let tmp = tmp.join(rng.u64().unwrap().to_string());
+        std::fs::create_dir(&tmp).unwrap();
+        let license_path = PathBuf::from("../LICENSE-MIT");
+        let mut license = std::fs::File::open(license_path.clone()).unwrap();
+        let mut license_content = vec![];
+        license.read_to_end(&mut license_content).unwrap();
+
+        for envelope_algorithm in navajo::aead::Algorithm::iter() {
+            let envelope_path = tmp.join("envelope").join(envelope_algorithm.to_string());
+
+            let mut w = vec![];
+            let r: Vec<u8> = vec![];
+            let new = New {
+                algorithm: envelope_algorithm.into(),
+                env_args: Default::default(),
+                metadata: Default::default(),
+                output: Output {
+                    output: envelope_path.clone().into(),
+                    out_encoding: None,
+                    pad_out_encoding: false,
+                },
+                plaintext: true,
+                pub_id: None,
+            };
+
+            run_cmd(new, r.as_slice(), &mut w).unwrap();
+
+            for keyring_algorithm in Algorithm::iter() {
+                let keyring_path = tmp.join("keyring").join(keyring_algorithm.to_string());
+                let new = New {
+                    algorithm: keyring_algorithm,
+                    env_args: EnvelopeArgs {
+                        envelope: Envelope::from_str(envelope_path.to_str().unwrap())
+                            .unwrap()
+                            .into(),
+                        ..Default::default()
+                    },
+                    metadata: Default::default(),
+                    output: Output {
+                        output: keyring_path.clone().into(),
+                        out_encoding: None,
+                        pad_out_encoding: false,
+                    },
+                    plaintext: false,
+                    pub_id: None,
+                };
+
+                let mut w = vec![];
+                let r: Vec<u8> = vec![];
+
+                run_cmd(new, r.as_slice(), &mut w).unwrap();
+
+                let encrypt = Encrypt {
+                    envelope_args: EnvelopeArgs {
+                        envelope: Envelope::from_str(envelope_path.to_str().unwrap())
+                            .unwrap()
+                            .into(),
+                        ..Default::default()
+                    },
+                    io: Io {
+                        input: Input {
+                            input: license_path.clone().into(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                    segment: Segment::FourKilobytes,
+                    keyring: keyring_path.clone(),
+                    keyring_encoding: None,
+                };
+
+                let r = w;
+                let mut w = vec![];
+
+                let result = run_cmd(encrypt, r.as_slice(), &mut w);
+
+                if keyring_algorithm.kind().is_aead() {
+                    assert!(result.is_ok());
+                    assert_ne!(w, license_content);
+                } else {
+                    assert!(result.is_err());
+                    continue;
+                }
+
+                let decrypt = Decrypt {
+                    envelope_args: EnvelopeArgs {
+                        envelope: Envelope::from_str(envelope_path.to_str().unwrap())
+                            .unwrap()
+                            .into(),
+                        ..Default::default()
+                    },
+                    io: Default::default(),
+                    keyring: keyring_path.clone(),
+                    keyring_encoding: None,
+                };
+
+                let r = w;
+                let mut w = vec![];
+
+                let result = run_cmd(decrypt, r.as_slice(), &mut w);
+
+                if keyring_algorithm.kind().is_aead() {
+                    assert!(result.is_ok());
+                } else {
+                    assert!(result.is_err());
+                    continue;
+                }
+                assert_eq!(w, license_content);
+            }
+        }
+        let _ = std::fs::remove_dir(tmp);
+    }
 }
 
-// PromoteKey(PromoteKey),
-// EnableKey(EnableKey),
-// DisableKey(DisableKey),
-// DeleteKey(DeleteKey),
 // SetKeyMetadata(SetKeyMetadata),
 // CreatePublic(CreatePublic),
-
-// Migrate(Migrate),

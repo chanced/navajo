@@ -27,12 +27,12 @@ const BASE64_URL_SAFE_NO_PAD_INDIF: GeneralPurpose = GeneralPurpose::new(
         .with_decode_allow_trailing_bits(true),
 );
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum, strum::Display, strum::EnumIter)]
-#[strum(serialize_all = "lowercase")]
 /// The encoding of a value, used for determining how to encode or decode a value.
 ///
 /// For Base64 and Base64Url, padding is indifferent for decoding
 ///
+#[derive(Clone, Copy, PartialEq, Eq, Debug, ValueEnum, strum::Display, strum::EnumIter)]
+#[strum(serialize_all = "lowercase")]
 pub enum Encoding {
     /// Base64; decoding is indifferent to padding and defaults to no padding on output unless overridden --out
     Base64,

@@ -16,24 +16,6 @@ impl Debug for Aad {
     }
 }
 
-// impl From<&String> for Aad {
-//     fn from(s: &String) -> Self {
-//         Self(s.to_string())
-//     }
-// }
-
-// impl TryFrom<&OsStr> for Aad {
-//     type Error = anyhow::Error;
-
-//     fn try_from(s: &OsStr) -> Result<Self, Self::Error> {
-//         let v = s
-//             .to_str()
-//             .ok_or(anyhow::anyhow!("failed to convert {s:?} to utf8"))?
-//             .to_string();
-//         Ok(Self(v))
-//     }
-// }
-
 impl FromStr for Aad {
     type Err = anyhow::Error;
 
@@ -56,7 +38,7 @@ impl FromStr for Aad {
                 _ => bail!("unknown Secret Store scheme: {}", secret.scheme()),
             }
         } else {
-            todo!()
+            Ok(Self(navajo::Aad(sensitive::Bytes::from(s.as_bytes()))))
         }
     }
 }
