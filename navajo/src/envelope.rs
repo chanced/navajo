@@ -35,8 +35,8 @@ pub mod sync {
     use alloc::vec::Vec;
 
     pub trait Envelope {
-        type EncryptError: super::Error + Send + Sync;
-        type DecryptError: super::Error + Send + Sync;
+        type EncryptError: core::fmt::Display + core::fmt::Debug + Send + Sync;
+        type DecryptError: core::fmt::Display + core::fmt::Debug + Send + Sync;
 
         fn encrypt_dek<A, P>(
             &self,
