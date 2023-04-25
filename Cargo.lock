@@ -1698,14 +1698,14 @@ version = "0.0.0"
 
 [[package]]
 name = "navajo-cli"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "base64 0.21.0",
  "clap",
  "hex",
  "navajo",
- "navajo-gcp",
+ "navajo-gcp 0.0.2",
  "serde",
  "serde_json",
  "shellexpand",
@@ -1716,6 +1716,28 @@ dependencies = [
 [[package]]
 name = "navajo-gcp"
 version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef8563347d9f367738b8862a644f693f7b713a5dbcc4a683a4e6a9452ba059a3"
+dependencies = [
+ "async-trait",
+ "base64 0.21.0",
+ "crc32c",
+ "gcloud-sdk",
+ "inherent",
+ "kms-aead",
+ "navajo",
+ "once_cell",
+ "prost",
+ "prost-types",
+ "secret-vault-value",
+ "tokio",
+ "tonic",
+ "url",
+]
+
+[[package]]
+name = "navajo-gcp"
+version = "0.0.3"
 dependencies = [
  "async-trait",
  "base64 0.21.0",

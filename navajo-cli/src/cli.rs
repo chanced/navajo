@@ -978,7 +978,7 @@ mod tests {
         version: u8,
     }
 
-    use std::{default, str::FromStr};
+    use std::str::FromStr;
 
     use super::*;
     use anyhow::Result;
