@@ -6,7 +6,9 @@ use clap::ValueEnum;
 use navajo::Kind;
 use serde::Deserialize;
 
-#[derive(Clone, Debug, PartialEq, Eq, ValueEnum, strum::Display, strum::EnumIter, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, ValueEnum, strum::Display, strum::EnumIter, Deserialize,
+)]
 #[serde(try_from = "&str")]
 pub enum Algorithm {
     // ------------------------------------------
@@ -351,6 +353,50 @@ impl TryFrom<Algorithm> for navajo::mac::Algorithm {
             Algorithm::Aes_192 => Ok(navajo::mac::Algorithm::Aes192),
             Algorithm::Aes_256 => Ok(navajo::mac::Algorithm::Aes256),
             _ => bail!("Algorithm {value} is not MAC"),
+        }
+    }
+}
+impl From<navajo::aead::Algorithm> for Algorithm {
+    fn from(value: navajo::aead::Algorithm) -> Self {
+        match value {
+            navajo::aead::Algorithm::Aes128Gcm => Algorithm::Aes_128_Gcm,
+            navajo::aead::Algorithm::Aes256Gcm => Algorithm::Aes_256_Gcm,
+            navajo::aead::Algorithm::ChaCha20Poly1305 => Algorithm::Chacha20Poly1305,
+            navajo::aead::Algorithm::XChaCha20Poly1305 => Algorithm::Xchacha20Poly1305,
+        }
+    }
+}
+
+impl From<navajo::daead::Algorithm> for Algorithm {
+    fn from(value: navajo::daead::Algorithm) -> Self {
+        match value {
+            navajo::daead::Algorithm::Aes256Siv => Algorithm::Aes_256_Siv,
+        }
+    }
+}
+impl From<navajo::dsa::Algorithm> for Algorithm {
+    fn from(value: navajo::dsa::Algorithm) -> Self {
+        match value {
+            navajo::dsa::Algorithm::Es256 => Algorithm::Es256,
+            navajo::dsa::Algorithm::Es384 => Algorithm::Es384,
+            navajo::dsa::Algorithm::Ed25519 => Algorithm::Ed25519,
+        }
+    }
+}
+impl From<navajo::mac::Algorithm> for Algorithm {
+    fn from(value: navajo::mac::Algorithm) -> Self {
+        match value {
+            navajo::mac::Algorithm::Blake3 => Algorithm::Blake3,
+            navajo::mac::Algorithm::Sha256 => Algorithm::Sha2_256,
+            navajo::mac::Algorithm::Sha384 => Algorithm::Sha2_384,
+            navajo::mac::Algorithm::Sha512 => Algorithm::Sha2_512,
+            navajo::mac::Algorithm::Sha3_256 => Algorithm::Sha3_256,
+            navajo::mac::Algorithm::Sha3_224 => Algorithm::Sha3_224,
+            navajo::mac::Algorithm::Sha3_384 => Algorithm::Sha3_384,
+            navajo::mac::Algorithm::Sha3_512 => Algorithm::Sha3_512,
+            navajo::mac::Algorithm::Aes128 => Algorithm::Aes_128,
+            navajo::mac::Algorithm::Aes192 => Algorithm::Aes_192,
+            navajo::mac::Algorithm::Aes256 => Algorithm::Aes_256,
         }
     }
 }

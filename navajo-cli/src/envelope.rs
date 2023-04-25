@@ -21,7 +21,11 @@ pub enum Envelope {
 impl FromStr for Envelope {
     type Err = anyhow::Error;
     fn from_str(key: &str) -> anyhow::Result<Self> {
-        let uri = url::Url::parse(key).context("failed to parse envelope key")?;
+        let key = shellexpand::full(key).context("failed to expand envelope key")?;
+        if !key.contains(':') {
+            return Self::open_plaintext(key.to_string());
+        }
+        let uri = url::Url::parse(&key).context("failed to parse envelope key")?;
 
         let uri_str = uri
             .to_string()
@@ -29,11 +33,11 @@ impl FromStr for Envelope {
 
         match uri.scheme().to_lowercase().as_str() {
             "gcp" => Ok(Envelope::Gcp(navajo_gcp::sync::Kms::new().key(uri_str))),
-            "plaintext" => Self::open_plaintext(uri_str),
+            "file" | "json" | "plaintext" => Self::open_plaintext(uri_str),
             "aws" => bail!("AWS KMS is not yet implemented"),
             "azure" => bail!("Azure KMS is not yet implemented"),
             "vault" => bail!("Vault KMS is not yet implemented"),
-            _ => bail!("unknown KMS scheme: {}", uri.scheme()),
+            scheme => bail!("unknown envelope scheme: {}", scheme),
         }
     }
 }
@@ -68,22 +72,22 @@ impl Envelope {
         Ok(Envelope::Json(envelope))
     }
 
-    pub fn open<'a>(
+    pub fn open<R: Read>(
         &self,
         aad: navajo::Aad<navajo::sensitive::Bytes>,
-        mut input: EncodingReader<Box<dyn 'a + Read>>,
+        mut input: EncodingReader<R>,
     ) -> anyhow::Result<Primitive> {
         let mut data = Vec::new();
         input.read_to_end(&mut data)?;
         match self {
             Envelope::Plaintext(envelope) => Ok(Primitive::open_sync(aad, data, envelope)?),
             Envelope::Gcp(envelope) => Ok(Primitive::open_sync(aad, data, envelope)?),
-            Envelope::Json(_) => todo!(),
+            Envelope::Json(envelope) => Ok(Primitive::open_sync(aad, data, envelope)?),
         }
     }
-    pub fn seal_and_write<'a, A>(
+    pub fn seal_and_write<A, W: Write>(
         &self,
-        mut output: EncodingWriter<Box<dyn 'a + Write>>,
+        mut output: EncodingWriter<W>,
         aad: Aad<A>,
         primitive: Primitive,
     ) -> anyhow::Result<()>
