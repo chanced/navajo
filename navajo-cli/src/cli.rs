@@ -821,6 +821,8 @@ mod tests {
         version: u8,
     }
 
+    use std::str::FromStr;
+
     use super::*;
     use anyhow::Result;
     use navajo::Status;
